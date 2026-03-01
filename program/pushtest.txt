@@ -1,0 +1,18 @@
+#define stack_val 0x0
+#define data_val 0xFFFFFFFF
+#define loop_count 10
+
+.text
+	set stack.16H stack_val >> 16
+	set stack.16L stack_val
+	set gen[0].16H data_val >> 16
+	set gen[0].16L data_val
+
+	nop
+	nop
+
+loop:
+	push gen[0].32B
+	jmp.one zero.32B loop
+
+	halt

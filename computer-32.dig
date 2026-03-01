@@ -1,0 +1,414 @@
+<?xml version="1.0" encoding="utf-8"?>
+<circuit>
+  <version>2</version>
+  <attributes>
+    <entry>
+      <string>bigEndianSetting</string>
+      <boolean>true</boolean>
+    </entry>
+    <entry>
+      <string>romContent</string>
+      <romList>
+        <roms/>
+      </romList>
+    </entry>
+    <entry>
+      <string>preloadProgram</string>
+      <boolean>true</boolean>
+    </entry>
+    <entry>
+      <string>preloadProgramFile</string>
+      <file>D:\Users\Taeho\Homemade Computer\computer 32 (new)\digital computer 32\program\run.txt</file>
+    </entry>
+  </attributes>
+  <visualElements>
+    <visualElement>
+      <elementName>cpu-32.dig</elementName>
+      <elementAttributes/>
+      <pos x="1000" y="440"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>C</string>
+        </entry>
+      </elementAttributes>
+      <pos x="980" y="500"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>NetName</string>
+          <string>C</string>
+        </entry>
+      </elementAttributes>
+      <pos x="820" y="500"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Clock</elementName>
+      <elementAttributes>
+        <entry>
+          <string>runRealTime</string>
+          <boolean>true</boolean>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>C</string>
+        </entry>
+        <entry>
+          <string>Frequency</string>
+          <int>64</int>
+        </entry>
+      </elementAttributes>
+      <pos x="800" y="500"/>
+    </visualElement>
+    <visualElement>
+      <elementName>DipSwitch</elementName>
+      <elementAttributes/>
+      <pos x="980" y="560"/>
+    </visualElement>
+    <visualElement>
+      <elementName>DipSwitch</elementName>
+      <elementAttributes/>
+      <pos x="980" y="680"/>
+    </visualElement>
+    <visualElement>
+      <elementName>DipSwitch</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+      </elementAttributes>
+      <pos x="1420" y="500"/>
+    </visualElement>
+    <visualElement>
+      <elementName>DipSwitch</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+      </elementAttributes>
+      <pos x="1420" y="520"/>
+    </visualElement>
+    <visualElement>
+      <elementName>DipSwitch</elementName>
+      <elementAttributes>
+        <entry>
+          <string>dipDefault</string>
+          <boolean>true</boolean>
+        </entry>
+      </elementAttributes>
+      <pos x="980" y="620"/>
+    </visualElement>
+    <visualElement>
+      <elementName>RAMDualAccess</elementName>
+      <elementAttributes>
+        <entry>
+          <string>AddrBits</string>
+          <int>24</int>
+        </entry>
+        <entry>
+          <string>isProgramMemory</string>
+          <boolean>true</boolean>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="1500" y="1260"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>C</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1480" y="1280"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Splitter</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Input Splitting</string>
+          <string>32</string>
+        </entry>
+        <entry>
+          <string>Output Splitting</string>
+          <string>2-25</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1360" y="1320"/>
+    </visualElement>
+    <visualElement>
+      <elementName>VDD</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="1"/>
+        </entry>
+      </elementAttributes>
+      <pos x="1480" y="1300"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Driver</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="1600" y="1260"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Driver</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>32</int>
+        </entry>
+        <entry>
+          <string>flipSelPos</string>
+          <boolean>true</boolean>
+        </entry>
+      </elementAttributes>
+      <pos x="1600" y="1280"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Splitter</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Input Splitting</string>
+          <string>32</string>
+        </entry>
+        <entry>
+          <string>Output Splitting</string>
+          <string>2-25</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1360" y="1360"/>
+    </visualElement>
+    <visualElement>
+      <elementName>VDD</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+      </elementAttributes>
+      <pos x="1060" y="860"/>
+    </visualElement>
+    <visualElement>
+      <elementName>VDD</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+      </elementAttributes>
+      <pos x="1140" y="860"/>
+    </visualElement>
+  </visualElements>
+  <wires>
+    <wire>
+      <p1 x="1320" y="640"/>
+      <p2 x="1400" y="640"/>
+    </wire>
+    <wire>
+      <p1 x="1620" y="1280"/>
+      <p2 x="1680" y="1280"/>
+    </wire>
+    <wire>
+      <p1 x="1480" y="1280"/>
+      <p2 x="1500" y="1280"/>
+    </wire>
+    <wire>
+      <p1 x="1560" y="1280"/>
+      <p2 x="1580" y="1280"/>
+    </wire>
+    <wire>
+      <p1 x="1080" y="1440"/>
+      <p2 x="1680" y="1440"/>
+    </wire>
+    <wire>
+      <p1 x="1320" y="580"/>
+      <p2 x="1400" y="580"/>
+    </wire>
+    <wire>
+      <p1 x="1320" y="520"/>
+      <p2 x="1420" y="520"/>
+    </wire>
+    <wire>
+      <p1 x="1380" y="1320"/>
+      <p2 x="1500" y="1320"/>
+    </wire>
+    <wire>
+      <p1 x="1180" y="1320"/>
+      <p2 x="1360" y="1320"/>
+    </wire>
+    <wire>
+      <p1 x="980" y="680"/>
+      <p2 x="1000" y="680"/>
+    </wire>
+    <wire>
+      <p1 x="1320" y="680"/>
+      <p2 x="1400" y="680"/>
+    </wire>
+    <wire>
+      <p1 x="1160" y="1420"/>
+      <p2 x="1700" y="1420"/>
+    </wire>
+    <wire>
+      <p1 x="1220" y="1260"/>
+      <p2 x="1500" y="1260"/>
+    </wire>
+    <wire>
+      <p1 x="1620" y="1260"/>
+      <p2 x="1700" y="1260"/>
+    </wire>
+    <wire>
+      <p1 x="1560" y="1260"/>
+      <p2 x="1580" y="1260"/>
+    </wire>
+    <wire>
+      <p1 x="1320" y="620"/>
+      <p2 x="1400" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="980" y="620"/>
+      <p2 x="1000" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="1380" y="1360"/>
+      <p2 x="1500" y="1360"/>
+    </wire>
+    <wire>
+      <p1 x="1100" y="1360"/>
+      <p2 x="1360" y="1360"/>
+    </wire>
+    <wire>
+      <p1 x="1320" y="560"/>
+      <p2 x="1400" y="560"/>
+    </wire>
+    <wire>
+      <p1 x="980" y="560"/>
+      <p2 x="1000" y="560"/>
+    </wire>
+    <wire>
+      <p1 x="1320" y="660"/>
+      <p2 x="1400" y="660"/>
+    </wire>
+    <wire>
+      <p1 x="1480" y="1300"/>
+      <p2 x="1500" y="1300"/>
+    </wire>
+    <wire>
+      <p1 x="1320" y="500"/>
+      <p2 x="1420" y="500"/>
+    </wire>
+    <wire>
+      <p1 x="980" y="500"/>
+      <p2 x="1000" y="500"/>
+    </wire>
+    <wire>
+      <p1 x="800" y="500"/>
+      <p2 x="820" y="500"/>
+    </wire>
+    <wire>
+      <p1 x="1320" y="600"/>
+      <p2 x="1400" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="1200" y="1240"/>
+      <p2 x="1600" y="1240"/>
+    </wire>
+    <wire>
+      <p1 x="1120" y="1400"/>
+      <p2 x="1600" y="1400"/>
+    </wire>
+    <wire>
+      <p1 x="1320" y="540"/>
+      <p2 x="1400" y="540"/>
+    </wire>
+    <wire>
+      <p1 x="1160" y="1340"/>
+      <p2 x="1500" y="1340"/>
+    </wire>
+    <wire>
+      <p1 x="1320" y="700"/>
+      <p2 x="1400" y="700"/>
+    </wire>
+    <wire>
+      <p1 x="1600" y="1300"/>
+      <p2 x="1600" y="1400"/>
+    </wire>
+    <wire>
+      <p1 x="1120" y="760"/>
+      <p2 x="1120" y="1400"/>
+    </wire>
+    <wire>
+      <p1 x="1700" y="1260"/>
+      <p2 x="1700" y="1420"/>
+    </wire>
+    <wire>
+      <p1 x="1220" y="760"/>
+      <p2 x="1220" y="1260"/>
+    </wire>
+    <wire>
+      <p1 x="1060" y="760"/>
+      <p2 x="1060" y="860"/>
+    </wire>
+    <wire>
+      <p1 x="1160" y="760"/>
+      <p2 x="1160" y="1340"/>
+    </wire>
+    <wire>
+      <p1 x="1160" y="1340"/>
+      <p2 x="1160" y="1420"/>
+    </wire>
+    <wire>
+      <p1 x="1100" y="760"/>
+      <p2 x="1100" y="1360"/>
+    </wire>
+    <wire>
+      <p1 x="1680" y="1280"/>
+      <p2 x="1680" y="1440"/>
+    </wire>
+    <wire>
+      <p1 x="1200" y="760"/>
+      <p2 x="1200" y="1240"/>
+    </wire>
+    <wire>
+      <p1 x="1140" y="760"/>
+      <p2 x="1140" y="860"/>
+    </wire>
+    <wire>
+      <p1 x="1240" y="760"/>
+      <p2 x="1240" y="1000"/>
+    </wire>
+    <wire>
+      <p1 x="1080" y="760"/>
+      <p2 x="1080" y="1440"/>
+    </wire>
+    <wire>
+      <p1 x="1180" y="760"/>
+      <p2 x="1180" y="1320"/>
+    </wire>
+  </wires>
+  <measurementOrdering/>
+</circuit>

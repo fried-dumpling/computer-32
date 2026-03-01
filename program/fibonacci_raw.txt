@@ -1,0 +1,20 @@
+.data
+	end:	; end of memory
+
+.text
+	;preset
+	set stack.S16H, end >> 16
+	set stack.16L, end	; sp = end
+	set gen[0].S16H, 0	
+	set gen[0].16L, 1	; gen[0] = 1
+	set gen[1].S16H, 0
+	set gen[1].16L, 1	; gen[1] = 1
+
+	loop:
+	push gen[0].32B	; push gen[0]
+	mov gen[2].32B, gen[1].32B	; gen[2] = gen[1]
+	mov gen[1].32B, gen[0].32B	; gen[1] = gen[0]
+	add gen[0].32B, gen[2].32B ; gen[0] += gen[2]
+	ijmp.carry zero.32B, loop	; jmp if not overflow
+	halt
+	

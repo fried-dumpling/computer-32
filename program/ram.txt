@@ -1,0 +1,16 @@
+.data
+    A: 4, 3
+    B: 4, 5
+    C: 4, 0
+
+.text
+    nop
+    nop
+    nop
+    nop
+    ld.zero gen[0].32B, A
+    ld.zero gen[1].32B, B
+    add gen[0].32B, gen[1].32B
+    st.zero gen[0].32B, C
+    halt
+

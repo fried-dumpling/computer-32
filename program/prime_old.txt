@@ -1,0 +1,93 @@
+#define LIST_SIZE 100
+
+.data
+    number 4, 0             ; current calculating number
+    index: 4, 0             ; cur index of list
+    prime_list: 4 * 100, 2  ; prime list
+    mem_end:
+
+.text
+    ; register setup
+    set stack.S16H mem_end >> 16   ; stack setup
+    set stack.16L mem_end          ; stack setup
+
+    halt
+
+    ; >> function section << ( No Go Zone )
+
+    ; <multiply>
+    ; gen[0] -> out: product
+    ; gen[1] -> in: multiplicand
+    ; gen[2] -> in: multiplier
+func_multiply:
+mult_loop:
+    test gen[2].32B, one.32B      ; test whether to add
+    jmp.zero zero.32B, mult_skip   ; skip if zero
+    add gen[0].32B, gen[1].32B    ; add shifted multiplicand to ans
+mult_skip:
+    shiftri gen[2].32B, 1          ; shift multiplier
+    shiftli gen[1].32B, 1          ; shift multiplicand
+    cmp gen[2].32B, zero.32B      ; test whether there is more multiplicand left
+    ijmp.zero zero.32B, mult_loop  ; if so continue to loop
+    ret                             ; else return
+
+    ; <isdivisible>
+    ; flag[gen] -> out: divisible
+    ; gen[1] -> in: dividend
+    ; gen[2] -> in: divisor
+func_isdivisible:
+isdiv_setloop:
+    shiftli gen[2].32B, 1          ; shift divisor
+    ijmp.carry zero.32B, isdiv_setloop ; if no carry has occured continue to shift
+    shiftrc gen[2].32B, one.32B   ; if carry has occured shift back with carry
+isdiv_divloop:
+    cmp gen[2].32B, gen[1].32B    ; test divisor - dividend
+    jmp.pos zero.32B, isdiv_skip     ; skip if divisor > dividend
+    sub gen[1].32B, gen[2].32B    ; sub divisor from dividend
+isdiv_skip:
+    shiftri gen[2], 1              ; shift divisor
+    ijmp.carry zero.32B            ; if carry hasn't occured then continue to mult_loop
+    cmp gen[1].32B, zero.32B      ; test remainder is zero
+    shiftli flag.8L, 7 - 0         ; shift zero into gen
+    ret                             ; return
+
+    ; <isprime>
+    ; flag[gen] -> out: is prime
+    ; gen[1] -> in: number
+    ; gen[2] -> in: list_start
+    ; gen[3] -> in: list_end
+    ; gen[4] -> tmp: tmp_number
+    ; gen[5] -> tmp: tmp_list_start
+    ; gen[6] -> tmp: tmp_list_end
+func_isprime:
+    mov gen[4].32B, gen[1].32B    ; tmp_number = number
+    mov gen[5].32B, gen[2].32B    ; tmp_list_start = list_start
+    mov gen[6].32B, gen[3].32B    ; tmp_list_end = list_end
+isprime_mainloop:
+    cmp gen[6].32B, gen[5].32B    ; test tmp_list_end - tmp_list_start
+    jmp.pos zero.32B, isprime_isprime   ; break if not tmp_list_start < tmp_list_end
+    ld.gen[5] gen[1].32B, 0        ; multiplicand, curprime = RAM[tmp_list_start]
+    mov gen[2].32B, gen[1].32B    ; multiplier, curprime = multiplicand
+    call zero.32B, func_multiply   ; call multiply -> square curprime
+    cmp gen[0].32B, gen[4].32B    ; cmp curprime^2 - tmp_number
+    jmp.pos 
+    ld.gen[5] gen[2].32B, 0        ; divisor, curprime = RAM[tmp_list_start]
+    mov gen[1].32B, gen[4].32B    ; dividend = tmp_number
+    call zero.32B, func_isdivisible    ; call isdivisible
+    jmp.gen zero.32B, isprime_notprime ; if divisible it is not prime
+    addi gen[5].32B, 1             ; tmp_list_start += 1
+    jmp.one zero.32B, isprime_mainloop ; continue to loop
+isprime_isprime:
+
+    jmp.one zero.32B, isprime_return   ; jmp to isprime_return
+isprime_notprime:
+
+isprime_return:
+    ret                                 ; return
+
+    
+    
+
+
+    
+

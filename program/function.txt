@@ -1,0 +1,24 @@
+.data
+    A: 4, 3
+    B: 4, 5
+    C: 4, 0
+
+.text
+    ld.zero gen[1].32B, A
+    ld.zero gen[2].32B, B
+    call zero.32B, func_add
+    st.zero gen[0].32B, C
+    halt
+
+    ; <function>
+
+    ; <add>
+    ; gen[0] -> out: out
+    ; gen[1] -> in: A
+    ; gen[2] -> in: B
+func_add:
+    mov gen[0].32B, gen[1].32B
+    nop
+    add gen[0].32B, gen[2].32B
+    ret
+
