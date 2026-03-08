@@ -9089,7 +9089,7 @@
           <string>V</string>
         </entry>
       </elementAttributes>
-      <pos x="-2100" y="520"/>
+      <pos x="-2000" y="440"/>
     </visualElement>
     <visualElement>
       <elementName>priority-test8.dig</elementName>
@@ -9144,6 +9144,20 @@
       </elementAttributes>
       <pos x="-3280" y="1580"/>
     </visualElement>
+    <visualElement>
+      <elementName>Or</elementName>
+      <elementAttributes>
+        <entry>
+          <string>wideShape</string>
+          <boolean>true</boolean>
+        </entry>
+        <entry>
+          <string>Inputs</string>
+          <int>8</int>
+        </entry>
+      </elementAttributes>
+      <pos x="-2100" y="360"/>
+    </visualElement>
   </visualElements>
   <wires>
     <wire>
@@ -9177,6 +9191,22 @@
     <wire>
       <p1 x="-460" y="1000"/>
       <p2 x="-520" y="1080"/>
+    </wire>
+    <wire>
+      <p1 x="-2120" y="500"/>
+      <p2 x="-2100" y="520"/>
+    </wire>
+    <wire>
+      <p1 x="-2120" y="460"/>
+      <p2 x="-2100" y="480"/>
+    </wire>
+    <wire>
+      <p1 x="-2120" y="480"/>
+      <p2 x="-2100" y="500"/>
+    </wire>
+    <wire>
+      <p1 x="-2120" y="440"/>
+      <p2 x="-2100" y="460"/>
     </wire>
     <wire>
       <p1 x="-2400" y="1280"/>
@@ -9389,10 +9419,6 @@
     <wire>
       <p1 x="-2240" y="520"/>
       <p2 x="-2220" y="520"/>
-    </wire>
-    <wire>
-      <p1 x="-2120" y="520"/>
-      <p2 x="-2100" y="520"/>
     </wire>
     <wire>
       <p1 x="-3280" y="2060"/>
@@ -10751,6 +10777,10 @@
       <p2 x="-2220" y="360"/>
     </wire>
     <wire>
+      <p1 x="-2120" y="360"/>
+      <p2 x="-2100" y="360"/>
+    </wire>
+    <wire>
       <p1 x="-3160" y="620"/>
       <p2 x="-3140" y="620"/>
     </wire>
@@ -10985,6 +11015,10 @@
     <wire>
       <p1 x="-2240" y="380"/>
       <p2 x="-2220" y="380"/>
+    </wire>
+    <wire>
+      <p1 x="-2120" y="380"/>
+      <p2 x="-2100" y="380"/>
     </wire>
     <wire>
       <p1 x="-3160" y="640"/>
@@ -11289,6 +11323,10 @@
     <wire>
       <p1 x="-2240" y="400"/>
       <p2 x="-2220" y="400"/>
+    </wire>
+    <wire>
+      <p1 x="-2120" y="400"/>
+      <p2 x="-2100" y="400"/>
     </wire>
     <wire>
       <p1 x="-2640" y="1680"/>
@@ -11633,6 +11671,10 @@
     <wire>
       <p1 x="-2240" y="420"/>
       <p2 x="-2220" y="420"/>
+    </wire>
+    <wire>
+      <p1 x="-2120" y="420"/>
+      <p2 x="-2100" y="420"/>
     </wire>
     <wire>
       <p1 x="-3760" y="1700"/>
@@ -12057,6 +12099,10 @@
     <wire>
       <p1 x="-2240" y="440"/>
       <p2 x="-2220" y="440"/>
+    </wire>
+    <wire>
+      <p1 x="-2020" y="440"/>
+      <p2 x="-2000" y="440"/>
     </wire>
     <wire>
       <p1 x="-3000" y="1720"/>
