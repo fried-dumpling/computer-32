@@ -1,0 +1,12 @@
+.data
+    addr: 4*10, 0
+
+.text
+    set gen[0].32B, 0xFFFF
+    st.zero gen[0].32B, addr
+    st.zero gen[0].32B, addr + 1
+    st.zero gen[0].32B, addr + 2
+    st.zero gen[0].32B, addr + 3
+    st.zero gen[0].32B, addr + 4
+    st.zero gen[0].32B, addr + 5
+    st.zero gen[0].32B, addr + 6

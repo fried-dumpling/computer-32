@@ -1,5 +1,7 @@
 .data
+	4*100, 0
 	end:	; end of memory
+	4, 5
 
 .text
 	;preset
@@ -10,11 +12,12 @@
 	set gen[1].S16H, 0
 	set gen[1].16L, 1	; gen[1] = 1
 
-	loop:
+	main_loop:
 	push gen[0].32B	; push gen[0]
 	mov gen[2].32B, gen[1].32B	; gen[2] = gen[1]
 	mov gen[1].32B, gen[0].32B	; gen[1] = gen[0]
 	add gen[0].32B, gen[2].32B ; gen[0] += gen[2]
-	ijmp.carry zero.32B, loop	; jmp if not overflow
+	ijmp.carry zero.32B, main_loop	; jmp if not overflow
+
 	halt
 	

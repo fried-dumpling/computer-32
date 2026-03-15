@@ -175,9 +175,14 @@
       <pos x="1200" y="440"/>
     </visualElement>
     <visualElement>
-      <elementName>And</elementName>
+      <elementName>Or</elementName>
       <elementAttributes/>
       <pos x="1120" y="400"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Not</elementName>
+      <elementAttributes/>
+      <pos x="1060" y="400"/>
     </visualElement>
   </visualElements>
   <wires>
@@ -187,6 +192,10 @@
     </wire>
     <wire>
       <p1 x="920" y="320"/>
+      <p2 x="1040" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="1040" y="320"/>
       <p2 x="1160" y="320"/>
     </wire>
     <wire>
@@ -246,8 +255,12 @@
       <p2 x="1200" y="560"/>
     </wire>
     <wire>
-      <p1 x="1000" y="400"/>
+      <p1 x="1100" y="400"/>
       <p2 x="1120" y="400"/>
+    </wire>
+    <wire>
+      <p1 x="1040" y="400"/>
+      <p2 x="1060" y="400"/>
     </wire>
     <wire>
       <p1 x="920" y="500"/>
@@ -306,6 +319,10 @@
       <p2 x="960" y="420"/>
     </wire>
     <wire>
+      <p1 x="1040" y="320"/>
+      <p2 x="1040" y="400"/>
+    </wire>
+    <wire>
       <p1 x="1140" y="540"/>
       <p2 x="1140" y="600"/>
     </wire>
@@ -328,10 +345,6 @@
     <wire>
       <p1 x="1160" y="320"/>
       <p2 x="1160" y="440"/>
-    </wire>
-    <wire>
-      <p1 x="1000" y="400"/>
-      <p2 x="1000" y="480"/>
     </wire>
     <wire>
       <p1 x="1000" y="480"/>
