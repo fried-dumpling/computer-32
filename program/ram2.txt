@@ -1,0 +1,18 @@
+.data
+    A: 4, 3
+    B: 4, 5
+    C: 4, 0
+
+.text
+    ld.zero gen[0].32B, A
+    ld.zero gen[1].32B, B
+    set gen[2].32B, 0
+
+loop:
+    add gen[2].32B, gen[0].32B
+    subi gen[1].32B, 1
+    ijmp.zero zero.32B, loop
+
+    st.zero gen[2].32B, C
+
+    halt

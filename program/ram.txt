@@ -1,12 +1,52 @@
 .data
-    A: 4, 3
-    B: 4, 5
-    C: 4, 0
+    A: 
+    4, 15
+    4, 14
+    4, 13
+    4, 12
+    4, 11
+    4, 10
+    4, 9
+    4, 8
+    4, 7
+    4, 6
+    4, 5
+    4, 4
+    4, 3
+    4, 2
+    4, 1
+    4, 0
+    B:
+    4, 0
+    4, 1
+    4, 2
+    4, 3
+    4, 4
+    4, 5
+    4, 6
+    4, 7
+    4, 8
+    4, 9
+    4, 10
+    4, 11
+    4, 12
+    4, 13
+    4, 14
+    4, 15
+    C:
 
 .text
-    ld.zero gen[0].32B, A
-    ld.zero gen[1].32B, B
-    add gen[0].32B, gen[1].32B
-    st.zero gen[0].32B, C
+    set gen[0].32B, 16*4
+    set gen[1].32B, 0
+    
+loop:
+    ld.gen[1] gen[2].32B, A
+    ld.gen[1] gen[3].32B, B
+    add gen[2].32B, gen[3].32B
+    st.gen[1] gen[2].32B, C
+
+    addi gen[1].32B, 4
+    cmp gen[0].32B, gen[1].32B
+    ijmp.zero zero.32B, loop
     halt
 

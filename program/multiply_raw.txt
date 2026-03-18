@@ -6,17 +6,7 @@
 .text
     ld.zero gen[1].32B, A
     ld.zero gen[2].32B, B
-    call zero.32B, func_multiply
-    st.zero gen[0].32B, C
-    halt
 
-    ; <function section>
-
-    ; <multiply>
-    ; gen[0] -> out: product
-    ; gen[1] -> in: multiplicand
-    ; gen[2] -> in: multiplier
-func_multiply:
 mult_loop:
     test gen[2].32B, one.32B
     jmp.zero zero.32B, mult_skip
@@ -26,4 +16,9 @@ mult_skip:
     shiftli gen[1].32B, 1
     cmp gen[2].32B, zero.32B
     ijmp.zero zero.32B, mult_loop
-    ret
+
+    st.zero gen[0].32B, C
+
+    nop
+    nop
+    halt

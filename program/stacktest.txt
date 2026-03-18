@@ -1,0 +1,30 @@
+.data
+list:
+    4, 1
+    4, 2
+    4, 3
+    4, 4
+    4, 5
+    4, 6
+end:
+
+.text
+    set stack.32B, list
+    set gen[2].32B, end
+loop:
+    pop gen[0].32B
+    pop gen[1].32B
+    cmp gen[2].32B, stack.32B
+    jmp.neg zero.32B, exit
+    add gen[0].32B, gen[1].32B
+    push gen[0].32B
+    jmp.one zero.32B, loop
+exit:
+    nop
+    halt
+
+
+    
+
+    
+    
