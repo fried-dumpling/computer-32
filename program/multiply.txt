@@ -8,7 +8,7 @@
     ld.zero gen[1].32B, A
     ld.zero gen[2].32B, B
 
-mult_loop:
+loop:
     test gen[2].32B, one.32B
     jmp.zero zero.32B, mult_skip
     add gen[0].32B, gen[1].32B
@@ -16,7 +16,7 @@ mult_skip:
     shiftri gen[2].32B, 1
     shiftli gen[1].32B, 1
     cmp gen[2].32B, zero.32B
-    ijmp.zero zero.32B, mult_loop
+    ijmp.zero zero.32B, loop
 
     st.zero gen[0].32B, C
 
