@@ -1086,7 +1086,7 @@ namespace assembler {
 			typedef struct _EvalData {
 				u32	textByte;
 				u32 dataByte;
-				u32 bssByte;
+				u64 bssByte;
 
 				std::unordered_map<std::string, u32> idenifierValue;
 				std::unordered_map<AST*, s32> expressionValue;

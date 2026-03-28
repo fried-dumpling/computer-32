@@ -68,11 +68,13 @@ namespace iotools {
 
 		data.clear();
 		char* tmp = new char[length];
-		fin.read(tmp, length);
+		fin.read(tmp, length * sizeof(char));
+		fin.close();
+		
 		for (size_t i = 0; i < length; i++)
 			data.push_back(tmp[i]);
 
-		fin.close();
+		delete[] tmp;
 		return true;
 	}
 
@@ -82,12 +84,14 @@ namespace iotools {
 		if (!fout.is_open() || !fout.good())
 			return false;
 
-		for (auto it = data.cbegin(); it != data.cend(); ++it) {
-			char tmp = *it;
-			fout.write(&tmp, sizeof(char));
-		}
+		char* tmp = new char[data.size()];
+		for (size_t i = 0; i < data.size(); i++)
+			tmp[i] = data[i];
 
+		fout.write(tmp, data.size() * sizeof(char));
 		fout.close();
+
+		delete[] tmp;
 		return true;
 	}
 }

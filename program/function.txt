@@ -18,7 +18,6 @@
     ; gen[2] -> in: B
 func_add:
     mov gen[0].32B, gen[1].32B
-    nop
     add gen[0].32B, gen[2].32B
     ret
 
