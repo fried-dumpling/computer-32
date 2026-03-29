@@ -4,6 +4,8 @@
     C: 4, 0
 
 .text
+    set stack.32B, 100
+
     ld.zero gen[1].32B, A
     ld.zero gen[2].32B, B
     call zero.32B, func_add
