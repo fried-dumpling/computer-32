@@ -9,7 +9,7 @@
     C: 4, 0 ; ans
 
 .text
-    set stack.32B, 100
+    set stack.32B, 4*0x20
 
     set gen[0].32B, 0
     ld.zero gen[1].32B, A
