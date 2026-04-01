@@ -8,9 +8,16 @@
 
     ld.zero gen[1].32B, A
     ld.zero gen[2].32B, B
-    call zero.32B, func_add
+    call zero.32B, func_foo
     st.zero gen[0].32B, C
-    halt
+loop:
+    jmp.one zero.32B, loop
+
+
+
+func_foo:
+    call zero.32B, func_add
+    ret
 
     ; <function>
 
