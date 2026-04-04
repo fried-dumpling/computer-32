@@ -1,0 +1,6 @@
+#define KEY_IN 0x100000
+#define KEY_V 0x1000001
+#define 
+
+.data
+.text

@@ -16,7 +16,9 @@ loop:
 
 
 func_foo:
+    push gen[2].32B
     call zero.32B, func_add
+    pop gen[0].32B
     ret
 
     ; <function>
