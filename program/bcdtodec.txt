@@ -1,0 +1,62 @@
+#macro HALT 0
+##inf_loop:
+    jmp.one zero.32B, ##inf_loop
+#end
+
+#define buffSize 20
+
+.data
+    ; input buffer
+    inputVec: 
+    4, 0x11
+    4, 0x12
+    4, 0x13
+    inputVecEnd:
+    (buffSize-3)*4, 0
+
+    numA: 4, 15    ; output
+    numB: 4, 15    ; output
+    numC: 4, 15    ; output
+    4*20, 0
+    stackEnd:
+
+
+.text
+    set stack.32B, stackEnd
+    
+    call zero.32B, func_convertInt
+    st.zero gen[0].32B, numA
+    call zero.32B, func_convertInt
+    st.zero gen[0].32B, numB
+    call zero.32B, func_convertInt
+    st.zero gen[0].32B, numC
+
+    HALT()
+
+    ; <convert int>
+    ; in: mem[inputStr]
+    ; out: gen[0] -> number
+    ; use: gen[1] -> char
+    ; use: gen[2] -> base
+    ; use: gen[3] -> tmp
+func_convertInt:
+    set gen[0].32B, 0           ; number = 0
+    set gen[2].32B, inputVec    ; base = inputVec
+    
+convertInt_mainloop:
+    ld.gen[2] gen[1].32B, 0     ; char = mem[base]
+    cmp gen[1].32B, zero.32B    ; char == 0
+    jmp.zero zero.32B, convertInt_exit  ; if (char == 0) break
+
+    mov gen[3].32B, gen[0].32B
+    shiftli gen[0].32B, 3
+    shiftli gen[3].32B, 1
+    add gen[0].32B, gen[3].32B
+
+    addi gen[2].32B, 4          ; base += 4
+    subi gen[1].32B, 16         ; char -= 16
+    add gen[0].32B, gen[1].32B  ; number += char
+    jmp.one zero.32B, convertInt_mainloop   ; continue loop
+    
+convertInt_exit:
+    ret
