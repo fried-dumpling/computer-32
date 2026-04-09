@@ -28,8 +28,10 @@
     st.zero gen[0].32B, numA
     call zero.32B, func_convertInt
     st.zero gen[0].32B, numB
-    call zero.32B, func_convertInt
-    st.zero gen[0].32B, numC
+    ld.zero gen[1].32B, numA
+    ld.zero gen[2].32B, numB
+    add gen[1].32B, gen[2].32B
+    st.zero gen[1].32B, numC
 
     HALT()
 

@@ -1,0 +1,16 @@
+.data
+    A: 4, 10
+    B: 4, 11
+    C: 4, 12
+
+.text
+    set gen[0].32B, 3
+    st.zero gen[0].32B, A
+    set gen[0].32B, 5
+    st.zero gen[0].32B, B
+    ld.zero gen[1].32B, A
+    ld.zero gen[2].32B, B
+    add gen[1].32B, gen[2].32B
+    st.zero gen[1].32B, C
+loop:
+    jmp.one zero.32B, loop
