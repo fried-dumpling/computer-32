@@ -24,15 +24,30 @@
 
     set stack.32B, stackEnd     ; stack = stackEnd
     
+    set gen[1].32B, 97
+    st.gen[24] gen[1].32B, TERM_OUT
+    set gen[1].32B, 10
+    st.gen[24] gen[1].32B, TERM_OUT
+
     ; get numA
     call zero.32B, func_getInput
     call zero.32B, func_convertInt
     st.zero gen[0].32B, numA
 
+    set gen[1].32B, 98
+    st.gen[24] gen[1].32B, TERM_OUT
+    set gen[1].32B, 10
+    st.gen[24] gen[1].32B, TERM_OUT
+
     ; get numB
     call zero.32B, func_getInput
     call zero.32B, func_convertInt
     st.zero gen[0].32B, numB
+    
+    set gen[1].32B, 99
+    st.gen[24] gen[1].32B, TERM_OUT
+    set gen[1].32B, 10
+    st.gen[24] gen[1].32B, TERM_OUT
 
     ; mem[numOut] = mem[numA] + mem[numB]
     ld.zero gen[1].32B, numA
@@ -57,8 +72,10 @@
     ; use: gen[4] -> char holder
 func_getInput:
     set gen[1].32B, 1           ; gen[1](counter) = 1
-    set gen[2].32B, strBuff    ; gen[2](base) = strBuff
+    set gen[2].32B, strBuff     ; gen[2](base) = strBuff
     set gen[3].32B, 0           ; gen[3] = 0
+    set gen[4].32B, 0
+
 
 getInput_mainloop:
     ; check valid
