@@ -8,6 +8,25 @@
     jmp.one zero.32B, ##inf_loop
 #end
 
+#macro FLUSH 0
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+#end
+
 #define buffSize 20
 
 .data
@@ -15,6 +34,7 @@
     numA:   4, 0    ; inputA
     numB:   4, 0    ; inputB
     numOut: 4, 0    ; output
+    bcdTest:4, 0    ; bcdTest
     4*20, 0
     stackEnd:
 .text
@@ -55,8 +75,6 @@
     add gen[1].32B, gen[2].32B
     st.zero gen[1].32B, numOut
 
-    HALT()
-
     ; print ans
     ld.zero gen[1].32B, numOut
     call zero.32B, func_convertStr
@@ -74,8 +92,6 @@ func_getInput:
     set gen[1].32B, 1           ; gen[1](counter) = 1
     set gen[2].32B, strBuff     ; gen[2](base) = strBuff
     set gen[3].32B, 0           ; gen[3] = 0
-    set gen[4].32B, 0
-
 
 getInput_mainloop:
     ; check valid
@@ -84,6 +100,8 @@ getInput_mainloop:
     jmp.zero zero.32B, getInput_skip    ; if !valid skip
 
     ; get input
+    FLUSH()
+    FLUSH()
     ld.gen[24] gen[4].32B, KEY_IN       ; char = mem[IO_BASE + KEY_IN]
     st.gen[24] gen[4].32B, TERM_OUT     ; mem[IO_BASE + TERM_OUT] = char
     cmpi gen[4].32B, 0x0A               ; char == '\n'
@@ -144,7 +162,6 @@ convertInt_exit:
     ; use: gen[7] -> counter
     ; use: gen[8] -> sum
 func_convertStr:
-    set gen[2].32B, strBuff ; base = strBuff
     set gen[3].32B, 0       ; result = 0
     set gen[7].32B, 0       ; counter = 0
 
@@ -176,6 +193,10 @@ convertStr_carryskip:
     jmp.one zero.32B, convertStr_mainloop   ; continue loop
 
 convertStr_exit:
+    st.zero gen[3].32B, bcdTest
+    HALT()
+
+    set gen[2].32B, strBuff ; base = strBuff
     set gen[7].32B, 0               ; counter = 0
     set gen[8].32B, 0               ; sum = 0
 
@@ -210,12 +231,12 @@ func_print:
     set gen[2].32B, strBuff     ; base = strBuff
 
 print_mainloop:
-    ld.gen[2] gen[1].32B, 0     ; char = mem[base]
-    cmpi gen[1].32B, 0          ; char == 0
-    jmp.zero zero.32B, print_exit   ; if (char == 0) break
+    ld.gen[2] gen[1].32B, 0             ; char = mem[base]
+    cmpi gen[1].32B, 0                  ; char == 0
+    jmp.zero zero.32B, print_exit       ; if (char == 0) break
 
-    st.gen[24] gen[1].32B, 0    ; mem[IO_BASE, TERM_OUT] = tmp
-    addi gen[2].32B, 4          ; base += 4
+    st.gen[24] gen[1].32B, TERM_OUT     ; mem[IO_BASE, TERM_OUT] = tmp
+    addi gen[2].32B, 4                  ; base += 4
     jmp.one zero.32B, print_mainloop    ; continue loop
 
 print_exit:

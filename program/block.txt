@@ -1,0 +1,19 @@
+.text
+loop:
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    block
+    jmp.one zero.32B, loop  
