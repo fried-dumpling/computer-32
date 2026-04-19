@@ -83,7 +83,7 @@ namespace hexdump {
 
     namespace dump  {
 
-        void dump(std::vector<u8>& in, int width) {
+        void dump(std::vector<u8>& in, int width, int bundle) {
             bool lower = false;
 
             size_t count = 0;
@@ -108,13 +108,19 @@ namespace hexdump {
                     curText += " ";
                     break;
                 }
-
                 count++;
+
                 if (count == width) {
                     count -= width;
                     std::cout << curHex << "| " << curText << std::endl;
                     curHex.clear();
                     curText.clear();
+                }
+                else {   
+                    if (!(count % bundle)) {
+                        curHex += " ";
+                        curText += " ";
+                    }
                 }
             }
             if (count) {
@@ -132,7 +138,7 @@ using namespace std;
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         cout << "too little argument" << endl;
-        cout << "usage: hexdump <file> <-width num>" << endl;
+        cout << "usage: hexdump <file> <-width num> <-bundle num>" << endl;
         return -1;
     }
 
@@ -145,26 +151,40 @@ int main(int argc, char* argv[]) {
     }
 
     int width = 4;
+    int bundle = width;
 
-    if (argc == 3) {
-        cout << "too little argument" << endl;
-        cout << "usage: hexdump <file> <-width num>" << endl;
-        return -1;
-    }
-    else if (argc == 4) {
-        if (string(argv[2]) != "-width") {
+    for (int i = 2; i < argc; i++) {
+        string str(argv[i]);
+
+        if (str == "-width") {
+            if (++i == argc) {
+                cout << "too little argument" << endl;
+                cout << "usage: hexdump <file> <-width num> <-bundle num>" << endl;
+            }
+            width = hexdump::util::convStr(argv[i]);
+            if (width == -1) {
+                cout << "wrong input" << endl;
+                return -1;
+            }
+        }
+        else if (str == "-bundle"){
+            if (++i == argc) {
+                cout << "too little argument" << endl;
+                cout << "usage: hexdump <file> <-width num> <-bundle num>" << endl;
+            }
+            bundle = hexdump::util::convStr(argv[i]);
+            if (bundle == -1) {
+                cout << "wrong input" << endl;
+                return -1;
+            }
+        }
+        else {
             cout << "wrong flag" << endl;
             return -1;
         }
-
-        width = hexdump::util::convStr((argv[3]));
-        if (width == -1) {
-            cout << "wrong size" << endl;
-            return -1;
-        }
     }
 
-    hexdump::dump::dump(data, width);
+    hexdump::dump::dump(data, width, bundle);
         
     return 0;
 }

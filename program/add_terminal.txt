@@ -1,7 +1,8 @@
 #define IO_BASE 0x4000000
 #define KEY_IN 0
 #define KEY_V 4
-#define TERM_OUT 8
+#define KEY_R 8
+#define TERM_OUT 12
 
 #macro HALT 0
 ##inf_loop:
@@ -91,7 +92,6 @@
 func_getInput:
     set gen[1].32B, 1           ; gen[1](counter) = 1
     set gen[2].32B, strBuff     ; gen[2](base) = strBuff
-    set gen[3].32B, 0           ; gen[3] = 0
 
 getInput_mainloop:
     ; check valid
@@ -100,9 +100,8 @@ getInput_mainloop:
     jmp.zero zero.32B, getInput_skip    ; if !valid skip
 
     ; get input
-    FLUSH()
-    FLUSH()
     ld.gen[24] gen[4].32B, KEY_IN       ; char = mem[IO_BASE + KEY_IN]
+    st.gen[24] full.32B, KEY_R          ; mem[IO_BASE + KEY_R] = 0xFFFFFFFF
     st.gen[24] gen[4].32B, TERM_OUT     ; mem[IO_BASE + TERM_OUT] = char
     cmpi gen[4].32B, 0x0A               ; char == '\n'
     jmp.zero zero.32B, getInput_exit    ; if (char == '\n') break
@@ -127,7 +126,6 @@ getInput_exit:
     ; use: gen[1] -> char
     ; use: gen[2] -> base
     ; use: gen[3] -> tmp
-    ; use: gen[4] -> const 10
 func_convertInt:
     set gen[0].32B, 0           ; number = 0
     set gen[2].32B, strBuff    ; base = strBuff
