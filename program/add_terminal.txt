@@ -133,6 +133,8 @@ func_convertInt:
 convertInt_mainloop:
     ld.gen[2] gen[1].32B, 0     ; char = mem[base]
     cmp gen[1].32B, zero.32B    ; char == 0
+
+    // problem here
     jmp.zero zero.32B, convertInt_exit  ; if (char == 0) break
 
     ;number *= 10
