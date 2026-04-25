@@ -9,25 +9,6 @@
     jmp.one zero.32B, ##inf_loop
 #end
 
-#macro FLUSH 0
-    block
-    block
-    block
-    block
-    block
-    block
-    block
-    block
-    block
-    block
-    block
-    block
-    block
-    block
-    block
-    block
-#end
-
 #define buffSize 20
 
 .data
@@ -77,7 +58,7 @@
     st.zero gen[1].32B, numOut
 
     ; print ans
-    ld.zero gen[1].32B, numOut
+    ; ld.zero gen[1].32B, numOut
     call zero.32B, func_convertStr
     call zero.32B, func_print
 
@@ -134,7 +115,6 @@ convertInt_mainloop:
     ld.gen[2] gen[1].32B, 0     ; char = mem[base]
     cmp gen[1].32B, zero.32B    ; char == 0
 
-    // problem here
     jmp.zero zero.32B, convertInt_exit  ; if (char == 0) break
 
     ;number *= 10
@@ -166,8 +146,6 @@ func_convertStr:
     set gen[7].32B, 0       ; counter = 0
 
 convertStr_mainloop:
-    shiftli gen[1].32B, 1       ; (gen[1] <<= 1)
-    shiftlc gen[3].32B, one.32B ; (gen[3] <<= 1) + carry
     set gen[4].32B, 0           ; offset = 0
 
 convertStr_carryloop:
@@ -182,19 +160,23 @@ convertStr_carryloop:
     add gen[3].32B, gen[6].32B      ; result += (3 <<= offset)
 
 convertStr_carryskip:
+
     addi gen[4].32B, 4              ; offset += 4
-    cmpi gen[4].32B, 64             ; offset == 64
-    ijmp.zero zero.32B, convertStr_carryloop    ; if (offset != 64) continue loop
+    cmpi gen[4].32B, 32             ; offset == 32
+    ijmp.zero zero.32B, convertStr_carryloop    ; if (offset != 32) continue loop
+
+    shiftli gen[1].32B, 1       ; (gen[1] <<= 1)
+    shiftlc gen[3].32B, one.32B ; (gen[3] <<= 1) + carry
 
     addi gen[7].32B, 1              ; counter++
-    cmpi gen[7].32B, 64             ; counter == 64
-    jmp.zero zero.32B, convertStr_exit  ; if (counter == 64) break
+    cmpi gen[7].32B, 32             ; counter == 32
+    jmp.zero zero.32B, convertStr_exit  ; if (counter == 32) break
+
 
     jmp.one zero.32B, convertStr_mainloop   ; continue loop
 
 convertStr_exit:
     st.zero gen[3].32B, bcdTest
-    HALT()
 
     set gen[2].32B, strBuff ; base = strBuff
     set gen[7].32B, 0               ; counter = 0
@@ -202,7 +184,7 @@ convertStr_exit:
 
 convertStr_charloop:
     mov gen[5].32B, gen[3].32B      ; tmp = result
-    bndi gen[5].32B, 0xf            ; tmp &= 0b1111
+    shiftri gen[5].32B, 28          ; tmp >>= 28
     add gen[8].32B, gen[5].32B      ; sum += tmp
 
     cmpi gen[8].32B, 0              ; sum == 0
@@ -210,13 +192,13 @@ convertStr_charloop:
 
     addi gen[5].32B, 48             ; tmp += 48
     st.gen[2] gen[5].32B, 0         ; mem[base] = tmp
+    addi gen[2].32B, 4              ; base += 4
 
 convertStr_skipchar:
-    addi gen[2].32B, 4              ; base += 4s
-    shiftri gen[3].32B, 4           ; result >>= 4
+    shiftli gen[3].32B, 4           ; result <<= 4
     addi gen[7].32B, 1              ; counter++
-    cmpi gen[7].32B, 16             ; counter == 16
-    ijmp.zero zero.32B, convertStr_charloop ; if (counter != 16) loop
+    cmpi gen[7].32B, 8             ; counter == 8
+    ijmp.zero zero.32B, convertStr_charloop ; if (counter != 8) loop
 
     ; exit
     st.gen[2] zero.32B, 0           ; mem[base] = 0
