@@ -1,6 +1,12 @@
+#macro HALT 0
+##inf:
+    jmp.one zero.32B, ##inf
+#end
+
 .data
     input: 4, 12
     output: 4, 0
+    4*32, 0         ; stack buffer
     stack_begin:
 
 .text
@@ -12,7 +18,7 @@
     ld.zero gen[1].32B, input
     call zero.32B, func_factorial
     st.zero gen[0].32B, output
-    halt
+    HALT()
 
     ; >> function section << ( No Go Zone )
 

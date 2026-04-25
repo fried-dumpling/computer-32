@@ -1,0 +1,21 @@
+.data
+    A: 4, 5
+    B: 4, 3
+    C: 4, 15
+
+.text
+    set stack.32B, 100
+
+    ld.zero gen[1].32B, A
+    ld.zero gen[2].32B, B
+    call zero.32B, func_add
+    st.zero gen[0].32B, C
+
+loop:
+    jmp.one zero.32B, loop
+
+
+func_add:
+    mov gen[0].32B, gen[1].32B
+    add gen[0].32B, gen[2].32B
+    ret

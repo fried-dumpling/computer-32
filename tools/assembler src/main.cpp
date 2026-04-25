@@ -156,6 +156,9 @@ int main(int argc, char* argv[]) {
 			cout << tmp << "; " << ((it->type == TokenType::__unknown) ? "error" : lexer::tokenStr[it->type]) << endl;
 		}
 		cout << "------------------------------------------------------------" << endl;
+		cout << "preproc->" << endl;
+		cout << (dump.preprocSuccess ? "success" : "failed") << endl;
+		cout << "------------------------------------------------------------" << endl;
 	}
 
 	if (dumpEvaluate || dumpBinary) {

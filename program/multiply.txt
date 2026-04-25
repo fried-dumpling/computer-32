@@ -1,14 +1,29 @@
+#macro HALT 0
+##inf:
+    jmp.one zero.32B, ##inf
+#end
+
 .data
     A: 4, 3 ; multiplicand
     B: 4, 5 ; multiplier
     C: 4, 0 ; ans
 
 .text
+    set stack.32B, 4*0x20
+
     set gen[0].32B, 0
     ld.zero gen[1].32B, A
     ld.zero gen[2].32B, B
-
-loop:
+    call zero.32B, func_multiply
+    st.zero gen[0].32B, C
+    HALT()
+    
+    ; <multiply>
+    ; gen[0] -> out: product
+    ; gen[1] -> in: multiplicand
+    ; gen[2] -> in: multiplier
+func_multiply:
+mult_loop:
     test gen[2].32B, one.32B
     jmp.zero zero.32B, mult_skip
     add gen[0].32B, gen[1].32B
@@ -16,10 +31,5 @@ mult_skip:
     shiftri gen[2].32B, 1
     shiftli gen[1].32B, 1
     cmp gen[2].32B, zero.32B
-    ijmp.zero zero.32B, loop
-
-    st.zero gen[0].32B, C
-
-    nop
-    nop
-    halt
+    ijmp.zero zero.32B, mult_loop
+    ret

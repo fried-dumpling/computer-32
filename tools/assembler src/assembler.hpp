@@ -39,6 +39,8 @@ namespace assembler {
 
 			ld, st,
 
+			block,
+
 			jmp, ijmp,
 			call, ret,
 			nop, halt,
@@ -123,6 +125,7 @@ namespace assembler {
 				{ "set", TokenType::set },
 				{ "sets", TokenType::sets },
 				{ "mov", TokenType::mov },
+				{ "block", TokenType::block },
 				{ "push", TokenType::push },
 				{ "pop", TokenType::pop },
 				{ "ld", TokenType::ld },
@@ -941,13 +944,15 @@ namespace assembler {
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::rol, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::roli, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::cmp, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::reg, true, false } } },
-			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::cmpi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::cmpi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::test, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::reg, true, false } } },
-			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::testi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
+			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::testi, false, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate16, true, false } } },
 
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::set, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RI, 0 }, { { TT::sets, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::immidate16, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, 0 }, { { TT::mov, false, false }, { NT::reg, true, false }, { TT::comma, false, false }, {NT::reg, true, false } } },
+
+			{ { NT::intruction, AT::instruction_N, 0 }, { { TT::block, false, false } } },
 
 			{ { NT::intruction, AT::instruction_R, 0 }, { { TT::push, false, false }, {NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_R, 0 }, { { TT::pop, false, false }, {NT::reg, true, false } } },
@@ -1234,6 +1239,7 @@ namespace assembler {
 				{ "set", 0x1A },
 				{ "sets", 0x1B },
 				{ "mov", 0x1C },
+				{ "block", 0x1D },
 				{ "pop", 0x1E },
 				{ "push", 0x1F },
 				{ "ld", 0x20 },
@@ -1534,7 +1540,7 @@ namespace assembler {
 		}
 	}
 
-	const unsigned long long version = 202;
+	const unsigned long long version = 204;
 
 	namespace cache {
 		using u64 = unsigned __int64;
