@@ -62,3 +62,99 @@ convertInt_mainloop:
     
 convertInt_exit:
     ret
+
+    
+    ; <convertStr2>
+    ; in: gen[1] -> number
+    ; out: mem[strBuff] -> string
+    ; use: gen[2] -> base
+    ; use: gen[3] -> mask1
+    ; use: gen[4] -> mask2
+    ; use: gen[5] -> repB1
+    ; use: gen[6] -> repB2
+    ; use: gen[7] -> result
+    ; use: gen[8] -> counter
+    ; use: gen[9] -> tmpLo
+    ; use: gen[10] -> tmpHi
+    ; use: gen[11] -> c4
+    ; use: gen[12] -> mask3
+    ; use: gen[13] -> mask4
+    ; use: gen[14] -> sum
+
+func_convertStr2:
+    set gen[3].S16H, 0x0F0F
+    set gen[3].16L, 0x0F0F      ; mask1 = 0x0F0F0F0F
+    set gen[4].S16H, 0xF0F0
+    set gen[4].16L, 0xF0F0      ; mask2 = 0xF0F0F0F0
+
+    set gen[5].S16H, 0x0B0B
+    set gen[5].16L, 0x0B0B      ; repB1 = 0x0B0B0B0B
+    set gen[6].S16H, 0xB0B0
+    set gen[6].16L, 0xB0B0      ; repB2 = 0xB0B0B0B0
+
+    set gen[12].S16H, 0x0101
+    set gen[12].16L, 0x0101     ; mask3 = 0x01010101
+    set gen[13].S16H, 0x1010
+    set gen[13].16L, 0x1010     ; mask4 = 0x10101010
+
+    set gen[11].32B, 4
+
+    set gen[7].32B, 0           ; result = 0
+    set gen[8].32B, 0           ; counter = 0
+
+convertStr2_mainloop:
+    mov gen[9].32B, gen[7].32B
+    mov gen[10].32B, gen[7].32B
+
+    bnd gen[9].32B, gen[3].32B  ; tmpLo = result & mask1
+    bnd gen[10].32B, gen[4].32B  ; tmpHi = result & mask2
+
+    add gen[9].32B, gen[5].32B
+    shiftrc gen[9].32B, gen[11].32B
+    bnd gen[9].32B, gen[12].32B
+
+    add gen[10].32B, gen[6].32B
+    shiftrc gen[10].32B, gen[11].32B
+    bnd gen[10].32B, gen[13].32B
+
+    bor gen[9].32B, gen[10].32B
+    mov gen[10].32B, gen[9].32B
+    shiftli gen[10].32B, 1
+    bor gen[9].32B, gen[10].32B
+
+    add gen[7].32B, gen[9].32B
+
+    shiftl gen[1].32B, one.32B  ; number <<= 1
+    shiftlc gen[7].32B, one.32B ; result <<= 1 + carry
+
+    addi gen[8].32B, 1          ; counter++
+    cmpi gen[8].32B, 32
+    ijmp.zero zero.32B, convertStr2_mainloop
+
+    st.zero gen[7].32B, bcdTest
+
+    set gen[2].32B, strBuff
+    set gen[8].32B, 0
+    set gen[14].32B, 0
+
+convertStr2_charloop:
+    mov gen[9].32B, gen[7].32B
+    shiftri gen[9].32B, 28
+
+    add gen[14].32B, gen[9].32B
+    cmpi gen[14].32B, 0
+    jmp.zero zero.32B, convertStr2_skipchar
+
+    addi gen[9].32B, 48
+    st.gen[2] gen[9].32B, 0
+    addi gen[2].32B, 4
+
+convertStr2_skipchar:
+    shiftli gen[7].32B, 4
+
+    addi gen[8].32B, 1
+    cmpi gen[8].32B, 8
+    ijmp.zero zero.32B, convertStr2_charloop
+
+    st.gen[2] zero.32B, 0 
+    ret
