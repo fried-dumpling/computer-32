@@ -15788,7 +15788,7 @@
         </entry>
         <entry>
           <string>NetName</string>
-          <string>ALU-A_LD</string>
+          <string>ALU-B_LD</string>
         </entry>
       </elementAttributes>
       <pos x="2760" y="1620"/>
@@ -17362,7 +17362,7 @@
         </entry>
         <entry>
           <string>NetName</string>
-          <string>ALU-A_STD</string>
+          <string>ALU-B_STD</string>
         </entry>
       </elementAttributes>
       <pos x="2900" y="620"/>
@@ -17444,7 +17444,7 @@
         </entry>
         <entry>
           <string>NetName</string>
-          <string>ALU-A_STF</string>
+          <string>ALU-B_STF</string>
         </entry>
       </elementAttributes>
       <pos x="2900" y="700"/>
@@ -18482,7 +18482,7 @@
         </entry>
         <entry>
           <string>NetName</string>
-          <string>C_dt</string>
+          <string>C_ct</string>
         </entry>
       </elementAttributes>
       <pos x="2760" y="840"/>
@@ -18520,7 +18520,7 @@
         </entry>
         <entry>
           <string>NetName</string>
-          <string>C_dt</string>
+          <string>C_ct</string>
         </entry>
       </elementAttributes>
       <pos x="2760" y="1000"/>
@@ -21346,34 +21346,6 @@
         </entry>
         <entry>
           <string>NetName</string>
-          <string>ALU-A_T-_F</string>
-        </entry>
-      </elementAttributes>
-      <pos x="1260" y="560"/>
-    </visualElement>
-    <visualElement>
-      <elementName>Tunnel</elementName>
-      <elementAttributes>
-        <entry>
-          <string>rotation</string>
-          <rotation rotation="2"/>
-        </entry>
-        <entry>
-          <string>NetName</string>
-          <string>ALU-B_T-_F</string>
-        </entry>
-      </elementAttributes>
-      <pos x="1260" y="580"/>
-    </visualElement>
-    <visualElement>
-      <elementName>Tunnel</elementName>
-      <elementAttributes>
-        <entry>
-          <string>rotation</string>
-          <rotation rotation="2"/>
-        </entry>
-        <entry>
-          <string>NetName</string>
           <string>ROB-FL_INSTA</string>
         </entry>
       </elementAttributes>
@@ -21384,7 +21356,7 @@
       <elementAttributes>
         <entry>
           <string>rotation</string>
-          <rotation reference="../../../../visualElement[1752]/elementAttributes/entry/rotation"/>
+          <rotation reference="../../../../visualElement[1750]/elementAttributes/entry/rotation"/>
         </entry>
         <entry>
           <string>NetName</string>
@@ -26484,7 +26456,7 @@
       <elementAttributes>
         <entry>
           <string>rotation</string>
-          <rotation reference="../../../../visualElement[2198]/elementAttributes/entry/rotation"/>
+          <rotation reference="../../../../visualElement[2196]/elementAttributes/entry/rotation"/>
         </entry>
         <entry>
           <string>NetName</string>
@@ -26498,7 +26470,7 @@
       <elementAttributes>
         <entry>
           <string>rotation</string>
-          <rotation reference="../../../../visualElement[2198]/elementAttributes/entry/rotation"/>
+          <rotation reference="../../../../visualElement[2196]/elementAttributes/entry/rotation"/>
         </entry>
         <entry>
           <string>NetName</string>
@@ -26512,7 +26484,7 @@
       <elementAttributes>
         <entry>
           <string>rotation</string>
-          <rotation reference="../../../../visualElement[2198]/elementAttributes/entry/rotation"/>
+          <rotation reference="../../../../visualElement[2196]/elementAttributes/entry/rotation"/>
         </entry>
         <entry>
           <string>NetName</string>
@@ -27006,7 +26978,7 @@
         </entry>
         <entry>
           <string>Frequency</string>
-          <int>256</int>
+          <int>64</int>
         </entry>
       </elementAttributes>
       <pos x="-560" y="-1680"/>
@@ -31253,7 +31225,7 @@
       <elementAttributes>
         <entry>
           <string>rotation</string>
-          <rotation reference="../../../../visualElement[2623]/elementAttributes/entry/rotation"/>
+          <rotation reference="../../../../visualElement[2621]/elementAttributes/entry/rotation"/>
         </entry>
         <entry>
           <string>NetName</string>
@@ -34459,16 +34431,6 @@
       <pos x="3160" y="-2660"/>
     </visualElement>
     <visualElement>
-      <elementName>DipSwitch</elementName>
-      <elementAttributes>
-        <entry>
-          <string>dipDefault</string>
-          <boolean>true</boolean>
-        </entry>
-      </elementAttributes>
-      <pos x="3380" y="-2580"/>
-    </visualElement>
-    <visualElement>
       <elementName>ScopeTrigger</elementName>
       <elementAttributes>
         <entry>
@@ -34491,6 +34453,34 @@
         </entry>
       </elementAttributes>
       <pos x="-920" y="-1620"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>ROB-FL_B</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1260" y="580"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>ROB-FL_A</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1260" y="560"/>
     </visualElement>
   </visualElements>
   <wires>
@@ -42899,7 +42889,7 @@
       <p2 x="4240" y="-2580"/>
     </wire>
     <wire>
-      <p1 x="3380" y="-2580"/>
+      <p1 x="3320" y="-2580"/>
       <p2 x="3440" y="-2580"/>
     </wire>
     <wire>
@@ -43327,6 +43317,10 @@
       <p2 x="4200" y="-560"/>
     </wire>
     <wire>
+      <p1 x="1260" y="560"/>
+      <p2 x="1280" y="560"/>
+    </wire>
+    <wire>
       <p1 x="-340" y="560"/>
       <p2 x="-320" y="560"/>
     </wire>
@@ -43361,10 +43355,6 @@
     <wire>
       <p1 x="2640" y="560"/>
       <p2 x="2660" y="560"/>
-    </wire>
-    <wire>
-      <p1 x="1260" y="560"/>
-      <p2 x="1280" y="560"/>
     </wire>
     <wire>
       <p1 x="860" y="560"/>
@@ -43607,6 +43597,10 @@
       <p2 x="3440" y="-580"/>
     </wire>
     <wire>
+      <p1 x="1260" y="580"/>
+      <p2 x="1280" y="580"/>
+    </wire>
+    <wire>
       <p1 x="-340" y="580"/>
       <p2 x="-320" y="580"/>
     </wire>
@@ -43653,10 +43647,6 @@
     <wire>
       <p1 x="1380" y="580"/>
       <p2 x="1400" y="580"/>
-    </wire>
-    <wire>
-      <p1 x="1260" y="580"/>
-      <p2 x="1280" y="580"/>
     </wire>
     <wire>
       <p1 x="860" y="580"/>
@@ -50941,6 +50931,10 @@
     <wire>
       <p1 x="3320" y="-2540"/>
       <p2 x="3320" y="-2480"/>
+    </wire>
+    <wire>
+      <p1 x="3320" y="-2620"/>
+      <p2 x="3320" y="-2580"/>
     </wire>
     <wire>
       <p1 x="760" y="220"/>
