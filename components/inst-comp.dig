@@ -96,7 +96,7 @@
       <elementAttributes>
         <entry>
           <string>Label</string>
-          <string>A_old</string>
+          <string>A_new</string>
         </entry>
       </elementAttributes>
       <pos x="1220" y="640"/>

@@ -58,7 +58,7 @@
     st.zero gen[1].32B, numOut
 
     ; print ans
-    ld.zero gen[1].32B, numOut
+    ; ld.zero gen[1].32B, numOut
     call zero.32B, func_convertStr
     call zero.32B, func_print
 
@@ -136,32 +136,34 @@ convertInt_exit:
     ; out: mem[strBuff] -> string
     ; use: gen[2] -> base
     ; use: gen[3] -> result
-    ; use: gen[4] -> c3
+    ; use: gen[4] -> offset
     ; use: gen[5] -> tmp
-    ; use: gen[6] -> mask
+    ; use: gen[6] -> const 3
     ; use: gen[7] -> counter
     ; use: gen[8] -> sum
-    ; use: gen[9] -> tmp2
 func_convertStr:
     set gen[3].32B, 0       ; result = 0
     set gen[7].32B, 0       ; counter = 0
 
-    set gen[4].S16H, 0x3333
-    set gen[4].16L, 0x3333      ; c3 = 0x33333333
-    set gen[6].S16H, 0x8888
-    set gen[6].16L, 0x8888      ; mask = 0x88888888
-
 convertStr_mainloop:
+    set gen[4].32B, 0           ; offset = 0
+
+convertStr_carryloop:
     mov gen[5].32B, gen[3].32B      ; tmp = result
-    add gen[5].32B, gen[4].32B      ; tmp += 0x33333333
-    bnd gen[5].32B, gen[6].32B      ; tmp &= 0x88888888
+    shiftr gen[5].32B, gen[4].32B   ; tmp >>= offset
+    bndi gen[5].32B, 0xF            ; tmp &= 0b1111
+    cmpi gen[5].32B, 5              ; tmp - 5 >= 0
+    jmp.neg zero.32B, convertStr_carryskip  ; if (tmp < 5) skip
 
-    shiftri gen[5].32B, 2           
-    mov gen[9].32B, gen[5].32B      
-    shiftri gen[5].32B, 1           
-    bor gen[9].32B, gen[5].32B      ; tmp2 = (tmp >> 3)*3
+    set gen[6].32B, 3               ; gen[6] = 3
+    shiftl gen[6].32B, gen[4].32B   ; 3 <<= offset
+    add gen[3].32B, gen[6].32B      ; result += (3 <<= offset)
 
-    add gen[3].32B, gen[9].32B      ; result += tmp2
+convertStr_carryskip:
+
+    addi gen[4].32B, 4              ; offset += 4
+    cmpi gen[4].32B, 32             ; offset == 32
+    ijmp.zero zero.32B, convertStr_carryloop    ; if (offset != 32) continue loop
 
     shiftli gen[1].32B, 1       ; (gen[1] <<= 1)
     shiftlc gen[3].32B, one.32B ; (gen[3] <<= 1) + carry
@@ -169,6 +171,7 @@ convertStr_mainloop:
     addi gen[7].32B, 1              ; counter++
     cmpi gen[7].32B, 32             ; counter == 32
     jmp.zero zero.32B, convertStr_exit  ; if (counter == 32) break
+
 
     jmp.one zero.32B, convertStr_mainloop   ; continue loop
 
