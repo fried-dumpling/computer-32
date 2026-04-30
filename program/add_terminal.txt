@@ -58,7 +58,7 @@
     st.zero gen[1].32B, numOut
 
     ; print ans
-    ; ld.zero gen[1].32B, numOut
+    ld.zero gen[1].32B, numOut
     call zero.32B, func_convertStr
     call zero.32B, func_print
 
