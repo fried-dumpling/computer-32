@@ -3,6 +3,11 @@
     B: 4, 5
     C: 4, 0
 
+#macro HALT 0
+##halt_loop:
+    jmp.one zero.32B, ##halt_loop
+#end
+
 .text
     ld.zero gen[0].32B, A
     ld.zero gen[1].32B, B
@@ -15,4 +20,4 @@ loop:
 
     st.zero gen[2].32B, C
 
-    halt
+    HALT()

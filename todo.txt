@@ -1,5 +1,7 @@
 <computer32>
 
+flush -> store -> flush ... oscillating error
+
 ------ note very big problem on memory
 -> trying to solve it by removing complex queue system
 

@@ -49,7 +49,7 @@ loop:
     ld.gen[1] gen[3].32B, B
     add gen[2].32B, gen[3].32B
     st.gen[1] gen[2].32B, C
-
+    
     addi gen[1].32B, 4
     cmp gen[0].32B, gen[1].32B
     ijmp.zero zero.32B, loop
