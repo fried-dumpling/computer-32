@@ -16,6 +16,7 @@
 #include <stack>
 
 #include <utility>
+#include <algorithm>
 
 #include "lexer.hpp"
 
@@ -87,6 +88,11 @@ namespace parser_generator {
 					closure.push_back(*it);
 			}
 
+			std::sort(closure.begin(), closure.end(), [](const Item& a, const Item& b) {
+				if (a.prodId != b.prodId) return a.prodId < b.prodId;
+				return a.dotPos < b.dotPos;
+			});
+
 			size_t counter = closure.size();
 			for (auto it = closure.rbegin(); it != closure.rend(); ++it) {
 				counter--;
@@ -124,6 +130,8 @@ namespace parser_generator {
 					}
 					if (li->dotPos < ri->dotPos)
 						return true;
+					if (li->dotPos > ri->dotPos)
+						return false;
 
 					++li; ++ri;
 				}
