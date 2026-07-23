@@ -1,6 +1,19 @@
-<computer32>
+<dasm>
+--emergency--
+dasm it has bug in it!
+i think it is in parsing somewhere.....
+however instead of gcc, msvc works fine.... so it's fine for now? idk. 
 
-flush -> store -> flush ... oscillating error
+
+<computer32>
+error at R-cycle 33--
+
+------ note something's wrong with branch prediction or memory dispatch?
+add_terminal handles n+1 keyboard inputs when n are actually inputted.
+-> branch prediction + ld <-> st error?
+
+
+flush -> store -> flush ... oscillating error <- fixed ?
 
 ------ note very big problem on memory
 -> trying to solve it by removing complex queue system
