@@ -30,7 +30,7 @@
     </entry>
     <entry>
       <string>preloadProgramFile</string>
-      <file>D:\Users\taeh5\Homemade Computer\computer 32 (new)\digital computer 32\program\run.txt</file>
+      <file>D:\user\Taeho\computer 32 (new)\digital computer 32\program\run.txt</file>
     </entry>
   </attributes>
   <visualElements>
@@ -25252,6 +25252,10 @@
           <string>Label</string>
           <string>C</string>
         </entry>
+        <entry>
+          <string>Frequency</string>
+          <int>16</int>
+        </entry>
       </elementAttributes>
       <pos x="-560" y="-1680"/>
     </visualElement>
@@ -32572,30 +32576,6 @@
       <pos x="3160" y="-2660"/>
     </visualElement>
     <visualElement>
-      <elementName>ScopeTrigger</elementName>
-      <elementAttributes>
-        <entry>
-          <string>maxStepCount</string>
-          <int>10000</int>
-        </entry>
-      </elementAttributes>
-      <pos x="-900" y="-1760"/>
-    </visualElement>
-    <visualElement>
-      <elementName>Tunnel</elementName>
-      <elementAttributes>
-        <entry>
-          <string>rotation</string>
-          <rotation rotation="2"/>
-        </entry>
-        <entry>
-          <string>NetName</string>
-          <string>C_i</string>
-        </entry>
-      </elementAttributes>
-      <pos x="-920" y="-1760"/>
-    </visualElement>
-    <visualElement>
       <elementName>Tunnel</elementName>
       <elementAttributes>
         <entry>
@@ -33746,6 +33726,102 @@
         </entry>
       </elementAttributes>
       <pos x="-900" y="-1500"/>
+    </visualElement>
+    <visualElement>
+      <elementName>ScopeTrigger</elementName>
+      <elementAttributes>
+        <entry>
+          <string>maxStepCount</string>
+          <int>10000</int>
+        </entry>
+      </elementAttributes>
+      <pos x="-880" y="-1760"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>C_i</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-900" y="-1760"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>clr</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-940" y="-880"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>CT_ISS-_OLDB</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-940" y="-900"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>issue_e</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-940" y="-920"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Probe</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>issue_e</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-920" y="-920"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Probe</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>CT_ISS-_OLDB</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-920" y="-900"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Probe</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>clr</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-920" y="-880"/>
     </visualElement>
   </visualElements>
   <wires>
@@ -44346,10 +44422,6 @@
       <p2 x="2580" y="2780"/>
     </wire>
     <wire>
-      <p1 x="-920" y="-1760"/>
-      <p2 x="-900" y="-1760"/>
-    </wire>
-    <wire>
       <p1 x="3900" y="-1760"/>
       <p2 x="4060" y="-1760"/>
     </wire>
@@ -44360,6 +44432,10 @@
     <wire>
       <p1 x="1500" y="-1760"/>
       <p2 x="1540" y="-1760"/>
+    </wire>
+    <wire>
+      <p1 x="-900" y="-1760"/>
+      <p2 x="-880" y="-1760"/>
     </wire>
     <wire>
       <p1 x="1260" y="1760"/>
@@ -45706,6 +45782,10 @@
       <p2 x="1520" y="-880"/>
     </wire>
     <wire>
+      <p1 x="-940" y="-880"/>
+      <p2 x="-920" y="-880"/>
+    </wire>
+    <wire>
       <p1 x="5040" y="880"/>
       <p2 x="5060" y="880"/>
     </wire>
@@ -45892,6 +45972,10 @@
     <wire>
       <p1 x="1500" y="-900"/>
       <p2 x="1540" y="-900"/>
+    </wire>
+    <wire>
+      <p1 x="-940" y="-900"/>
+      <p2 x="-920" y="-900"/>
     </wire>
     <wire>
       <p1 x="5400" y="900"/>
@@ -46088,6 +46172,10 @@
     <wire>
       <p1 x="1560" y="-920"/>
       <p2 x="1620" y="-920"/>
+    </wire>
+    <wire>
+      <p1 x="-940" y="-920"/>
+      <p2 x="-920" y="-920"/>
     </wire>
     <wire>
       <p1 x="5400" y="920"/>
