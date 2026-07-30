@@ -84,9 +84,9 @@ getInput_mainloop:
     ; get input
     ld.gen[24] gen[4].32B, KEY_IN       ; char = mem[IO_BASE + KEY_IN]
     st.gen[24] full.32B, KEY_R          ; mem[IO_BASE + KEY_R] = 0xFFFFFFFF
-    ;st.gen[24] gen[4].32B, TERM_OUT     ; mem[IO_BASE + TERM_OUT] = char
+    st.gen[24] gen[4].32B, TERM_OUT     ; mem[IO_BASE + TERM_OUT] = char
 
-    st.gen[24] gen[5].32B, TERM_OUT     ; mem[IO_BASE + TERM_OUT] = 'k'
+    ;st.gen[24] gen[5].32B, TERM_OUT     ; mem[IO_BASE + TERM_OUT] = 'k'
     
     cmpi gen[4].32B, '\n'               ; char == '\n'
     jmp.zero zero.32B, getInput_exit    ; if (char == '\n') break
