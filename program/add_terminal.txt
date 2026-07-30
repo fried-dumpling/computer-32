@@ -9,10 +9,29 @@
     jmp.one zero.32B, ##inf_loop
 #end
 
+#macro BLOCK 0
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+#end
+
 #define buffSize 20
 
 .data
-    strBuff: 4*buffSize, 0   ; input buffer
+    strBuff: 4*buffSize, 0  ; input buffer
     numA:   4, 0    ; inputA
     numB:   4, 0    ; inputB
     numOut: 4, 0    ; output
@@ -26,9 +45,9 @@
 
     set stack.32B, stackEnd     ; stack = stackEnd
     
-    set gen[1].32B, 97
+    set gen[1].32B, 'a'
     st.gen[24] gen[1].32B, TERM_OUT
-    set gen[1].32B, 10
+    set gen[1].32B, '\n'
     st.gen[24] gen[1].32B, TERM_OUT
 
     ; get numA
@@ -36,9 +55,9 @@
     call zero.32B, func_convertInt
     st.zero gen[0].32B, numA
 
-    set gen[1].32B, 98
+    set gen[1].32B, 'b'
     st.gen[24] gen[1].32B, TERM_OUT
-    set gen[1].32B, 10
+    set gen[1].32B, '\n'
     st.gen[24] gen[1].32B, TERM_OUT
 
     ; get numB
@@ -46,9 +65,9 @@
     call zero.32B, func_convertInt
     st.zero gen[0].32B, numB
     
-    set gen[1].32B, 99
+    set gen[1].32B, 'c'
     st.gen[24] gen[1].32B, TERM_OUT
-    set gen[1].32B, 10
+    set gen[1].32B, '\n'
     st.gen[24] gen[1].32B, TERM_OUT
 
     ; mem[numOut] = mem[numA] + mem[numB]
@@ -76,6 +95,7 @@ func_getInput:
 
 getInput_mainloop:
     ; check valid
+    BLOCK()
     ld.gen[24] gen[3].32B, KEY_V        ; gen[3](valid) = mem[IO_BASE + KEY_V]
     cmp gen[3].32B, zero.32B            ; valid == 0
     jmp.zero zero.32B, getInput_skip    ; if !valid skip
@@ -84,7 +104,8 @@ getInput_mainloop:
     ld.gen[24] gen[4].32B, KEY_IN       ; char = mem[IO_BASE + KEY_IN]
     st.gen[24] full.32B, KEY_R          ; mem[IO_BASE + KEY_R] = 0xFFFFFFFF
     st.gen[24] gen[4].32B, TERM_OUT     ; mem[IO_BASE + TERM_OUT] = char
-    cmpi gen[4].32B, 0x0A               ; char == '\n'
+    
+    cmpi gen[4].32B, '\n'               ; char == '\n'
     jmp.zero zero.32B, getInput_exit    ; if (char == '\n') break
 
     st.gen[2] gen[4].32B, 0     ; mem[base] = char

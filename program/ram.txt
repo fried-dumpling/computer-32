@@ -35,6 +35,11 @@
     4, 15
     C:
 
+#macro HALT 0
+##inf_loop:
+    jmp.one zero.32B, ##inf_loop
+#end
+
 .text
     set gen[0].32B, 16*4
     set gen[1].32B, 0
@@ -44,9 +49,9 @@ loop:
     ld.gen[1] gen[3].32B, B
     add gen[2].32B, gen[3].32B
     st.gen[1] gen[2].32B, C
-
+    
     addi gen[1].32B, 4
     cmp gen[0].32B, gen[1].32B
     ijmp.zero zero.32B, loop
-    halt
 
+    HALT()

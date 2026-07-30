@@ -1,0 +1,244 @@
+<dasm>
+--emergency--
+dasm it has bug in it!
+i think it is in parsing somewhere.....
+however instead of gcc, msvc works fine.... so it's fine for now? idk. 
+
+
+<computer32>
+error at R-cycle 33--
+
+------ note something's wrong with branch prediction or memory dispatch?
+add_terminal handles n+1 keyboard inputs when n are actually inputted.
+-> branch prediction + ld <-> st error?
+
+
+flush -> store -> flush ... oscillating error <- fixed ?
+
+------ note very big problem on memory
+-> trying to solve it by removing complex queue system
+
+<Memory Issues>
+
+ld/st not going well
+-> rebuild queue
+
+-> just use age matrix?
+% 4x1 on store buffer?
+% 4x2 on load buffer? or none?
+-> load buffer doesn't need strict order cause it's going to be consumed by cpu anyway
+
+store buffer -> on strict instruction order -> instruction order compare? on reserve age matrix?
+load buffer -> whatever it can: since it's not in order
+
+age matrix -> 1 if current is older 0 if not (cur id is set to 1 for convenience)
+
+if one id retires: set that id line to 1 for every module
+-> (except for new id if it comes in simultainously)
+
+if new id reserves: set module's every id except for cur to 0
+
+------ note very big problem on memory
+
+<RAW table>
+
+* invalid flush
+- 
+
+<call & ret>
+*call syncronizer
+-dispatch jmp & stack
+-sync commit
+
+*SCS rollback
+-add double encoder rollback mech
+
+*return sequencer
+-dispatch stack in ret mode
+-dispatch jmp when stack inst has finished
+
+% dispatch of jmp must happen 2 cycle after 
+% sending a busy sig to JPU -> JPU busy sig needed
+<- predictable timing
+
+JPU: call/ret/jmp/ijmp
+
+% or just use JPU's free time <- efficency go low
+
+# idea
+# why don't upgrade current dispatcher to uop-distpatcher?
+
+# idea selected
+% add another valid buffer to the dispatcher
+% making dispatcher accept 2 uop instruction
+
+- normal 1 uop disign use single mux double gate disign to reduce mux count
+
+
+<ALU & other FU(functional unit)>
+*add instruction validator circuit
+-it's placed near ALU for testing and i think it works
+
+%maybe i should add a fetch queue
+
+<Return Address Stack>
+4 module speculative RAS
+8 module architectual RAS
+
+<jmp function unit>
+- unit for calculating jmp address and condition
+
+% branch prediction may be also added in the future here
+
+<BTB & branch prediction>
+- size 16
+
+* datas
+- 2bit predictor (weak <- 0, 1, 2, 3 -> strong)
+- 12bit PC tag
+- 4bit index
+
+% when mispridicted:
+% insert current PC, target, predictor to BTB at index=PC[5:2]
+% insert tag=PC[17:6]
+
+>> JPU logic <<
+IF  (BTB-V && BTB-TAR == R-TAR) {
+	IF (R-J)
+		BTB-PRED++
+	ELSE
+		BTB-PRED--
+
+	IF (BTB-J != R-J)
+		FLUSH()
+
+	BTB-ST()
+} ELSE {
+	IF (R-J) {
+		BTB-OVERRIDE()
+		FLUSH()
+	} ELSE {
+		IF (BTB-J)
+			FLUSH()
+
+		BTB-PRED--
+	}
+	
+
+
+	BTB-ST()
+}
+>> end <<
+
+<flush & rollback>
+- happens when the spectulation of the CPU is wrong
+
+% store-buffer doesn't require flush logic because it only happens after commit
+
+* add wrong-speculation state
+- add wrong-speculation state to id-dispatcher
+
+% when the com1_inst has wrong-spec flag turned on:
+-> disable com2
+-> call flush and rollback with cur inst-id (cause it compare if it is >> greater << than parameter id)
+
+% ROB doesn't require a seperate compare and clear circuit
+% this is because when the id-generator's id rolls back, 
+% it will overwrite the previous ROB's data with correct ones eventually before the commit happens
+
+ * add flush mech
+- reset fetch/decode/issue valid-buffer
+- cancel every instruction that is after current called instruction from the CPU
+-> lot's of comparator
+
+* rollback
+- restore architectual state
+- fill speculative state buffer with architectual state
+
+% rollback and flush happens simultaneously
+% fetch valid-buffer turns on when PC is ready (1 cycle after rollback&flush)
+% the valid-buffer's own on signal buffer may add a 1cycle delay
+-> in that case just activate the buffer with rollback and flush
+
+<memory buffer>
+
+** current chores todo -->
+
+* merge address calculating unit
+- because load/store should happens less frequently than other inst, merge it's ACU
+
+* add memory offset calculation
+- add 5 to 3 compressor logic to lookahead to get memory offset into calculation
+
+* increase buffer size
+% when ACU is merged, st-buffer busy sig may block lda inst and the opposite also happens
+- so the store/load-buffer's size has to be increased to 6~8
+
+> impliment page:
+% the page calculation happens after the ld/st buffer
+- split physical / virtual address within the buffers
+
+<-- end
+
+* add LD, ST buffer
+- ld, st buffer for memory accessability checking and commit delay
+- add reading function to st buffer to forward stored data
+
+LD buff:
+info: addr, data, Avalid, Dvalid, inst-id
+
+when issue:
+allocate buffer fot the dispatched inst.
+
+loading addr (same struct as normal FU ld):
+lda addr to corresponding buffer.
+set Avalid flag to true
+
+loading data:
+lda data to corresponding buffer.
+set Vvalid flag to true
+
+%if buffer is Avalid:
+send the valid lda out to port in id order (using store-buffer's queue)
+
+% if buffer is Dvalid:
+send the valid lda out to ROB in id order (using store-buffer's queue)
+
+* each buffer holds:
+- addr: 32bit
+- data: 32bit
+- Avalid: addr is ready
+- Dvalid: data is ready
+- inst-id & epoch (for comp)
+
+ST buff:
+info: addr, data, inst id, valid bit.
+
+% valid bit means that it is a occupied space and has correct inst-id loaded
+% which happens at a dispatch cycle
+
+when issue:
+allocate memory for the dispatched inst.
+set the valid bit to one.
+
+- notice:
+dispatch only happens one at a time (for now at least)
+
+when reciving data/addr
+set selected set of register to data/addr
+two loading of data/addr set can happen simultaneously
+
+when committed:
+outputs correlating set of datas and remove it from the buffer	
+
+edge case:
+1: load / store gets pushed to buff at the same time
+
+<interrupt>
+* impliment interrupt to CPU
+- outer IPU needed
+
+<IPU>
+<MMU>
+<cache>
+<multi channel RAM>

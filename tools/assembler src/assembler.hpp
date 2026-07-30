@@ -84,6 +84,7 @@ namespace assembler {
 			whitespace,
 			newline,
 
+			character,
 			string,
 			identifier,
 
@@ -194,18 +195,20 @@ namespace assembler {
 				{ "\\|", TokenType::verticalbar },
 				{ "^", TokenType::caret },
 				{ "<<", TokenType::leftshift },
-				{ ">>", TokenType::rightshift }
+				{ ">>", TokenType::rightshift },
 			},
 			{
 				{ "0x[0-9a-fA-F]+", TokenType::hexnum },
 				{ "[0-9]+", TokenType::decnum },
 				{ "0o[0-7]+", TokenType::octnum },
 				{ "0b[01]+", TokenType::binnum },
-
+ 
 				{ "#[0-9]+", TokenType::macro_arg },
 
 				{ "[a-zA-Z_][a-zA-Z0-9_]*", TokenType::identifier },
 				{ "##[a-zA-Z_][a-zA-Z0-9_]*", TokenType::identifier_unique },
+
+				{ "\'([^\\\\\n\t\']|(\\\\([nt\\\\]|([0-9]{1,3}))))\'", TokenType::character},
 				{ "\"[^\n\"]*([^\n\"]+(\\\\[\n\"])+)*\"", TokenType::string },
 
 				{ ";[^\n]*", TokenType::comment },
@@ -323,6 +326,7 @@ namespace assembler {
 
 			{ TokenType::newline, "newline" },
 			{ TokenType::identifier, "identifier" },
+			{ TokenType::character, "character" },
 			{ TokenType::string, "string" },
 
 			{ TokenType::__epsilon, "epsilon" },
@@ -1050,7 +1054,8 @@ namespace assembler {
 			{ { NT::number, AT::__epsilon, 0 }, { { TT::hexnum, false, false } } },
 			{ { NT::number, AT::__epsilon, 0 }, { { TT::decnum, false, false } } },
 			{ { NT::number, AT::__epsilon, 0 }, { { TT::octnum, false, false } } },
-			{ { NT::number, AT::__epsilon, 0 }, { { TT::binnum, false, false } } }
+			{ { NT::number, AT::__epsilon, 0 }, { { TT::binnum, false, false } } },
+			{ { NT::number, AT::__epsilon, 0 }, { { TT::character, false, false } } }
 		};
 
 		ParserFactory parserFactory;
@@ -1202,6 +1207,35 @@ namespace assembler {
 				return ans;
 			}
 
+			int char2int(std::string text) {
+				int ans = 0;
+
+				auto it = text.begin();
+				if (it != text.end()) ++it;
+
+				if (*it == '\\') {
+					++it;
+
+					switch (*it) {
+					case 'n': ans = '\n'; break;
+					case 't': ans = '\t'; break;
+					case '\\': ans = '\\'; break;
+					case '\'': ans = '\''; break;
+					case '\"': ans = '\"'; break;
+					default:
+						for (it; *it != '\''; ++it) {
+							ans *= 10;
+							ans += (*it - '0');
+						}
+					}
+				}
+				else {
+					ans = *it;
+				}
+
+				return ans;
+			}
+
 			int pow(int base, u32 power) {
 				int ans = 1;
 				for (u32 i = 0; i < power; i++)
@@ -1308,6 +1342,7 @@ namespace assembler {
 				case (u64)TokenType::decnum: data->expressionValue[cur] = dec2int(cur->text); break;
 				case (u64)TokenType::octnum: data->expressionValue[cur] = oct2int(cur->text); break;
 				case (u64)TokenType::binnum: data->expressionValue[cur] = bin2int(cur->text); break;
+				case (u64)TokenType::character: data->expressionValue[cur] = char2int(cur->text); break;
 				}
 
 				return true;
@@ -1540,7 +1575,7 @@ namespace assembler {
 		}
 	}
 
-	const unsigned long long version = 204;
+	const unsigned long long version = 209;
 
 	namespace cache {
 		using u64 = unsigned __int64;
