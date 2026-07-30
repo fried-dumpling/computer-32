@@ -9,6 +9,25 @@
     jmp.one zero.32B, ##inf_loop
 #end
 
+#macro BLOCK 0
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+#end
+
 #define buffSize 20
 
 .data
@@ -73,10 +92,10 @@
 func_getInput:
     set gen[1].32B, 1           ; gen[1](counter) = 1
     set gen[2].32B, strBuff     ; gen[2](base) = strBuff
-    set gen[5].32B, 'k'         ; gen[5] = 'k'
 
 getInput_mainloop:
     ; check valid
+    BLOCK()
     ld.gen[24] gen[3].32B, KEY_V        ; gen[3](valid) = mem[IO_BASE + KEY_V]
     cmp gen[3].32B, zero.32B            ; valid == 0
     jmp.zero zero.32B, getInput_skip    ; if !valid skip
@@ -85,8 +104,6 @@ getInput_mainloop:
     ld.gen[24] gen[4].32B, KEY_IN       ; char = mem[IO_BASE + KEY_IN]
     st.gen[24] full.32B, KEY_R          ; mem[IO_BASE + KEY_R] = 0xFFFFFFFF
     st.gen[24] gen[4].32B, TERM_OUT     ; mem[IO_BASE + TERM_OUT] = char
-
-    ;st.gen[24] gen[5].32B, TERM_OUT     ; mem[IO_BASE + TERM_OUT] = 'k'
     
     cmpi gen[4].32B, '\n'               ; char == '\n'
     jmp.zero zero.32B, getInput_exit    ; if (char == '\n') break
