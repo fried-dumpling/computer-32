@@ -4,7 +4,6 @@ dasm it has bug in it!
 i think it is in parsing somewhere.....
 however instead of gcc, msvc works fine.... so it's fine for now? idk. 
 
-
 <computer32>
 error at R-cycle 33--
 

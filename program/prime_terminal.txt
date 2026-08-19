@@ -4,11 +4,17 @@
 #define KEY_R 8
 #define TERM_OUT 12
 
+#define LISTSIZE 1000
+#define BUFFSIZE 10
+#define STACKSIZE 10
+
+; <halt>
 #macro HALT 0
 ##inf_loop:
     jmp.one zero.32B, ##inf_loop
 #end
 
+; <block>
 #macro BLOCK 0
     nop
     nop
@@ -28,61 +34,155 @@
     nop
 #end
 
-#define buffSize 20
-
-.data
-    strBuff: 4*buffSize, 0  ; input buffer
-    numA:   4, 0    ; inputA
-    numB:   4, 0    ; inputB
-    numOut: 4, 0    ; output
-    bcdTest:4, 0    ; bcdTest
-    4*20, 0
-    stackEnd:
-.text
-    ; setting gen[24] to IO_BASE
-    set gen[24].S16H, IO_BASE >> 16
-    set gen[24].16L, IO_BASE & 0xFFFF
-
-    set stack.32B, stackEnd     ; stack = stackEnd
+; <multiply>
+; out: #1 -> product
+; in:  #2 -> multiplicand
+; in:  #3 -> multiplier
+#macro MULT 3
+    set #1.32B, 0
+##mult_loop:
+    test #3.32B, one.32B
+    jmp.zero zero.32B, ##mult_skip
+    add #1.32B, #2.32B
+##mult_skip:
+    shiftri #3.32B, 1
+    shiftli #2.32B, 1
+    cmpi #3.32B, 0
+    ijmp.zero zero.32B, ##mult_loop
+#end
     
-    set gen[1].32B, 'a'
+; <modulo>
+; out: #1 -> remainder
+; in:  #2 -> dividend
+; in:  #3 -> divisor
+; use: #4 -> tmp
+#macro MOD 4
+    set #1.S16H, 0x7FFF
+    set #1.16L, 0xFFFF
+    mov #4.32B, #3.32B
+    cmpi #3.32B, 0
+    jmp.zero zero.32B, ##mod_exit
+
+##mod_init:
+    cmp #3.32B, #1.32B
+    jmp.pos zero.32B, ##mod_main
+    cmp #3.32B, #2.32B
+    jmp.pos zero.32B, ##mod_main
+    shiftli #3.32B, 1
+    jmp.one zero.32B, ##mod_init
+    
+##mod_main:
+    shiftrc #3.32B, one.32B
+    mov #1.32B, #2.32B
+
+##mod_loop:
+    cmp #1.32B, #3.32B
+    jmp.neg zero.32B, ##mod_skip
+    sub #1.32B, #3.32B
+##mod_skip:
+    shiftri #3.32B, 1
+    cmp #4.32B, #3.32B
+    ijmp.pos zero.32B, ##mod_loop
+##mod_exit:
+#end
+
+.data 
+    testA:      4, 0xAAAAAAAA
+    testB:      4, 0xAAAAAAAA
+    testC:      4, 0xAAAAAAAA
+    primeLen:   4, 0
+    primeArr:   4*LISTSIZE, 0
+    strBuff:    4*BUFFSIZE, 0
+    num:        4, 0xFFFFFFFF
+    4*STACKSIZE, 0xCCCCCCCC
+    stackEnd:   
+
+.text
+    set stack.16L, stackEnd & 0xFFFF
+    set stack.S16H, stackEnd >> 16
+    set gen[24].16L, IO_BASE & 0xFFFF
+    set gen[24].S16H, IO_BASE >> 16
+    set gen[23].16L, primeArr & 0xFFFF
+    set gen[23].S16H, primeArr >> 16
+
+    set gen[1].32B, 'l'
     st.gen[24] gen[1].32B, TERM_OUT
-    set gen[1].32B, '\n'
+    set gen[1].32B, 'e'
+    st.gen[24] gen[1].32B, TERM_OUT
+    set gen[1].32B, 'n'
+    st.gen[24] gen[1].32B, TERM_OUT
+    set gen[1].32B, ':'
+    st.gen[24] gen[1].32B, TERM_OUT
+    set gen[1].32B, ' '
     st.gen[24] gen[1].32B, TERM_OUT
 
-    ; get numA
     call zero.32B, func_getInput
     call zero.32B, func_convertInt
-    st.zero gen[0].32B, numA
-
-    set gen[1].32B, 'b'
-    st.gen[24] gen[1].32B, TERM_OUT
-    set gen[1].32B, '\n'
-    st.gen[24] gen[1].32B, TERM_OUT
-
-    ; get numB
-    call zero.32B, func_getInput    
-    call zero.32B, func_convertInt
-    st.zero gen[0].32B, numB
+    st.zero gen[0].32B, primeLen
     
-    set gen[1].32B, 'c'
-    st.gen[24] gen[1].32B, TERM_OUT
-    set gen[1].32B, '\n'
-    st.gen[24] gen[1].32B, TERM_OUT
+    mov gen[1].32B, gen[23].32B
+    call zero.32B, func_getPrime
 
-    ; mem[numOut] = mem[numA] + mem[numB]
-    ld.zero gen[1].32B, numA
-    ld.zero gen[2].32B, numB            ; !!! sometimes equal numA !!!
-    add gen[1].32B, gen[2].32B
-    st.zero gen[1].32B, numOut
-    st.zero gen[2].32B, bcdTest
-
-    ; print ans
-    ld.zero gen[1].32B, numOut
+    ld.zero gen[2].32B, primeLen
+    subi gen[2].32B, 1
+    shiftli gen[2].32B, 2
+    ld.gen[2] gen[1].32B, primeArr
     call zero.32B, func_convertStr
     call zero.32B, func_print
 
     HALT()
+
+
+
+    ; <get prime> 
+    ; mem:  mem[primeArr]
+    ; in:  gen[0] -> len
+    ; use: gen[1] -> primeArr
+    ; use: gen[2] -> cur
+    ; use: gen[3] -> test
+    ; use: gen[4] -> pointer
+    ; use: gen[5] -> square
+    ; use: gen[6] -> tmp
+    ; use: gen[7] -> tmp2
+    ; use: gen[8] -> write
+    ; use: gen[9] -> tmp3
+func_getPrime:
+    set gen[6].32B, 2
+    st.gen[1] gen[6].32B, 0
+    set gen[2].32B, 3
+    mov gen[8].32B, gen[1].32B
+    addi gen[8].32B, 4
+    
+getPrime_mainloop:
+    mov gen[4].32B, gen[1].32B
+    
+getPrime_subloop:
+    ld.gen[4] gen[3].32B, 0
+    mov gen[6].32B, gen[3].32B
+
+    MOD(gen[7], gen[2], gen[6], gen[9])
+    cmpi gen[7].32B, 0
+    jmp.zero zero.32B, getPrime_continue
+
+    addi gen[4].32B, 4
+    mov gen[6].32B, gen[3].32B
+    MULT(gen[5], gen[6], gen[3])
+    cmp gen[5].32B, gen[2].32B
+    ijmp.pos zero.32B, getPrime_subloop
+
+    st.gen[8] gen[2].32B, 0
+    addi gen[8].32B, 4
+
+    subi gen[0].32B, 1
+    cmpi gen[0].32B, 0
+    ijmp.pos zero.32B, getPrime_exit
+
+getPrime_continue:
+    addi gen[2].32B, 1
+    jmp.one zero.32B, getPrime_mainloop
+
+getPrime_exit:
+    ret
 
     ; <get input>
     ; out: mem[strBuff]
@@ -112,7 +212,7 @@ getInput_mainloop:
     st.gen[2] gen[4].32B, 0     ; mem[base] = char
     addi gen[2].32B, 4          ; base += 4
     addi gen[1].32B, 1          ; count++
-    cmpi gen[1].32B, buffSize   ; count == buffSize
+    cmpi gen[1].32B, BUFFSIZE   ; count == buffSize
     jmp.zero zero.32B, getInput_exit    ; if (count == buffSize) break
     
 getInput_skip:
@@ -241,4 +341,3 @@ print_mainloop:
 
 print_exit:
     ret
-    
