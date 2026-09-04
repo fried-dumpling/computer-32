@@ -1,0 +1,123 @@
+#define GP_BASE 0x8000000
+#define IO_BASE 0x4000000
+#define KEY_IN 0
+#define KEY_V 4
+#define KEY_R 8
+#define TERM_OUT 12
+
+#define LISTSIZE 1000
+#define BUFFSIZE 10
+#define STACKSIZE 10
+
+#define WIDTH 160
+#define HEIGHT 90
+#define SCR (WIDTH * HEIGHT)
+
+#macro RGB 3 (((#1) << 10) + ((#2) << 5) + (#3) + 0x8000) #end
+
+#macro LONGSET 2
+    set #1.16L, #2 & 0xFFFF
+    set #1.S16H, #2 >> 16
+#end
+
+.data
+    STACKSIZE * 4, 0
+    stackEnd:
+.text
+    LONGSET(stack, stackEnd)
+    LONGSET(sbp, stackEnd)
+    LONGSET(gen[24], IO_BASE)
+    LONGSET(gen[23], GP_BASE)
+
+    set gen[1].32B, WIDTH
+    set gen[2].32B, HEIGHT
+    set gen[3].32B, func_value
+    mov gen[4].32B, gen[23].32B
+
+    call zero.32B, func_fillscr
+
+    halt
+
+func_value:
+    mov gen[0].32B, gen[1].32B
+    shiftli gen[1].32B, 1
+    add gen[0].32B, gen[1].32B
+    shiftli gen[1].32B, 1
+    add gen[0].32B, gen[1].32B
+    shiftli gen[1].32B, 3
+    add gen[0].32B, gen[1].32B
+    shiftli gen[1].32B, 1
+    add gen[0].32B, gen[1].32B
+
+    shiftri gen[0].32B, 11
+
+    mov gen[2].32B, gen[0].32B
+    shiftli gen[0].32B, 4
+    bor gen[2].32B, gen[0].32B
+    shiftli gen[0].32B, 4
+    bor gen[2].32B, gen[0].32B
+    bndi gen[2].32B, 0b10000100001
+    
+    set gen[0].32B, 0
+    sub gen[0].32B, gen[2].32B
+    shiftli gen[2].32B, 5
+    add gen[0].32B, gen[2].32B
+    set gen[2].32B, 0x4000
+    shiftli gen[2].32B, 1
+    add gen[0].32B, gen[2].32B
+
+    ret
+    
+
+    ; gen[0] -> zero
+    ; gen[1] -> width / pixXmov
+    ; gen[2] -> height / pixYmov
+    ; gen[3] -> funcpointer
+    ; gen[4] -> offset / cntP
+    ; gen[5]: cntX
+    ; gen[6]: cntY
+    ; gen[7]: width
+    ; gen[8]: height
+func_fillscr:
+    push sbp.32B
+    push gen[1].32B
+    push gen[2].32B
+    push gen[4].32B
+    push gen[5].32B
+    push gen[6].32B
+    push gen[7].32B
+    push gen[8].32B
+
+    mov gen[7].32B, gen[1].32B
+    mov gen[8].32B, gen[2].32B
+
+    set gen[6].32B, 0
+
+fillscr_loopY:
+    set gen[5].32B, 0
+
+fillscr_loopX:
+    mov gen[1].32B, gen[5].32B
+    mov gen[2].32B, gen[6].32B
+    call gen[3].32B, 0
+    st.gen[4] gen[0].32B, 0
+    addi gen[4].32B, 4
+
+    addi gen[5].32B, 1
+    cmp gen[5].32B, gen[7].32B
+    ijmp.zero zero.32B, fillscr_loopX
+
+    addi gen[6].32B, 1
+    cmp gen[6].32B, gen[8].32B
+    ijmp.zero zero.32B, fillscr_loopY
+
+    pop gen[7].32B
+    pop gen[8].32B
+    pop gen[6].32B
+    pop gen[5].32B
+    pop gen[4].32B
+    pop gen[2].32B
+    pop gen[1].32B
+    pop sbp.32B
+
+    ret
