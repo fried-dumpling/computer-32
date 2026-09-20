@@ -71,8 +71,8 @@ int main(int argc, char* argv[]) {
 		dump.flags |= assembler::AssemblerDump::getToken;
 	if (dumpPreproc)
 		dump.flags |= assembler::AssemblerDump::getPreproc;
-	if (dumpAST)
-		dump.flags |= assembler::AssemblerDump::getAST;
+	/*if (dumpAST)
+		dump.flags |= assembler::AssemblerDump::getAST;*/
 	if (dumpEvaluate)
 		dump.flags |= assembler::AssemblerDump::getEval;
 	if (dumpBinary)
@@ -120,7 +120,7 @@ int main(int argc, char* argv[]) {
 		cout << "------------------------------------------------------------" << endl;
 	}
 
-	if (dumpPreproc) {
+	if (dumpPreproc || !dump.preprocSuccess) {
 		cout << "preproc->" << endl;
 		cout << "------------------------------------------------------------" << endl;
 		for (auto it = dump.preprocTokens.begin(); it != dump.preprocTokens.end(); it++) {
@@ -161,11 +161,11 @@ int main(int argc, char* argv[]) {
 		cout << "------------------------------------------------------------" << endl;
 	}
 
-	if (dumpEvaluate || dumpBinary) {
+	if (dumpEvaluate || dumpBinary || !dump.parseSuccess) {
 		cout << "parse->" << endl;
 		cout << (dump.parseSuccess ? "success" : "failed") << endl;
 		if (!dump.parseSuccess)
-			cout << dump.errorMessage << " <- here" << endl;
+			cout << dump.errorMessage << endl;
 		cout << "------------------------------------------------------------" << endl;
 		cout << "evaluate->" << endl;
 		cout << (dump.evalSuccess ? "success" : "failed") << endl;

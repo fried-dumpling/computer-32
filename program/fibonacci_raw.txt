@@ -19,5 +19,5 @@
 	add gen[0].32B, gen[2].32B ; gen[0] += gen[2]
 	ijmp.carry zero.32B, main_loop	; jmp if not overflow
 
-	halt
+	wait
 	

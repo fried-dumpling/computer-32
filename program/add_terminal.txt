@@ -72,7 +72,7 @@
 
     ; mem[numOut] = mem[numA] + mem[numB]
     ld.zero gen[1].32B, numA
-    ld.zero gen[2].32B, numB            ; !!! sometimes equal numA !!!
+    ld.zero gen[2].32B, numB
     add gen[1].32B, gen[2].32B
     st.zero gen[1].32B, numOut
     st.zero gen[2].32B, bcdTest

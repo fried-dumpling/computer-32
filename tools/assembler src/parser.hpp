@@ -3,6 +3,7 @@
 
 #include <iostream>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -16,7 +17,6 @@
 #include <stack>
 
 #include <utility>
-#include <algorithm>
 
 #include "lexer.hpp"
 
@@ -25,21 +25,22 @@
 
 namespace parser_generator {
 	namespace convert {
+		using u32 = unsigned __int32;
 		using u64 = unsigned __int64;
-		using ID = u64;
-		using Element = u64;
+		using ID = u32;
+		using Element = u32;
 
 		typedef struct _Item {
-			u64 prodId;
-			u64 dotPos;
-			u64 lookaheadId;
+			ID prodId;
+			u32 dotPos;
+			ID lookaheadId;
 		} Item;
 
 		inline void getClosure(
 			std::unordered_set<ID>& reduceItems,
 			std::vector<Item>& closure,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
-			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
+			std::unordered_multimap<Element, std::pair<std::vector<Element>, ID>>& grammerMap,
 			std::vector<Item> items) {
 
 			typedef struct _QData {
@@ -56,7 +57,7 @@ namespace parser_generator {
 					continue;
 				}
 
-				it->lookaheadId = (u64)-1;
+				it->lookaheadId = (ID)-1;
 				itemQ.push({ *it, *it });
 			}
 
@@ -76,7 +77,7 @@ namespace parser_generator {
 					Item tmp;
 					tmp.prodId = it->second.second;
 					tmp.dotPos = 0;
-					tmp.lookaheadId = (it->second.first.size()) ? (u64)-1 : 0;
+					tmp.lookaheadId = (it->second.first.size()) ? (ID)-1 : 0;
 
 					itemQ.push({ tmp, cur.item });
 					closure.push_back(tmp);
@@ -88,16 +89,11 @@ namespace parser_generator {
 					closure.push_back(*it);
 			}
 
-			std::sort(closure.begin(), closure.end(), [](const Item& a, const Item& b) {
-				if (a.prodId != b.prodId) return a.prodId < b.prodId;
-				return a.dotPos < b.dotPos;
-			});
-
 			size_t counter = closure.size();
 			for (auto it = closure.rbegin(); it != closure.rend(); ++it) {
 				counter--;
 				if (!it->lookaheadId) {
-					reduceItems.insert(counter);
+					reduceItems.insert((ID)counter);
 				}
 			}
 		}
@@ -145,7 +141,7 @@ namespace parser_generator {
 			std::vector<std::vector<Item>>& closureVec,
 			std::unordered_multimap<ID, std::pair<ID, Element>>& transitionMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
-			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
+			std::unordered_multimap<Element, std::pair<std::vector<Element>, ID>>& grammerMap,
 			Item startItem) {
 
 			typedef struct _QData {
@@ -190,9 +186,9 @@ namespace parser_generator {
 				}
 			}
 
-			size_t closureIndex = 0;
+			ID closureIndex = 0;
 			for (auto it = closureVec.begin(); it != closureVec.end(); ++it) {
-				size_t itemIndex = 0;
+				ID itemIndex = 0;
 				for (auto si = it->begin(); si != it->end(); ++si) {
 					if (si->prodId == startItem.prodId)
 						startItemIds.push_back({ closureIndex, itemIndex });
@@ -204,7 +200,7 @@ namespace parser_generator {
 
 		inline std::vector<u64>& getFirst(
 			Element element,
-			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
+			std::unordered_multimap<Element, std::pair<std::vector<Element>, ID>>& grammerMap,
 			std::unordered_map<Element, std::vector<u64>>& firstCache,
 			Element terminalEnd) {
 
@@ -281,11 +277,11 @@ namespace parser_generator {
 
 		inline void lookaheadHelper(
 			std::vector<u64>& lookahead,
-			std::vector<std::pair<u64, u64>>& ref,
+			std::vector<std::pair<ID, ID>>& ref,
 			std::vector<std::vector<Item>>& closureVec,
 			std::unordered_map<Element, std::unordered_multimap<ID, ID>>& revTransitionMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
-			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
+			std::unordered_multimap<Element, std::pair<std::vector<Element>, ID>>& grammerMap,
 			std::unordered_map<Element, std::vector<u64>>& firstCache,
 			Element terminalEnd, ID closureID, Item item) {
 
@@ -296,17 +292,17 @@ namespace parser_generator {
 
 			typedef struct _QData {
 				ID closureId;
-				u64 index;
+				u32 index;
 			} QData;
 
 			std::unordered_set<ID> predSet;
 			std::queue<QData> closureQ;
 
-			closureQ.push({ closureID, (u64)(item.dotPos - 1)});
+			closureQ.push({ closureID, (u32)(item.dotPos - 1)});
 			while (!closureQ.empty()) {
 				QData cur = closureQ.front(); closureQ.pop();
 
-				if (cur.index == (u64)-1) {
+				if (cur.index == (u32)-1) {
 					predSet.insert(cur.closureId);
 					continue;
 				}
@@ -318,9 +314,9 @@ namespace parser_generator {
 
 			for (auto it = predSet.begin(); it != predSet.end(); ++it) {
 				std::vector<Item>& curClosure = closureVec[*it];
-				u64 counter = 0;
+				ID counter = 0;
 				for (auto si = curClosure.begin(); si != curClosure.end(); ++si) {
-					u64 itemId = counter++;
+					ID itemId = counter++;
 					if (grammerVec[si->prodId].second.size() <= si->dotPos || grammerVec[si->prodId].second[si->dotPos] != core.first)
 						continue;
 
@@ -362,27 +358,35 @@ namespace parser_generator {
 			bool operator == (const _DoubleID& other) const {
 				return (this->closureId == other.closureId && this->itemId == other.itemId);
 			}
+
+			bool operator < (const _DoubleID& other) const {
+				return (this->closureId < other.closureId) || (this->closureId == other.closureId && this->itemId < other.itemId);
+			}
 		} DoubleID;
 
 		typedef struct _HashDoubleID {
 			size_t operator()(const DoubleID& k) const {
 				size_t h1 = std::hash<ID>()(k.closureId);
 				size_t h2 = std::hash<ID>()(k.itemId);
-				return h1 ^ (h2 << 32) ^ (h2 >> 32);
+				return h1 ^ (h2 + 0x9e3779b97f4a7c15ULL + (h1 << 6) + (h1 >> 2));
 			}
 		} HashDoubleID;
 
 		typedef struct _TarjanDFSdata {
-			std::unordered_map<DoubleID, u64, HashDoubleID>& index;
-			std::unordered_map<DoubleID, u64, HashDoubleID>& low;
+			std::unordered_map<DoubleID, ID, HashDoubleID>& index;
+			std::unordered_map<DoubleID, ID, HashDoubleID>& low;
 			std::unordered_map<DoubleID, bool, HashDoubleID>& onStack;
 			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID>& transitionMap;
-			u64 indexCt;
+			std::unordered_map<DoubleID, DoubleID, HashDoubleID>& sccMap;
+			std::vector<DoubleID>& sccStack;
+			ID indexCt;
 		} TarjanDFSdata;
 
 		inline void tarjanDFS(TarjanDFSdata& data, DoubleID id) {
-			data.index[id] = data.indexCt++;
-			data.low[id] = data.index[id];
+			data.index[id] = data.indexCt;
+			data.low[id] = data.indexCt;
+			data.indexCt++;
+			data.sccStack.push_back(id);
 			data.onStack[id] = true;
 
 			auto range = data.transitionMap.equal_range(id);
@@ -398,17 +402,27 @@ namespace parser_generator {
 					data.low[id] = std::min(data.low[id], data.index[it->second]);
 			}
 
-			data.onStack[id] = false;
+			if (data.low[id] == data.index[id]) {
+				while (true) {
+					DoubleID w = data.sccStack.back();
+					data.sccStack.pop_back();
+					data.onStack[w] = false;
+					data.sccMap[w] = id;
+					if (w == id)
+						break;
+				}
+			}
 		}
 
 		inline void tarjan(
 			std::unordered_map<DoubleID, DoubleID, HashDoubleID>& sccMap,
 			std::unordered_multimap<DoubleID, DoubleID, HashDoubleID>& transitionMap) {
 
-			std::unordered_map<DoubleID, u64, HashDoubleID> index, low;
+			std::unordered_map<DoubleID, ID, HashDoubleID> index, low;
 			std::unordered_map<DoubleID, bool, HashDoubleID> onStack;
+			std::vector<DoubleID> sccStack;
 
-			TarjanDFSdata data = { index, low, onStack, transitionMap, 1 };
+			TarjanDFSdata data = { index, low, onStack, transitionMap, sccMap, sccStack, 1 };
 
 			std::unordered_set<DoubleID, HashDoubleID> idSet;
 			for (auto it = transitionMap.begin(); it != transitionMap.end(); ++it) {
@@ -422,13 +436,6 @@ namespace parser_generator {
 
 				tarjanDFS(data, *it);
 			}
-
-			std::unordered_map<ID, DoubleID> rIndex;
-			for (auto it = index.begin(); it != index.end(); ++it)
-				rIndex[it->second] = it->first;
-
-			for (auto it = idSet.begin(); it != idSet.end(); ++it)
-				sccMap[*it] = rIndex[low[*it]];
 		}
 
 		inline DoubleID replaceScc(DoubleID id, std::unordered_map<DoubleID, DoubleID, HashDoubleID>& sccMap) {
@@ -445,7 +452,7 @@ namespace parser_generator {
 			std::vector<std::pair<ID, ID>>& startItems,
 			std::unordered_map<Element, std::unordered_multimap<ID, ID>>& revTransitionMap,
 			std::vector<std::pair<Element, std::vector<Element>>>& grammerVec,
-			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>>& grammerMap,
+			std::unordered_multimap<Element, std::pair<std::vector<Element>, ID>>& grammerMap,
 			Element terminalEnd, Element eot) {
 
 			typedef struct _TableData {
@@ -469,7 +476,7 @@ namespace parser_generator {
 					itemQ.push({ it->first, *si });
 			}
 
-			u64 count = 0;
+			ID count = 0;
 			while (!itemQ.empty()) {
 				QData cur = itemQ.front(); itemQ.pop();
 				if (!visited[cur.closureId].insert(cur.itemId).second)
@@ -523,7 +530,7 @@ namespace parser_generator {
 			}
 
 			std::vector<DoubleID> orderedSet;
-			std::unordered_map<DoubleID, u64, HashDoubleID> inDegree;
+			std::unordered_map<DoubleID, ID, HashDoubleID> inDegree;
 			std::queue<DoubleID> sortQ;
 
 			for (auto it = sccRRefMap.begin(); it != sccRRefMap.end(); ++it) {
@@ -606,12 +613,12 @@ namespace parser_generator {
 			acceptNonterminal += terminalEnd;
 
 			Item startItem = {};
-			std::unordered_multimap<Element, std::pair<std::vector<Element>, u64>> grammerMap;
-			u64 count = 0;
+			std::unordered_multimap<Element, std::pair<std::vector<Element>, ID>> grammerMap;
+			ID count = 0;
 			for (auto it = grammerVec.begin(); it != grammerVec.end(); ++it) {
 				grammerMap.insert({ it->first, { it->second, count } });
 				if (it->first == acceptNonterminal)
-					startItem = { count, 0, (u64)-1 };
+					startItem = { count, 0, (ID)-1 };
 				count++;
 			}
 
@@ -645,32 +652,35 @@ namespace parser_generator {
 					table.gotoTable[i][j] = { 0, true };
 			}
 
-			std::map<std::pair<ID, ID>, int> handledReduce;
-
 			for (auto it = transitionMap.begin(); it != transitionMap.end(); ++it) {
-				if (it->second.second < terminalEnd) {
+				if (it->second.second < terminalEnd)
 					table.actionTable[it->first][it->second.second] = { it->second.first, ActionType::Shift };
-					handledReduce.insert({ { it->first, it->second.second },  -(int)it->second.second});
-				}
 				else
 					table.gotoTable[it->first][it->second.second - terminalEnd] = { it->second.first, false };
 			}
 
-			for (auto it = reduceItem.begin(); it != reduceItem.end(); ++it) {
-				for (auto si = it->second.begin(); si != it->second.end(); ++si) {
-					Item& item = closureVec[it->first][*si];
-					ActionType type = ActionType::Reduce;
-					if (grammerVec[item.prodId].first == acceptNonterminal)
-						type = ActionType::Accept;
+			std::set<DoubleID> reduceList;
+			for (auto it = reduceItem.begin(); it != reduceItem.end(); ++it)
+				for (auto si = it->second.begin(); si != it->second.end(); ++si)
+					reduceList.insert({ it->first, *si });
 
-					std::vector<u64> lookahead = lookaheadSets[item.lookaheadId];
-					for (u64 i = 0; i < lookahead.size(); i++) {
-						u64 bit = lookahead[i];
-						for (u64 j = 0; j < 64 && bit; j++) {
-							if (bit & 0b1)
-								table.actionTable[it->first][i * 64 + j] = { item.prodId, type };
-							bit >>= 1;
+			for (auto it = reduceList.begin(); it != reduceList.end(); ++it) {
+				ID closureId = it->closureId, itemId = it->itemId;
+				Item& item = closureVec[closureId][itemId];
+				ActionType type = ActionType::Reduce;
+				if (grammerVec[item.prodId].first == acceptNonterminal)
+					type = ActionType::Accept;
+
+				std::vector<u64>& lookahead = lookaheadSets[item.lookaheadId];
+				for (u64 i = 0; i < lookahead.size(); i++) {
+					u64 bit = lookahead[i];
+					for (u64 j = 0; j < 64 && bit; j++) {
+						if (bit & 0b1) {
+							Action& slot = table.actionTable[closureId][i * 64 + j];
+							if (slot.type == ActionType::Error)
+								slot = { item.prodId, type };
 						}
+						bit >>= 1;
 					}
 				}
 			}
@@ -834,7 +844,7 @@ namespace parser_generator {
 			}
 		}
 
-		bool parse(ASTNode*& pAST, std::vector<Token> inputs) {
+		bool parse(ASTNode*& pAST, int* pErrorLine, std::vector<Token> inputs) {
 			inputs.push_back({ "", Terminal::__eot});
 
 			typedef struct _StackData {
@@ -861,7 +871,6 @@ namespace parser_generator {
 						tokenCount++;
 						break;
 					case AT::Reduce: {
-						//parseList.push_back(action.arg);
 						auto& grammer = this->grammerVec[action.arg];
 						auto& ASTRule = this->ASTActionVec[action.arg];
 
@@ -917,8 +926,21 @@ namespace parser_generator {
 		error:
 			ASTNode* nNode = new ASTNode;
 			ASTNode* errNode = new ASTNode;
-			for (u64 i = 0; i < tokenCount; i++)
-				errNode->text += inputs[i].text + " ";
+
+			u64 errorIndex = 0;
+			int errorLine = 0;
+			if (tokenCount) {
+				errorLine = inputs[tokenCount - 1].line;
+				for (errorIndex = tokenCount - 1; errorIndex != (u64)-1 && inputs[errorIndex].line == errorLine; errorIndex--) {}
+				errorIndex++;
+			}
+			*pErrorLine = errorLine;
+
+			if (tokenCount < inputs.size())
+				errNode->text = inputs[tokenCount].text;
+			else
+				errNode->text = "<EOF>";
+
 			nNode->child.push_back(errNode);
 			while (!astStack.empty()) {
 				ASTNode* cur = astStack.top(); astStack.pop();
@@ -953,7 +975,7 @@ namespace parser_generator {
 				Terminal terminal;
 				NonTerminal nonTerminal;
 				ASTElement astElement;
-				u64 raw;
+				Element raw;
 			};
 
 		public:
@@ -982,8 +1004,8 @@ namespace parser_generator {
 				return (convert::Element)this->raw;
 			}
 
-			inline std::pair<Type, u64> getRaw(void) const {
-				return { this->type, (u64)this->raw };
+			inline std::pair<Type, Element> getRaw(void) const {
+				return { this->type, (Element)this->raw };
 			}
 		};
 

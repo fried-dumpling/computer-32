@@ -63,11 +63,41 @@ st.<base_reg> <src_reg>, <offset16>     ; store to mem[base + offset]
 ```
 jmp.<flag> <reg>, <imm16>    ; conditional relative jump
 ijmp.<flag> <reg>, <imm16>   ; indirect jump (inverted condition)
-call <reg>, <imm16>          ; call
+call <reg>, <imm16>          ; call (reg doubles as base)
 ret                          ; return
 ```
 
 Flag conditions: `zero`, `neg`, `pos`, `carry`, `carry4`, `overflow`, `one` (always), `gen`
+
+### Stack
+
+```
+push <reg>
+pop <reg>
+```
+
+### Interrupts / Exceptions
+
+```
+syscall                              ; software interrupt
+iret                                 ; return from interrupt
+intervec <reg>, <imm8>, <imm8>       ; set interrupt vector entry
+interpri <imm8>, <imm8>              ; set interrupt priority
+ldexp <reg>, <reg_ex>                ; load from an extended/special register
+stexp <reg>, <reg_ex>                ; store to an extended/special register
+```
+
+`reg_ex` (only reachable via `ldexp`/`stexp`, not the normal `reg.mode` form): `istack` (interrupt stack pointer), `panicvec` (panic/fault vector), `cpuid`.
+
+### Misc
+
+```
+nop                           ; no-op
+brk                            ; breakpoint
+wait                          ; stall
+halt                          ; halt
+block                          ; pipeline block
+```
 
 ### Preprocessor
 
@@ -97,19 +127,26 @@ Opcode table is in `tools/assembler src/assembler.hpp` (`instructionBase` map).
 ## CPU Microarchitecture (Digital circuits in `components/`)
 
 - **`computer-32.dig`** — top-level system (CPU + memory + IO)
-- **`cpu-32.dig`** — main CPU: fetch, decode, dispatch, execute, commit pipeline
-- **`res-station.dig`** — reservation station (instruction window size 16)
-- **`ROB-gen.dig`** — reorder buffer for in-order commit
-- **`regFile*.dig`** — speculative register file with renaming
+- **`cpu-32.dig`** / **`cpu-32 test.dig`** — main CPU: fetch, decode, dispatch, execute, commit pipeline (test variant has extra probes)
+- **`res-station.dig`** (+ `res-station 2.dig`, `res-station-debug.dig`) — reservation station (instruction window size 16)
+- **`ROB-gen.dig`** (+ `ROB-gen 2.dig`) — reorder buffer for in-order commit; **`ROB-FL.dig`**, **`ROB-PC.dig`**, **`ROB-SC.dig`** — per-field ROB submodules (flags, PC, side-channel data); **`ROB-INT.dig`** — separate, smaller ROB dedicated to interrupt/trap entries
+- **`regFile.dig`..`regFile4.dig`** — speculative register file with renaming (iterated versions)
 - **`BTB.dig`** / **`BTB-buff.dig`** — branch target buffer (size 16, 2-bit predictor, 12-bit tag, 4-bit index)
 - **`RAS.dig`** — return address stack (4 speculative + 8 architectural modules)
-- **`load-buffer.dig`** / **`store-buffer.dig`** — memory operation buffers
-- **`id-manager.dig`** — instruction ID allocation/tracking
+- **`load-buffer.dig`** / **`store-buffer.dig`** (+ `-debug` variants) — memory operation buffers
+- **`store-controller.dig`** — **store-arbiter**: picks the commit/ROB-write order across multiple functional units (ALU, DIR for mov/set/register-ex, LOAD/STORE-BUFFER, etc.), 8-entry. Depends on **`index-compressor.dig`** and **`priority-test8V.dig`** (also `priority-test8`, `priority-test8V8B` variants exist). This is a separate concept from the load/store buffer age matrix below.
+  - **`store-controller-half.dig`** — 4-entry version of the same arbiter, used for the interrupt/trap ROB write path (few units currently raise exceptions, so 8 entries were overkill) and reused for the flag-store arbiter (which only uses 2 of its slots today). Depends on `index-compressor-half.dig` / `priority-test4V.dig`.
+- **`SC-buff.dig`** — side-channel/store-controller buffer support
+- **`flush-mux.dig`** — misprediction/exception flush muxing
+- **`id-manager.dig`** (+ `-debug`) — instruction ID allocation/tracking
 - **`alu-32.dig`** — 32-bit ALU
+- **`data-select-4.dig`/`-8.dig`/`-32.dig`** (+ `-4H`/`-8H` half-width variants) — data path selection muxes
 
 ### Active Development (dev branch)
 
-Currently replacing the queue-based ordering system with an **age matrix** for load/store buffer ordering. Age matrix encodes relative instruction age: bit = 1 means current entry is older than indexed entry.
+- Replacing the queue-based ordering system with an **age matrix** for **load/store buffer** ordering only. Age matrix encodes relative instruction age: bit = 1 means current entry is older than indexed entry. (This is unrelated to the store-arbiter family above.)
+- Shrinking the store-arbiter (`store-controller*.dig`) from its original 8-entry design to a 4-entry `-half.dig`, since most consumers (interrupt/trap ROB, flag-store arbiter) don't need the full 8 slots.
+- ISA cleanup in progress (see `todo.txt`): removing NMI, removing the trap-flag, rearranging the ISA. Interrupt/exception support (`syscall`, `iret`, `intervec`, `interpri`, `ldexp`/`stexp` + extended registers, `ROB-INT.dig`) and `call`-with-base, `block`/`halt` were added recently and are still being wired up.
 
 ## Programs
 

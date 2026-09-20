@@ -22,7 +22,7 @@
 
 namespace lexer_generator {
 	namespace graph {
-		using ID = unsigned long long;
+		using ID = unsigned int;
 		class UIDSet {
 		private:
 			std::set<ID> used;
@@ -395,9 +395,9 @@ namespace lexer_generator {
 				switch (cur->state) {
 				case S::E_START:
 					switch (c) {
-					case 't': tokens.push_back({ "\t", TokenType::CHAR, 0, 0 }); contexts.pop_back(); return true;
-					case 'n': tokens.push_back({ "\n", TokenType::CHAR, 0, 0 }); contexts.pop_back(); return true;
-					case 'r': tokens.push_back({ "\r", TokenType::CHAR, 0, 0 }); contexts.pop_back(); return true;
+					case 't': tokens.push_back({ "\t", TokenType::CHAR, '\t', 0}); contexts.pop_back(); return true;
+					case 'n': tokens.push_back({ "\n", TokenType::CHAR, '\n', 0 }); contexts.pop_back(); return true;
+					case 'r': tokens.push_back({ "\r", TokenType::CHAR, '\r', 0 }); contexts.pop_back(); return true;
 					default: tokens.push_back({ "\\" + std::string(1, c), TokenType::CHAR, c, 0 }); contexts.pop_back(); return true;
 					}
 				default: return false;
@@ -1355,6 +1355,7 @@ namespace lexer_generator {
 		typedef struct _Token {
 			std::string text;
 			TokenType type;
+			int line;
 
 			inline operator TokenType() const {
 				return this->type;

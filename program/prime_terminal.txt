@@ -126,7 +126,7 @@
     call zero.32B, func_convertStr
     call zero.32B, func_print
 
-    halt
+    wait
 
 
 

@@ -805,6 +805,11 @@
       <elementAttributes/>
       <pos x="1820" y="1720"/>
     </visualElement>
+    <visualElement>
+      <elementName>cpu-32 test.dig</elementName>
+      <elementAttributes/>
+      <pos x="500" y="600"/>
+    </visualElement>
   </visualElements>
   <wires>
     <wire>
