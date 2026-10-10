@@ -10,7 +10,7 @@
 #include <chrono>
 
 #include "assembler.hpp"
-#include "iotool.hpp"
+#include "../common/iotool.hpp"
 
 using namespace std;
 
@@ -19,18 +19,41 @@ using namespace assembler::lexer;
 using namespace assembler::parser;
 using namespace assembler::evaluator;
 
+int fileIO(std::string& text, std::string path) {
+	if (!iotools::readTextFile(path, text)) {
+		cout << "failed to read input file \'" << path << "\'" << endl;
+		return -1;
+	}
+
+	return 0;
+}
+
 int main(int argc, char* argv[]) {
 	iotools::setDirectory();
 
 	assembler::createAssembler();
+	assembler::fileIoFunc = fileIO;
 
 	if (argc < 3) {
-		std::cout << "usage: assembler <input file> <output file> <-file, -token, -preproc, -eval, -bin, -double>..." << std::endl;
+		std::cout << "usage: assembler <input file> <output file> [-file, -token, -preproc, -eval, -bin, -double] ..." << std::endl;
 		return -1;
 	}
 
-	const char* inputFile = argv[1];
+	// resolved relative to the invoking shell's own current directory (not the executable's
+	// directory) so included-file paths and duplicate-#include detection are stable no matter
+	// where the caller's cwd is or whether they passed a relative or absolute input path.
+	std::string inputFile = iotools::absolutePath(argv[1]);
 	const char* outputFile = argv[2];
+
+	// label mangling uses the output binary's own base name (no directory, no extension) so
+	// same-named labels from different object files don't collide once the linker merges them
+	std::string outputBase = outputFile;
+	size_t slashPos = outputBase.find_last_of("/\\");
+	if (slashPos != std::string::npos)
+		outputBase = outputBase.substr(slashPos + 1);
+	size_t dotPos = outputBase.find_last_of('.');
+	if (dotPos != std::string::npos)
+		outputBase = outputBase.substr(0, dotPos);
 
 	bool dumpFile = false, dumpToken = false, dumpPreproc = false, dumpAST = false, dumpEvaluate = false, dumpBinary = false, doubleOutput = false;
 	for (int i = 3; i < argc; i++) {
@@ -80,7 +103,11 @@ int main(int argc, char* argv[]) {
 
 	std::vector<u8> binary;
 
-	assembler::assemble(buff, binary, dump);
+	assembler::assemble(buff, binary, dump, inputFile, outputBase);
+
+	bool preprocOk = !(dump.errorCode & assembler::AssemblerDump::FAIL_PREPROCESS);
+	bool parseOk = !(dump.errorCode & assembler::AssemblerDump::FAIL_PARSE);
+	bool evalOk = !(dump.errorCode & assembler::AssemblerDump::FAIL_EVALUATE);
 
 	if (dumpToken) {
 		cout << "lex->" << endl;
@@ -120,7 +147,7 @@ int main(int argc, char* argv[]) {
 		cout << "------------------------------------------------------------" << endl;
 	}
 
-	if (dumpPreproc || !dump.preprocSuccess) {
+	if (dumpPreproc || !preprocOk) {
 		cout << "preproc->" << endl;
 		cout << "------------------------------------------------------------" << endl;
 		for (auto it = dump.preprocTokens.begin(); it != dump.preprocTokens.end(); it++) {
@@ -157,35 +184,41 @@ int main(int argc, char* argv[]) {
 		}
 		cout << "------------------------------------------------------------" << endl;
 		cout << "preproc->" << endl;
-		cout << (dump.preprocSuccess ? "success" : "failed") << endl;
+		cout << (preprocOk ? "success" : "failed") << endl;
+		if (!preprocOk)
+			cout << dump.errorMessage << endl;
 		cout << "------------------------------------------------------------" << endl;
 	}
 
-	if (dumpEvaluate || dumpBinary || !dump.parseSuccess) {
+	if (dumpEvaluate || dumpBinary || !parseOk || !evalOk) {
 		cout << "parse->" << endl;
-		cout << (dump.parseSuccess ? "success" : "failed") << endl;
-		if (!dump.parseSuccess)
+		cout << (parseOk ? "success" : "failed") << endl;
+		if (!parseOk)
 			cout << dump.errorMessage << endl;
 		cout << "------------------------------------------------------------" << endl;
-		cout << "evaluate->" << endl;
-		cout << (dump.evalSuccess ? "success" : "failed") << endl;
-		cout << "------------------------------------------------------------" << endl;
+		// evaluate() never runs when the parse failed (assemble() bails out right after
+		// parsing) -- print it only when parsing actually succeeded, otherwise evalOk's
+		// default-true value would misleadingly read as "evaluate succeeded".
+		if (parseOk) {
+			cout << "evaluate->" << endl;
+			cout << (evalOk ? "success" : "failed") << endl;
+			if (!evalOk)
+				cout << dump.errorMessage << endl;
+			cout << "------------------------------------------------------------" << endl;
+		}
 	}
 
 	if (dumpBinary) {
 		cout << "binary->" << endl;
 		cout << "------------------------------------------------------------" << endl;
-		cout << "text section" << endl;
-		for (auto it = dump.textSection.begin(); it != dump.textSection.end(); ) {
-			for (int i = 0; it != dump.textSection.end() && i++ < 4; ++it)
-				printf("%02X ", *it);
-			cout << endl;
-		}
-		cout << "data section" << endl;
-		for (auto it = dump.dataSection.begin(); it != dump.dataSection.end(); ) {
-			for (int i = 0; it != dump.dataSection.end() && i++ < 4; ++it)
-				printf("%02X ", *it);
-			cout << endl;
+		for (auto it = dump.sectionDump.begin(); it != dump.sectionDump.end(); ++it) {
+			cout << "section: " << it->name << endl;
+			for (auto si = it->data.begin(); si != it->data.end();) {
+				cout << "    ";
+				for (int i = 0; si != it->data.end() && i++ < 4; ++si)
+					printf("%02X ", *si);
+				cout << endl;
+			}
 		}
 		cout << "------------------------------------------------------------" << endl;
 		cout << "final binary" << endl;
@@ -197,10 +230,17 @@ int main(int argc, char* argv[]) {
 		cout << "------------------------------------------------------------" << endl;
 	}
 	
+	// on failure write nothing, and remove a stale output from an earlier run, so a build
+	// script that ignores the exit code can't hand an empty/old object to the linker
+	if (!preprocOk || !parseOk || !evalOk) {
+		std::remove(outputFile);
+		return -1;
+	}
+
 	if (!iotools::writeBinaryFile(outputFile, binary)) {
 		cout << "failed to create output file \'" << inputFile << "\'" << endl;
 		return -1;
 	}
 
 	return 0;
-}	
+}

@@ -34,7 +34,7 @@ Default width is 4 bytes per row. Useful for inspecting assembled output.
 
 ### Rebuilding Tools
 
-Source is in `tools/assembler src/` (C++) and `tools/hexdump src/`. Compile with any C++17-compatible compiler. The assembler entry point is `tools/assembler src/main.cpp`.
+Source is in `tools/assembler/`, `tools/linker/`, `tools/common/` (shared headers, included as `../common/`) and `tools/hexdump/` (C++), mirrored from `computer 32 (new)/src`. Compile with any C++17-compatible compiler. Entry points: `tools/assembler/main.cpp`, `tools/linker/main.cpp`. Full assembler/linker syntax reference: `tools/SYNTAX.md`.
 
 ## ISA-32 Assembly Syntax
 
@@ -122,7 +122,7 @@ label:       ; defines a label (usable as an address constant)
 
 `[opcode 8b][reg_a 8b][reg_b 8b][imm16 or reg_c 8b]`
 
-Opcode table is in `tools/assembler src/assembler.hpp` (`instructionBase` map).
+Opcode table is in `tools/assembler/assembler.hpp` (`instructionBase` map).
 
 ## CPU Microarchitecture (Digital circuits in `components/`)
 

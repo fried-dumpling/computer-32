@@ -822,9 +822,11 @@ namespace parser_generator {
 			Element type;
 			std::string text;
 			std::vector<struct _ASTNode*> child;
+			// copy of the first (leftmost) source token this node was built from; line = -1 if none
+			Token srcToken;
 
-			_ASTNode(void) : type(0), text(""), child({}) {}
-			_ASTNode(const Element& type, const std::string& text, const std::vector<struct _ASTNode*>& child) : type(type), text(text), child(child) {}
+			_ASTNode(void) : type(0), text(""), child({}), srcToken() { srcToken.line = -1; }
+			_ASTNode(const Element& type, const std::string& text, const std::vector<struct _ASTNode*>& child, const Token& srcToken) : type(type), text(text), child(child), srcToken(srcToken) {}
 		} ASTNode;
 
 		void delAST(ASTNode* pAST) {
@@ -844,8 +846,11 @@ namespace parser_generator {
 			}
 		}
 
-		bool parse(ASTNode*& pAST, int* pErrorLine, std::vector<Token> inputs) {
-			inputs.push_back({ "", Terminal::__eot});
+		bool parse(Token& errorToken, ASTNode*& pAST, const std::vector<Token>& inputs) {
+			// end-of-input lookahead is synthesized instead of appended to inputs (caller's vector)
+			Token eotToken = {};
+			eotToken.type = Terminal::__eot;
+			eotToken.line = -1;
 
 			typedef struct _StackData {
 				Element symbol;
@@ -857,16 +862,19 @@ namespace parser_generator {
 			stack.push({ (Element)0 , 0 });
 
 			u64 tokenCount = 0;
-			for (auto it = inputs.begin(); it != inputs.end();) {
+			for (auto it = inputs.cbegin(); ;) {
 				ID state = stack.top().state;
+				const Token& look = (it != inputs.cend()) ? *it : eotToken;
 
 				using AT = convert::ActionType;
 
-				auto action = this->table.actionTable[state][(Element)(it->type)];
+				auto action = this->table.actionTable[state][(Element)(look.type)];
 				switch (action.type) {
 					case AT::Shift:
+						if (it == inputs.cend())
+							goto error;
 						stack.push({ (Element)(it->type), action.arg });
-						astStack.push(new ASTNode( (Element)it->type, it->text, {} ));
+						astStack.push(new ASTNode( (Element)it->type, it->text, {}, *it));
 						++it;
 						tokenCount++;
 						break;
@@ -885,6 +893,13 @@ namespace parser_generator {
 								nNode->text = cur->text;
 								nNode->type = cur->type;
 							}
+
+							// location = leftmost symbol's location (like bison's @$ = @1). Every popped
+							// symbol carries its own span start even if its node is discarded/spliced
+							// below, so this is the construct's first token regardless of which child
+							// supplies the node's text.
+							if (!i)
+								nNode->srcToken = cur->srcToken;
 
 							if (ASTRule.second[i].first) {
 								if (ASTRule.second[i].second) {
@@ -927,14 +942,17 @@ namespace parser_generator {
 			ASTNode* nNode = new ASTNode;
 			ASTNode* errNode = new ASTNode;
 
-			u64 errorIndex = 0;
-			int errorLine = 0;
-			if (tokenCount) {
-				errorLine = inputs[tokenCount - 1].line;
-				for (errorIndex = tokenCount - 1; errorIndex != (u64)-1 && inputs[errorIndex].line == errorLine; errorIndex--) {}
-				errorIndex++;
+			// the lookahead that had no valid action; at end of input, report <EOF> on the last line
+			Token tmpTok = {};
+			tmpTok.line = -1;
+			if (tokenCount < inputs.size())
+				tmpTok = inputs[tokenCount];
+			else {
+				if (!inputs.empty())
+					tmpTok = inputs.back();
+				tmpTok.text = "<EOF>";
 			}
-			*pErrorLine = errorLine;
+			errorToken = tmpTok;
 
 			if (tokenCount < inputs.size())
 				errNode->text = inputs[tokenCount].text;

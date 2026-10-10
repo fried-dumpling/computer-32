@@ -19,32 +19,30 @@
 #include "parser.hpp"
 
 namespace evaluator_generator {
-	using namespace lexer_generator;
-	using namespace parser_generator;
-
 	template <typename Terminal, typename NonTerminal, typename ASTElement>
 	class Evaluator {
 	private:
 		using u32 = unsigned __int32;
 		using u64 = unsigned __int64;
-		using Element = convert::Element;
+		using Element = parser_generator::convert::Element;
 
-		using AST = typename Parser<Terminal, NonTerminal, ASTElement>::ASTNode;
+		using AST = typename parser_generator::Parser<Terminal, NonTerminal, ASTElement>::ASTNode;
 
 		AST* tree;
 	public:
-		typedef bool(*EvaluateFunction)(AST*, void*);
-		typedef bool(*TBEvaluateFunction)(std::vector<AST*>&, AST*, void*);
+		using Token = typename parser_generator::Parser<Terminal, NonTerminal, ASTElement>::Token;
+
+		typedef int(*EvaluateFunction)(AST*, void*);
 
 		Evaluator() {
 			this->tree = NULL;
 		}
-		
+
 		void setTree(AST* tree) {
 			this->tree = tree;
 		}
 
-		bool evaluate(EvaluateFunction function, void* data) {
+		int evaluate(Token& errorToken, EvaluateFunction function, void* data) {
 			std::vector<AST*> orderVec;
 			std::stack<AST*> stack;
 			stack.push(this->tree);
@@ -55,24 +53,32 @@ namespace evaluator_generator {
 					stack.push(*it);
 			}
 			for (auto it = orderVec.rbegin(); it != orderVec.rend(); ++it) {
-				if (!function(*it, data)) return false;
+				int code = function(*it, data);
+				if (code) {
+					errorToken = (*it)->srcToken;
+					return code;
+				}
 			}
-			return true;
+			errorToken.line = -1;
+			return 0;
 		}
 
-		bool evaluateTB(TBEvaluateFunction function, void* data) {
+		//legacy, unused code
+		/*
+		typedef int(*TBEvaluateFunction)(std::vector<AST*>&, AST*, void*);
+		int evaluateTB(TBEvaluateFunction function, void* data) {
 			std::stack<AST*> stack;
 			stack.push(this->tree);
 			while (!stack.empty()) {
 				AST* cur = stack.top(); stack.pop();
 				std::vector<AST*> next;
-				if (!function(next, cur, data))
-					return false;
+				int code = function(next, cur, data);
+				if (code) return code;
 				for (auto it = cur->child.begin(); it != cur->child.end(); ++it)
 					stack.push(*it);
 			}
-			return true;
-		}
+			return 0;
+		}*/
 	};
 }
 

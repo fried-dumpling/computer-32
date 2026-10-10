@@ -83,7 +83,7 @@ namespace hexdump {
 
     namespace dump  {
 
-        void dump(std::vector<u8>& in, int width, int bundle) {
+        void dumpDecode(std::vector<u8>& in, int width, int bundle) {
             bool lower = false;
 
             size_t count = 0;
@@ -111,7 +111,7 @@ namespace hexdump {
                 count++;
 
                 if (count == width) {
-                    count -= width;
+                    count = 0;
                     std::cout << curHex << "| " << curText << std::endl;
                     curHex.clear();
                     curText.clear();
@@ -125,9 +125,46 @@ namespace hexdump {
             }
             if (count) {
                 std::cout << curHex;
-                for (int i = 0; i < width - count; i++)
-                    std::cout << "   ";
+                for (int i = 0; i < width - count; i++) {
+                    std::cout << "   ";   
+                    if (!((i + 1) % bundle) && i + 1 < width - count) {
+                        std::cout << " ";
+                    }
+                }
                 std::cout << "| " << curText << std::endl;
+            }
+        }
+
+        void dumpNonDecode(std::vector<u8>& in, int width, int bundle) {
+            bool lower = false;
+
+            size_t count = 0;
+            std::string curHex;
+            for (auto it = in.begin(); it != in.end(); ++it) {
+                curHex += util::convHex(*it, lower);
+                curHex += " ";
+                count++;
+
+                if (count == width) {
+                    count = 0;
+                    std::cout << curHex << std::endl;
+                    curHex.clear();
+                }
+                else {   
+                    if (!(count % bundle)) {
+                        curHex += " ";
+                    }
+                }
+            }
+            if (count) {
+                std::cout << curHex;
+                for (int i = 0; i < width - count; i++) {
+                    std::cout << "   ";   
+                    if (!((i + 1) % bundle) && i + 1 < width - count) {
+                        std::cout << " ";
+                    }
+                }
+                std::cout << std::endl;
             }
         }
     }
@@ -138,7 +175,7 @@ using namespace std;
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         cout << "too little argument" << endl;
-        cout << "usage: hexdump <file> <-width num> <-bundle num>" << endl;
+        cout << "usage: hexdump <file> <-nodec> <-width num> <-bundle num>" << endl;
         return -1;
     }
 
@@ -152,14 +189,15 @@ int main(int argc, char* argv[]) {
 
     int width = 4;
     int bundle = width;
+    bool nodec = false;
 
     for (int i = 2; i < argc; i++) {
         string str(argv[i]);
 
         if (str == "-width") {
             if (++i == argc) {
-                cout << "too little argument" << endl;
-                cout << "usage: hexdump <file> <-width num> <-bundle num>" << endl;
+                cout << "too little argument for -width" << endl;
+                cout << "usage: hexdump <file> <-nodec> <-width num> <-bundle num>" << endl;
             }
             width = hexdump::util::convStr(argv[i]);
             if (width == -1) {
@@ -167,10 +205,10 @@ int main(int argc, char* argv[]) {
                 return -1;
             }
         }
-        else if (str == "-bundle"){
+        else if (str == "-bundle") {
             if (++i == argc) {
-                cout << "too little argument" << endl;
-                cout << "usage: hexdump <file> <-width num> <-bundle num>" << endl;
+                cout << "too little argument for -bundle" << endl;
+                cout << "usage: hexdump <file> <-nodec> <-width num> <-bundle num>" << endl;
             }
             bundle = hexdump::util::convStr(argv[i]);
             if (bundle == -1) {
@@ -178,13 +216,19 @@ int main(int argc, char* argv[]) {
                 return -1;
             }
         }
+        else if (str == "-nodec") {
+            nodec = true;
+        }
         else {
             cout << "wrong flag" << endl;
             return -1;
         }
     }
 
-    hexdump::dump::dump(data, width, bundle);
+    if (nodec)
+        hexdump::dump::dumpNonDecode(data, width, bundle);
+    else
+        hexdump::dump::dumpDecode(data, width, bundle);
         
     return 0;
 }

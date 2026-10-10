@@ -36,6 +36,17 @@ namespace iotools {
 		executable = raw_directory.substr(index1+1, index2-index1-1);
 	}
 
+	// Resolves `path` to an absolute path relative to the CURRENT WORKING DIRECTORY (i.e. the
+	// directory the process was launched from) -- distinct from `directory` above, which is the
+	// executable's own directory. Falls back to returning `path` unchanged if the OS call fails.
+	std::string absolutePath(const std::string& path) {
+		char buffer[MAX_PATH];
+		DWORD len = GetFullPathNameA(path.c_str(), MAX_PATH, buffer, NULL);
+		if (len == 0 || len > MAX_PATH)
+			return path;
+		return std::string(buffer, len);
+	}
+
 	using u8 = unsigned __int8;
 	using u32 = unsigned __int32;
 

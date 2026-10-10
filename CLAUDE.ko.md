@@ -34,7 +34,7 @@ tools/bin/hexdump.exe <파일.bin> [-width N] [-bundle N]
 
 ### 도구 재빌드
 
-소스는 `tools/assembler src/`(C++)와 `tools/hexdump src/`에 있습니다. C++17 이상 컴파일러로 빌드하며, 어셈블러 진입점은 `tools/assembler src/main.cpp`입니다.
+소스는 `tools/assembler/`, `tools/linker/`, `tools/common/`(공용 헤더, `../common/`으로 include), `tools/hexdump/`(C++)에 있으며 `computer 32 (new)/src`를 그대로 복사한 것입니다. C++17 이상 컴파일러로 빌드하며, 진입점은 `tools/assembler/main.cpp`, `tools/linker/main.cpp`입니다. 어셈블러/링커 전체 문법은 `tools/SYNTAX.md` 참고.
 
 ## ISA-32 어셈블리 문법
 
@@ -92,7 +92,7 @@ ret                                 ; 반환
 
 `[opcode 8비트][reg_a 8비트][reg_b 8비트][imm16 또는 reg_c 8비트]`
 
-opcode 표는 `tools/assembler src/assembler.hpp`의 `instructionBase` 맵에 있습니다.
+opcode 표는 `tools/assembler/assembler.hpp`의 `instructionBase` 맵에 있습니다.
 
 ## CPU 마이크로아키텍처 (`components/` 내 Digital 회로 파일)
 

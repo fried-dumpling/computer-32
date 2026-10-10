@@ -30,17 +30,32 @@ namespace preproccesser_generator {
 	public:
 		using Vec = std::vector<Token>&;
 		using Iter = typename std::vector<Token>::iterator&;
-		typedef bool(*PreprocessFunction)(Vec, Iter, void*);
+		typedef int(*PreprocessFunction)(Vec, Iter, void*);
 
 		void setTokens(std::vector<Token>& tokens) {
 			this->tokens = &tokens;
 		}
 
-		bool preprocess(PreprocessFunction function, void* data) {
-			for (auto it = this->tokens->begin(); it != this->tokens->end(); ) {
-				if (!function(*this->tokens, it, data)) return false;
+		typename std::vector<Token>::iterator begin() {
+			return this->tokens->begin();
+		}
+
+		// on failure errorToken is the token the callback was looking at (line = -1 past the last token)
+		int preprocess(Token& errorToken, PreprocessFunction function, void* data) {
+			auto it = this->tokens->begin();
+			for (; it != this->tokens->end(); ) {
+				int code = function(*this->tokens, it, data);
+				if (code) {
+					if (it != this->tokens->end())
+						errorToken = *it;
+					else {
+						errorToken = {};
+						errorToken.line = -1;
+					}
+					return code;
+				}
 			}
-			return true;
+			return 0;
 		}
 	};
 }
