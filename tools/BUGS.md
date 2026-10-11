@@ -3,8 +3,8 @@
 `program/floatingpoint/float.txt` 작성 중 발견 (2026-10-10, `tools/bin`의 dasm/dlnk 기준).
 
 > **상태 (2026-10-10): 세 가지 모두 수정됨.** `src/assembler-linker` 소스에 반영됐습니다.
-> `tools/bin`의 dasm/dlnk는 재빌드하고 교체해야 반영됩니다. 각 항목 끝의 **수정 내용** 참고.
-> 수정된 dasm/dlnk에서는 `float.txt`의 우회 코드가 더 이상 필요 없습니다.
+> `tools/bin`의 dasm/dlnk에도 반영됐습니다(2026-10-10 확인). 각 항목 끝의 **수정 내용** 참고.
+> 그래서 `float.txt`의 우회 코드도 걷어냈습니다(현재 파일명 `float.asm`)(`FP_PUTC` 매크로 복원).
 
 ## 1. 인자가 정확히 1개인 매크로를 쓰면 `unterminated directive`
 

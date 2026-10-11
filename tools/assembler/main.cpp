@@ -19,9 +19,23 @@ using namespace assembler::lexer;
 using namespace assembler::parser;
 using namespace assembler::evaluator;
 
+using CLI = iotools::Terminal::TerminalIO<int>;
+
+// command-line flags (value = bit in the parsed flag set)
+enum AsmFlag {
+	FLAG_OUTPUT,
+	FLAG_FILE,
+	FLAG_TOKEN,
+	FLAG_PREPROC,
+	FLAG_EVAL,
+	FLAG_BIN,
+	FLAG_HELP,
+	FLAG_HELP_LONG
+};
+
 int fileIO(std::string& text, std::string path) {
 	if (!iotools::readTextFile(path, text)) {
-		cout << "failed to read input file \'" << path << "\'" << endl;
+		iotools::Terminal::printError(iotools::Terminal::readFailed(path));
 		return -1;
 	}
 
@@ -31,19 +45,52 @@ int fileIO(std::string& text, std::string path) {
 int main(int argc, char* argv[]) {
 	iotools::setDirectory();
 
+	CLI terminal;
+	terminal.setup({
+		{ "-o",       FLAG_OUTPUT,    true,  {}, "output object file (default: <input>.o)" },
+		{ "-file",    FLAG_FILE,      false, {}, "print the input file" },
+		{ "-token",   FLAG_TOKEN,     false, {}, "print the lexer tokens" },
+		{ "-preproc", FLAG_PREPROC,   false, {}, "print the tokens after preprocessing" },
+		{ "-eval",    FLAG_EVAL,      false, {}, "print the parse/evaluate result" },
+		{ "-bin",     FLAG_BIN,       false, {}, "print the section bytes and the object file" },
+		{ "-h",       FLAG_HELP,      false, {}, "show this help" },
+		{ "-help",    FLAG_HELP_LONG, false, {}, "show this help" },
+	}, 1, { ' ', '\t' }, iotools::executable + " <input file> [-o <output file>] [flags]");
+
+	int flags;
+	std::vector<std::string> inputs;
+	if (!terminal.parse(flags, inputs, argc, argv))
+		return terminal.printParseError();
+	if (CLI::has(flags, FLAG_HELP) || CLI::has(flags, FLAG_HELP_LONG))
+		return terminal.printHelp();
+	if (inputs.empty())
+		return iotools::Terminal::usageError(iotools::Terminal::noInput(), terminal.usage());
+
+	bool dumpFile = CLI::has(flags, FLAG_FILE);
+	bool dumpToken = CLI::has(flags, FLAG_TOKEN);
+	bool dumpPreproc = CLI::has(flags, FLAG_PREPROC);
+	bool dumpEvaluate = CLI::has(flags, FLAG_EVAL);
+	bool dumpBinary = CLI::has(flags, FLAG_BIN);
+	std::string inputArg = inputs[0];
+	std::string outputFile = terminal.value(FLAG_OUTPUT);
+
 	assembler::createAssembler();
 	assembler::fileIoFunc = fileIO;
-
-	if (argc < 3) {
-		std::cout << "usage: assembler <input file> <output file> [-file, -token, -preproc, -eval, -bin, -double] ..." << std::endl;
-		return -1;
-	}
 
 	// resolved relative to the invoking shell's own current directory (not the executable's
 	// directory) so included-file paths and duplicate-#include detection are stable no matter
 	// where the caller's cwd is or whether they passed a relative or absolute input path.
-	std::string inputFile = iotools::absolutePath(argv[1]);
-	const char* outputFile = argv[2];
+	std::string inputFile = iotools::absolutePath(inputArg);
+
+	// default output: the input path with its extension replaced by ".o"
+	if (outputFile.empty()) {
+		outputFile = inputArg;
+		size_t extPos = outputFile.find_last_of('.');
+		size_t dirPos = outputFile.find_last_of("/\\");
+		if (extPos != std::string::npos && (dirPos == std::string::npos || extPos > dirPos))
+			outputFile.erase(extPos);
+		outputFile += ".o";
+	}
 
 	// label mangling uses the output binary's own base name (no directory, no extension) so
 	// same-named labels from different object files don't collide once the linker merges them
@@ -55,31 +102,10 @@ int main(int argc, char* argv[]) {
 	if (dotPos != std::string::npos)
 		outputBase = outputBase.substr(0, dotPos);
 
-	bool dumpFile = false, dumpToken = false, dumpPreproc = false, dumpAST = false, dumpEvaluate = false, dumpBinary = false, doubleOutput = false;
-	for (int i = 3; i < argc; i++) {
-		std::string flag = argv[i];
-		if (flag == "-file")
-			dumpFile = true;
-		else if (flag == "-token")
-			dumpToken = true;
-		else if (flag == "-preproc")
-			dumpPreproc = true;
-		else if (flag == "-eval")
-			dumpEvaluate = true;
-		else if (flag == "-bin")
-			dumpBinary = true;
-		else if (flag == "-double")
-			doubleOutput = true;
-		else {
-			cout << "unknown flag \'" << flag << "\'" << endl;
-			return -1;
-		}
-	}
-
 	std::string buff;
 	if (!iotools::readTextFile(inputFile, buff)) {
-		cout << "failed to read input file \'" << inputFile << "\'" << endl;
-		return -1;
+		iotools::Terminal::printError(iotools::Terminal::readFailed(inputArg));
+		return iotools::Terminal::EXIT_FAIL;
 	}
 
 	if (dumpFile) {
@@ -94,8 +120,6 @@ int main(int argc, char* argv[]) {
 		dump.flags |= assembler::AssemblerDump::getToken;
 	if (dumpPreproc)
 		dump.flags |= assembler::AssemblerDump::getPreproc;
-	/*if (dumpAST)
-		dump.flags |= assembler::AssemblerDump::getAST;*/
 	if (dumpEvaluate)
 		dump.flags |= assembler::AssemblerDump::getEval;
 	if (dumpBinary)
@@ -147,7 +171,7 @@ int main(int argc, char* argv[]) {
 		cout << "------------------------------------------------------------" << endl;
 	}
 
-	if (dumpPreproc || !preprocOk) {
+	if (dumpPreproc) {
 		cout << "preproc->" << endl;
 		cout << "------------------------------------------------------------" << endl;
 		for (auto it = dump.preprocTokens.begin(); it != dump.preprocTokens.end(); it++) {
@@ -185,25 +209,18 @@ int main(int argc, char* argv[]) {
 		cout << "------------------------------------------------------------" << endl;
 		cout << "preproc->" << endl;
 		cout << (preprocOk ? "success" : "failed") << endl;
-		if (!preprocOk)
-			cout << dump.errorMessage << endl;
 		cout << "------------------------------------------------------------" << endl;
 	}
 
-	if (dumpEvaluate || dumpBinary || !parseOk || !evalOk) {
+	// a stage that never ran (an earlier one failed) is not printed, otherwise its
+	// default "ok" bit would read as success; the error itself goes to stderr below
+	if ((dumpEvaluate || dumpBinary) && preprocOk) {
 		cout << "parse->" << endl;
 		cout << (parseOk ? "success" : "failed") << endl;
-		if (!parseOk)
-			cout << dump.errorMessage << endl;
 		cout << "------------------------------------------------------------" << endl;
-		// evaluate() never runs when the parse failed (assemble() bails out right after
-		// parsing) -- print it only when parsing actually succeeded, otherwise evalOk's
-		// default-true value would misleadingly read as "evaluate succeeded".
 		if (parseOk) {
 			cout << "evaluate->" << endl;
 			cout << (evalOk ? "success" : "failed") << endl;
-			if (!evalOk)
-				cout << dump.errorMessage << endl;
 			cout << "------------------------------------------------------------" << endl;
 		}
 	}
@@ -233,14 +250,15 @@ int main(int argc, char* argv[]) {
 	// on failure write nothing, and remove a stale output from an earlier run, so a build
 	// script that ignores the exit code can't hand an empty/old object to the linker
 	if (!preprocOk || !parseOk || !evalOk) {
-		std::remove(outputFile);
-		return -1;
+		iotools::Terminal::printDiagnostic(dump.errorMessage);
+		std::remove(outputFile.c_str());
+		return iotools::Terminal::EXIT_FAIL;
 	}
 
 	if (!iotools::writeBinaryFile(outputFile, binary)) {
-		cout << "failed to create output file \'" << inputFile << "\'" << endl;
-		return -1;
+		iotools::Terminal::printError(iotools::Terminal::writeFailed(outputFile));
+		return iotools::Terminal::EXIT_FAIL;
 	}
 
-	return 0;
+	return iotools::Terminal::EXIT_OK;
 }

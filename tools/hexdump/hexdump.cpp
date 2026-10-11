@@ -2,50 +2,12 @@
 #include <fstream>
 #include <vector>
 
+#include "../common/iotool.hpp"
+
 namespace hexdump {
     using u8 = unsigned __int8;
     using u32 = unsigned __int32;
     using u64 = unsigned __int64;
-    
-    namespace file {
-        bool readFile(std::vector<u8>& out, std::string name) {
-            std::fstream file;
-            file.open(name, std::ios::in | std::ios::binary);
-            if (!file.is_open() || !file.good())
-                return false;
-            
-            file.seekg(0, file.end);
-            size_t length = file.tellg();
-            file.seekg(0, file.beg);
-
-            out.clear();
-            char* buff = new char[length];
-            file.read(buff, length);
-
-            out.reserve(length);
-            for (size_t i = 0; i < length; i++)
-                out.push_back(buff[i]);
-
-            delete[] buff;
-            return true;
-        }
-
-        bool writeFile(std::vector<u8>& in, std::string name) {
-            std::fstream file;
-            file.open(name, std::ios::out | std::ios::binary);
-            if (!file.is_open() || !file.good())
-                return false;
-
-            char* buff = new char[in.size()];
-            for (size_t i = 0; i < in.size(); i++)
-                buff[i] = in[i];
-            
-            file.write(buff, in.size());
-
-            delete[] buff;
-            return true;
-        }
-    }
 
     namespace util {
         std::string convHex(u8 in, bool low) {
@@ -54,7 +16,7 @@ namespace hexdump {
 
             for (int i = 0; i < 2; i++) {
                 u8 cur = in >> 4;
-                
+
                 if (0 <= cur && cur <= 9)
                     out.push_back((char)cur + '0');
                 else if (10 <= cur && cur <= 15)
@@ -67,23 +29,11 @@ namespace hexdump {
 
             return out;
         }
-
-        int convStr(std::string str) {
-            int total = 0;
-            for (auto it = str.begin(); it != str.end(); ++it) {
-                total *= 10;
-                if ('0' <= *it && *it <= '9')
-                    total += (*it - '0');
-                else
-                    return -1;
-            }
-            return total;
-        }
     }
 
     namespace dump  {
 
-        void dumpDecode(std::vector<u8>& in, int width, int bundle) {
+        void dumpDecode(std::ostream& out, std::vector<u8>& in, int width, int bundle) {
             bool lower = false;
 
             size_t count = 0;
@@ -112,11 +62,11 @@ namespace hexdump {
 
                 if (count == width) {
                     count = 0;
-                    std::cout << curHex << "| " << curText << std::endl;
+                    out << curHex << "| " << curText << std::endl;
                     curHex.clear();
                     curText.clear();
                 }
-                else {   
+                else {
                     if (!(count % bundle)) {
                         curHex += " ";
                         curText += " ";
@@ -124,18 +74,18 @@ namespace hexdump {
                 }
             }
             if (count) {
-                std::cout << curHex;
+                out << curHex;
                 for (int i = 0; i < width - count; i++) {
-                    std::cout << "   ";   
+                    out << "   ";
                     if (!((i + 1) % bundle) && i + 1 < width - count) {
-                        std::cout << " ";
+                        out << " ";
                     }
                 }
-                std::cout << "| " << curText << std::endl;
+                out << "| " << curText << std::endl;
             }
         }
 
-        void dumpNonDecode(std::vector<u8>& in, int width, int bundle) {
+        void dumpNonDecode(std::ostream& out, std::vector<u8>& in, int width, int bundle) {
             bool lower = false;
 
             size_t count = 0;
@@ -147,24 +97,24 @@ namespace hexdump {
 
                 if (count == width) {
                     count = 0;
-                    std::cout << curHex << std::endl;
+                    out << curHex << std::endl;
                     curHex.clear();
                 }
-                else {   
+                else {
                     if (!(count % bundle)) {
                         curHex += " ";
                     }
                 }
             }
             if (count) {
-                std::cout << curHex;
+                out << curHex;
                 for (int i = 0; i < width - count; i++) {
-                    std::cout << "   ";   
+                    out << "   ";
                     if (!((i + 1) % bundle) && i + 1 < width - count) {
-                        std::cout << " ";
+                        out << " ";
                     }
                 }
-                std::cout << std::endl;
+                out << std::endl;
             }
         }
     }
@@ -172,63 +122,80 @@ namespace hexdump {
 
 using namespace std;
 
+using CLI = iotools::Terminal::TerminalIO<int>;
+
+// command-line flags (value = bit in the parsed flag set)
+enum HexFlag {
+    FLAG_NODEC,
+    FLAG_WIDTH,
+    FLAG_BUNDLE,
+    FLAG_OUTPUT,
+    FLAG_HELP,
+    FLAG_HELP_LONG
+};
+
+// reads a -width/-bundle value: a number from 1 to 4096
+static bool readCount(const CLI& terminal, int flag, int& out) {
+    std::string text = terminal.value(flag);
+    iotools::u32 value;
+    if (!iotools::Terminal::parseNumber(text, value) || value < 1 || value > 4096)
+        return false;
+    out = (int)value;
+    return true;
+}
+
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        cout << "too little argument" << endl;
-        cout << "usage: hexdump <file> <-nodec> <-width num> <-bundle num>" << endl;
-        return -1;
-    }
+    iotools::setDirectory();
 
-    vector<hexdump::u8> data;
-    bool opened = hexdump::file::readFile(data, string(argv[1]));
+    CLI terminal;
+    terminal.setup({
+        { "-nodec",  FLAG_NODEC,     false, {}, "hex only, no text column" },
+        { "-width",  FLAG_WIDTH,     true,  {}, "bytes per line (default 4)" },
+        { "-bundle", FLAG_BUNDLE,    true,  {}, "bytes per group within a line (default: width)" },
+        { "-o",      FLAG_OUTPUT,    true,  {}, "write the dump to a file instead of stdout" },
+        { "-h",      FLAG_HELP,      false, {}, "show this help" },
+        { "-help",   FLAG_HELP_LONG, false, {}, "show this help" },
+    }, 1, { ' ', '\t' }, iotools::executable + " <file> [-o <output file>] [flags]");
 
-    if (!opened) {
-        cout << "failed to open file" << endl;
-        return -1;
-    }
+    int flags;
+    std::vector<std::string> inputs;
+    if (!terminal.parse(flags, inputs, argc, argv))
+        return terminal.printParseError();
+    if (CLI::has(flags, FLAG_HELP) || CLI::has(flags, FLAG_HELP_LONG))
+        return terminal.printHelp();
+    if (inputs.empty())
+        return iotools::Terminal::usageError(iotools::Terminal::noInput(), terminal.usage());
 
     int width = 4;
+    if (CLI::has(flags, FLAG_WIDTH) && !readCount(terminal, FLAG_WIDTH, width))
+        return iotools::Terminal::usageError(iotools::Terminal::invalidValue("-width", terminal.value(FLAG_WIDTH)), terminal.usage());
     int bundle = width;
-    bool nodec = false;
+    if (CLI::has(flags, FLAG_BUNDLE) && !readCount(terminal, FLAG_BUNDLE, bundle))
+        return iotools::Terminal::usageError(iotools::Terminal::invalidValue("-bundle", terminal.value(FLAG_BUNDLE)), terminal.usage());
+    bool nodec = CLI::has(flags, FLAG_NODEC);
 
-    for (int i = 2; i < argc; i++) {
-        string str(argv[i]);
+    vector<hexdump::u8> data;
+    if (!iotools::readBinaryFile(inputs[0], data)) {
+        iotools::Terminal::printError(iotools::Terminal::readFailed(inputs[0]));
+        return iotools::Terminal::EXIT_FAIL;
+    }
 
-        if (str == "-width") {
-            if (++i == argc) {
-                cout << "too little argument for -width" << endl;
-                cout << "usage: hexdump <file> <-nodec> <-width num> <-bundle num>" << endl;
-            }
-            width = hexdump::util::convStr(argv[i]);
-            if (width == -1) {
-                cout << "wrong input" << endl;
-                return -1;
-            }
+    std::ofstream file;
+    std::ostream* out = &std::cout;
+    if (CLI::has(flags, FLAG_OUTPUT)) {
+        std::string outputFile = terminal.value(FLAG_OUTPUT);
+        file.open(outputFile, std::ios::out);
+        if (!file.is_open()) {
+            iotools::Terminal::printError(iotools::Terminal::writeFailed(outputFile));
+            return iotools::Terminal::EXIT_FAIL;
         }
-        else if (str == "-bundle") {
-            if (++i == argc) {
-                cout << "too little argument for -bundle" << endl;
-                cout << "usage: hexdump <file> <-nodec> <-width num> <-bundle num>" << endl;
-            }
-            bundle = hexdump::util::convStr(argv[i]);
-            if (bundle == -1) {
-                cout << "wrong input" << endl;
-                return -1;
-            }
-        }
-        else if (str == "-nodec") {
-            nodec = true;
-        }
-        else {
-            cout << "wrong flag" << endl;
-            return -1;
-        }
+        out = &file;
     }
 
     if (nodec)
-        hexdump::dump::dumpNonDecode(data, width, bundle);
+        hexdump::dump::dumpNonDecode(*out, data, width, bundle);
     else
-        hexdump::dump::dumpDecode(data, width, bundle);
-        
-    return 0;
+        hexdump::dump::dumpDecode(*out, data, width, bundle);
+
+    return iotools::Terminal::EXIT_OK;
 }

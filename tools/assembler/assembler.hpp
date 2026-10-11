@@ -3304,19 +3304,21 @@ namespace assembler {
 			return (int)preprocesser::functions::PreprocessError::SUCCESS;
 		};
 
-		// "error at <file> line <n>: <source line>" for a token tagged by tagLine()
-		auto describeLocation = [&](const Token& tok) {
-			std::string msg = "error at ";
+		// "<file>:<line>: error: <detail>" + the source line, for a token tagged by tagLine()
+		// (a token without a line -- e.g. end of input -- reports just the main file)
+		auto describeError = [&](const Token& tok, const std::string& detail) {
 			if (tok.line < 0)
-				return msg + includedFiles[0] + ": ";
-			msg += (tok.fileId >= 0 && tok.fileId < (int)includedFiles.size()) ? includedFiles[tok.fileId] : std::to_string(tok.fileId);
-			msg += " line ";
-			msg += std::to_string(tok.fileLine);
-			msg += ": ";
+				return iotools::Terminal::codeError(includedFiles[0], detail);
+			std::string file = (tok.fileId >= 0 && tok.fileId < (int)includedFiles.size()) ? includedFiles[tok.fileId] : std::to_string(tok.fileId);
+			std::string msg = iotools::Terminal::codeError(iotools::errPosGenerator(file, tok.fileLine), detail);
+			std::string source;
 			auto range = tokenBackup.equal_range(tok.line);
 			for (auto it = range.first; it != range.second; ++it)
 				if (it->second.type != TokenType::newline)
-					msg += it->second.text;
+					source += it->second.text;
+			size_t first = source.find_first_not_of(" \t");
+			if (first != std::string::npos)
+				msg += "\n    " + source.substr(first);
 			return msg;
 		};
 
@@ -3342,13 +3344,10 @@ namespace assembler {
 		}
 
 		if (!validPreprocess) {
-			dump.errorMessage = describeLocation(errorTok);
-			dump.errorMessage += "\n ";
-			dump.errorMessage += preprocesser::functions::preprocessErrorName(preprocessError);
-			if (errorTok.line >= 0) {
-				dump.errorMessage += ": ";
-				dump.errorMessage += errorTok.text;
-			}
+			std::string detail = preprocesser::functions::preprocessErrorName(preprocessError);
+			if (errorTok.line >= 0)
+				detail += ": " + errorTok.text;
+			dump.errorMessage = describeError(errorTok, detail);
 			return -1;
 		}
 
@@ -3363,9 +3362,7 @@ namespace assembler {
 
 		if (dump.flags & AssemblerDump::getEval || !validParse) {
 			if (!validParse) {
-				dump.errorMessage = describeLocation(errorTok);
-				dump.errorMessage += "\n unexpected token: ";
-				dump.errorMessage += errorTok.text;
+				dump.errorMessage = describeError(errorTok, "unexpected token: " + errorTok.text);
 			}
 		}
 
@@ -3382,11 +3379,7 @@ namespace assembler {
 		dump.errorCode |= (validEvaluate) ? 0 : (int)AssemblerDump::FAIL_EVALUATE;
 
 		if (!validEvaluate) {
-			dump.errorMessage = describeLocation(errorTok);
-			dump.errorMessage += "\n ";
-			dump.errorMessage += evaluator::functions::evaluateErrorName(evaluateError);
-			dump.errorMessage += ": ";
-			dump.errorMessage += errorTok.text;
+			dump.errorMessage = describeError(errorTok, std::string(evaluator::functions::evaluateErrorName(evaluateError)) + ": " + errorTok.text);
 			parser::parser.delAST(pAST);
 			return -1;
 		}

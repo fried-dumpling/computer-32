@@ -10,7 +10,11 @@ Semantics follow ISA-32.xlsx / SYNTAX.md:
 strict=True (default) makes flags valid only right after cmp/cmpi/test/testi;
 any other ALU op poisons them, so a branch that depends on flags left by
 add/shift/... raises instead of silently guessing the hardware behavior.
-Only register mode 32B is accepted, except `set` with 32B / S16H.
+Only register mode 32B is accepted, except `set` with 32B / S16H / 16L.
+`set R.S16H` writes the upper half and keeps the lower half, and `set R.16L`
+writes the lower half and keeps the upper half, as measured on the circuit
+(selftest A). 32 bit constants are loaded as S16H then 16L, which is safe
+either way.
 
 Unsupported opcodes (carry ops, rotates, interrupts, ...) raise EmuError.
 """
@@ -169,7 +173,9 @@ class CPU:
             if mode == 0:
                 self.wr(a, imm)
             elif mode == 4:                    # S16H : upper half, keep lower
-                self.r[rid] = (imm << 16) | (self.r[rid] & 0xFFFF)
+                self.r[rid] = (self.r[rid] & 0xFFFF) | (imm << 16)
+            elif mode == 1:                    # 16L : lower half, keep upper
+                self.r[rid] = (self.r[rid] & 0xFFFF0000) | imm
             else:
                 raise EmuError(f"set mode {mode} not supported at pc={self.pc:#x}")
         elif op == 0x1C:

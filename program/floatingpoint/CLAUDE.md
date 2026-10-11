@@ -1,26 +1,45 @@
 # floatingpoint — ISA-32 소프트웨어 부동소수점 라이브러리
 
 ISA-32 어셈블리로 작성한 **IEEE-754 binary32(float)** 라이브러리입니다. 이 CPU에는 FPU가 없어서 정수 명령으로 구현했습니다.
-문법은 `tools/SYNTAX.md`를 따릅니다. 명령 의미(플래그, `set` 모드, ABI)는 `ISA.md`를 기준으로 하고, 아직 없으면 `ISA-32.xlsx`를 봅니다.
+문법은 `SYNTAX.md`, 명령 의미(플래그, `set` 모드, ABI)는 `ISA.md`를 따릅니다. 이 폴더의 두 파일은 `tools/SYNTAX.md`와 루트 `ISA.md`의 복사본이라, 원본이 바뀌면 다시 복사해야 합니다.
 
 ## 파일
 
 | 파일 | 역할 |
 |---|---|
-| `float.txt` | 라이브러리 본체(헤더). 다른 프로그램에서 include해서 씁니다 |
-| `fp_harness.txt` | 테스트용 프로그램. mailbox에 연산과 인자를 넣고 실행한 뒤 `halt` |
+| `float.hsm` | 정의(API). 함수 `extern` 선언, 공개 상수(`FP_STRBUF`), API 설명. 사용하는 프로그램에서 include합니다 |
+| `float.asm` | 구현. 따로 어셈블해서 `float.o`로 만들고 링크합니다. `#define FP_IMPL 1` 후 `float.hsm`를 include하고, 함수를 `global`로 내보냅니다 |
+| `fp_harness.asm` | 테스트용 프로그램. mailbox에 연산과 인자를 넣고 실행한 뒤 `halt` |
 | `isa32emu.py` | ISA-32 명령 단위 에뮬레이터. Digital 회로가 아니라 프로그램 검증용입니다 |
 | `fp_test.py` | harness를 빌드해서 에뮬레이터로 돌리고 기준값과 비교합니다 |
 
 ## 사용법
 
 ```asm
-#include<floatingpoint/float.txt>   ; 경로는 dasm에 넘긴 최초 파일의 디렉터리 기준
+#include<floatingpoint/float.hsm>     ; 경로는 dasm에 넘긴 최초 파일의 디렉터리 기준
 ```
 
-- 라이브러리는 `.text` 첫 명령이 `jmp.one zero.32B, fp_lib_end`라서 자기 코드를 건너뜁니다. 그래서 파일 맨 위에 include해도 되고, 맨 아래에 해도 됩니다.
-- `#ifndef FP_LIB_INC` 가드가 있습니다.
-- `.data`에 `fp_pow10`, `fp_bigA`, `fp_bigB`, `fp_digits`(약 160 word)를 차지합니다. 데이터 주소는 `set reg.32B, label`로 쓰기 때문에 0xFFFF 이하여야 합니다.
+```
+dasm main.asm -o main.o
+dasm floatingpoint/float.asm -o float.o
+dlnk main.o float.o -o main.bin     ; main.o를 먼저
+```
+
+- 헤더와 구현이 분리돼 있습니다.
+  - `float.hsm`에는 `extern` 선언만 있습니다. `#ifndef FP_H` 가드가 있습니다.
+  - `float.asm`는 `#define FP_IMPL 1` 다음에 `float.hsm`를 include하므로 `extern`이 빠집니다. 같은 파일에 `extern`과 정의가 함께 있으면 dasm 에러가 나기 때문입니다.
+- 오브젝트에서는 내부 라벨이 `float#...`로 저장됩니다. 그래서 `global`로 내보낸 6개 함수 말고는 다른 파일과 이름이 충돌하지 않습니다.
+- 링크 순서:
+  - 바이너리는 링크 순서대로 text가 주소 0부터 이어지므로, main을 먼저 링크해야 시작 주소가 main이 됩니다.
+  - 혹시 `float.o`가 먼저 오더라도, 첫 명령 `jmp.one zero.32B, fp_lib_end`가 라이브러리를 건너뜁니다.
+- `.data`에 `fp_pow10`, `fp_bigA`, `fp_bigB`, `fp_digits`(약 160 word)를 차지합니다.
+- **주소 제약: 라이브러리 코드와 데이터는 모두 0x8000 미만에 있어야 합니다.**
+  - `call zero.32B, fp_xxx`와 `jmp.* zero.32B, label`은 라벨을 offset으로 씁니다. `ld.gen[13] …, fp_pow10`과 `ld.gen[13] …, fp_digits`도 마찬가지입니다. 이 offset은 부호 있는 16비트(-32768~32767)라서 0x8000 이상인 주소는 음수가 되어 엉뚱한 곳을 가리킵니다.
+  - `set reg.32B, label`(zero-extend, 0xFFFF까지)만 보면 0xFFFF까지 될 것 같지만, 실제 한계는 위의 offset 쪽입니다.
+  - 링크하면 모든 text 뒤에 data가 오므로, 프로그램 전체 text가 커지면 `fp_pow10`도 뒤로 밀립니다. 현재 `fp_harness` 링크 결과에서는 0x186C입니다.
+- **재진입 불가**: `fp_str2f`와 `fp_f2str`는 전역 버퍼 `fp_bigA`, `fp_bigB`, `fp_digits`를 씁니다.
+  - 다른 `fp_` 호출을 중단시킬 수 있는 인터럽트 핸들러에서는 이 두 함수를 부르면 안 됩니다.
+  - `fp_add/sub/mul/div`는 레지스터와 스택만 써서 버퍼 충돌이 없습니다. 다만 ISR에서 부르려면 `gen[1..4]`와 `gen[13..20]`을 ISR이 직접 저장해야 합니다.
 - 라벨은 모두 `fp_` 접두사를 씁니다.
 
 ### API
@@ -31,12 +50,19 @@ ISA-32 어셈블리로 작성한 **IEEE-754 binary32(float)** 라이브러리입
 | `fp_sub` | 같음 | `gen[0]` = a - b (b의 부호를 뒤집고 `fp_add`로 넘어감) |
 | `fp_mul` | 같음 | `gen[0]` = a * b |
 | `fp_div` | 같음 | `gen[0]` = a / b |
-| `fp_str2f` | `gen[1]` = 문자열 주소 | `gen[0]` = float |
+| `fp_str2f` | `gen[1]` = 문자열 주소 | `gen[0]` = float, `gen[1]` = 끝 포인터(사용하지 않은 첫 글자, strtod와 같음) |
 | `fp_f2str` | `gen[1]` = float, `gen[2]` = 버퍼, `gen[3]` = 유효숫자(1..9, 범위 밖은 클램프) | 버퍼에 문자열, `gen[0]` = 길이 |
 
 - **문자열 형식**: 기존 `strBuff`처럼 **1 word = 1 글자**이고 0으로 끝납니다.
-- **`fp_str2f` 입력 문법**: `[공백][+|-](숫자[.숫자] | .숫자)[(e|E)[+|-]숫자]`이고, `inf`/`nan`(대소문자 무관)도 받습니다. 파싱할 수 없는 문자가 나오면 거기서 멈추고, 그때까지 읽은 값을 돌려줍니다.
-- **`fp_f2str` 출력**: C의 `printf("%.*g")`와 같습니다. `-4 <= X < P`이면 고정소수점, 아니면 `d.ddde±XX` 형식이고, 끝의 0은 지웁니다. 특수값은 `inf`, `-inf`, `nan`, `-0`으로 씁니다. 버퍼는 최대 17 word가 필요합니다. 유효숫자 9이면 왕복 변환이 정확합니다.
+- **`fp_str2f` 입력 문법**: `[공백][+|-](숫자[.숫자] | .숫자)[(e|E)[+|-]숫자]`이고, `inf`/`nan`(대소문자 무관, 세 글자 전체 확인)도 받습니다. 파싱할 수 없는 문자가 나오면 거기서 멈추고, 그때까지 읽은 값을 돌려줍니다.
+  - **끝 포인터(`gen[1]`)**: strtod의 endptr와 같습니다.
+    - 숫자가 하나도 없으면(`""`, `"-"`, `"."`, `"abc"`, `"inx"`) `+0`을 돌려주고, 끝 포인터는 시작 주소 그대로입니다. 호출자는 이것으로 파싱 실패를 알 수 있습니다.
+    - `"1e"`, `"1e+"`처럼 지수 뒤에 숫자가 없으면 `e`는 쓰지 않은 것으로 칩니다. 이때 끝 포인터는 `e`를 가리킵니다.
+    - `"infinity"`는 `inf`까지만 읽습니다.
+  - 알려진 차이:
+    - 앞 공백은 스페이스만 건너뛰고 탭은 건너뛰지 않습니다.
+    - 지수 값은 1000을 넘으면 더 쌓지 않습니다. 그래서 가수가 1000자리를 넘는 극단적인 입력은 틀릴 수 있습니다.
+- **`fp_f2str` 출력**: C의 `printf("%.*g")`와 같습니다. `-4 <= X < P`이면 고정소수점, 아니면 `d.ddde±XX` 형식이고, 끝의 0은 지웁니다. 특수값은 `inf`, `-inf`, `nan`, `-0`으로 씁니다. 부호가 음수인 NaN도 `nan`으로 출력합니다. glibc는 `-nan`이라 여기서 다릅니다. 버퍼는 최대 17 word가 필요합니다. 유효숫자 9이면 왕복 변환이 정확합니다.
 - **호출 규약 (ISA-32 ABI)**: `gen[5..12]`는 보존(push/pop)하고, `gen[1..4]`와 `gen[13..20]`은 덮어씁니다. 스택은 깊이 약 12 word를 씁니다.
 
 ### IEEE 준수 범위
@@ -86,7 +112,10 @@ ISA-32 어셈블리로 작성한 **IEEE-754 binary32(float)** 라이브러리입
 - `shiftr`/`shiftri`는 논리 시프트로 가정합니다. 부호 비트가 있을 수 있는 값은 시프트한 뒤 마스크합니다.
 - 레지스터로 시프트할 때 시프트 양은 항상 0~31입니다.
 - 즉시값은 zero-extend(0..65535)입니다.
-- `set R.32B, imm`은 `R = imm`, `set R.S16H, imm`은 상위 16비트만 바꿉니다. 32비트 상수는 `FP_SET(reg, hi, lo)` 매크로로 넣습니다.
+- `set R.32B, imm`은 `R = imm`입니다.
+- 32비트 상수는 `FP_SET(reg, hi, lo)` 매크로로 넣습니다. 이 매크로는 `set R.S16H, hi` 다음에 `set R.16L, lo`를 씁니다. 회로에서 이미 동작이 확인된 `add_terminal.txt`와 같은 순서입니다.
+  - `S16H`가 하위 16비트를 지우든 유지하든 결과가 같습니다.
+  - 예전 순서(`32B` 다음 `S16H`)는 `S16H`가 하위를 지우면 상수가 깨집니다. 그래서 바꿨고, 에뮬레이터도 이제 "지운다" 쪽으로 모델링합니다.
 - 스택: push는 `stack -= 4; mem[stack] = v`, call은 복귀 주소를 push합니다.
 
 ## 테스트
@@ -99,7 +128,7 @@ python isa32emu.py prog.bin "12\n"   # 임의 프로그램 실행 (키보드 입
 ```
 
 - `fp_test.py`
-  - `../../tools/bin`의 dasm/dlnk로 `fp_harness.txt`를 임시 폴더에 빌드합니다.
+  - `../../tools/bin`의 dasm으로 `fp_harness.asm`와 `float.asm`를 각각 어셈블하고, dlnk로 링크합니다(임시 폴더).
   - harness의 mailbox(매직 `0x7E57F00D` 다음 word들)에 연산과 인자를 넣고 실행합니다.
   - 매 실행마다 `gen[5..12]` 보존과 스택 균형을 확인합니다.
 - **기준값**
@@ -111,7 +140,7 @@ python isa32emu.py prog.bin "12\n"   # 임의 프로그램 실행 (키보드 입
   - `cmp`/`test`가 아닌 ALU 명령은 플래그를 무효로 만들고, 무효한 플래그로 분기하면 에러를 냅니다.
   - `32B` 모드와 `set`의 `S16H`만 허용합니다.
   - 캐리 명령, 회전 명령, 인터럽트 명령은 지원하지 않습니다(필요하면 추가).
-- **현재 결과 (2026-10-10)**: 전체 ALL PASS입니다(add/sub/mul/div 각 2,076건, str2f 431건, f2str 424건, 왕복).
+- **현재 결과 (2026-10-10)**: 전체 ALL PASS입니다(add/sub/mul/div 각 2,076건, str2f 446건(값과 끝 포인터), f2str 424건, 왕복).
 - **Digital 회로에서는 아직 실행하지 않았습니다.**
 
 ### 성능
@@ -122,16 +151,16 @@ python isa32emu.py prog.bin "12\n"   # 임의 프로그램 실행 (키보드 입
 
 ## 툴체인 관련 메모
 
-`tools/BUGS.md`에 있는 버그 세 가지는 `src/assembler-linker`에서 수정됐습니다. `tools/bin`을 재빌드한 dasm/dlnk로 교체하기 전까지는 `float.txt`의 우회 코드를 유지합니다.
+`tools/BUGS.md`의 버그 세 가지는 모두 수정됐고, `tools/bin`의 dasm/dlnk에도 반영됐습니다(2026-10-10 확인). 그래서 우회 코드를 걷어냈습니다.
 
-- **1인자 매크로를 쓰지 않음**: 예전 dasm에서는 1인자 매크로가 실패합니다. 그래서 문자 출력을 `st.gen[5] reg.32B, 0` + `addi gen[5].32B, 4` 두 줄로 인라인했습니다(예전 `FP_PUTC`).
-- **내용 없는 `;` 주석 줄 금지**: 예전 렉서에서는 parse 에러가 납니다.
-- 위 두 가지는 수정된 dasm에서는 필요 없습니다. 다만 그대로 둬도 문제는 없습니다.
+- 1인자 매크로는 정상 동작합니다. 문자 출력은 다시 `FP_PUTC(reg)` 매크로를 씁니다.
+- 내용 없는 `;` 주석 줄도 정상입니다.
+- dlnk는 깨진 오브젝트에서 에러로 끝나고, dasm은 실패하면 출력 파일을 지웁니다. `fp_test.py`는 원래 각 단계의 종료 코드를 확인합니다.
 - 주석 밖에서는 ASCII만 씁니다. 예약어(`test`, `pos`, `zero` 등)는 라벨로 쓰지 않습니다.
 
 ## 남은 일 / 아이디어
 
 - Digital(`cpu-32.dig`)에서 실제 실행 검증
-- 키보드로 두 수를 받아 사칙연산 결과를 출력하는 데모 프로그램 (`add_terminal.txt` 스타일)
+- 계산기 `../calc.asm`를 만들었습니다(`../io` 라이브러리 사용, 수식 입력, 우선순위와 괄호 지원). 에뮬레이터에서만 확인했습니다
 - 필요하면 추가할 함수: 비교(`fp_cmp`), int↔float 변환, `fp_neg`/`fp_abs`, sqrt
 - bigint limb 길이를 동적으로 바꿔 문자열 변환 속도 개선

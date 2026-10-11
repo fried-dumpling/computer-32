@@ -1,27 +1,36 @@
 # ISA-32 어셈블리 문법 (dasm / dlnk)
 
-`dasm`(어셈블러)과 `dlnk`(링커)가 받아들이는 소스 문법과 출력 형식을 정리한 문서입니다.
+`dasm`(어셈블러)과 `dlnk`(링커)가 받아들이는 소스 문법과 출력 형식을 정리한 문서입니다. `hexdump` 사용법도 1절에 같이 적습니다.
 명령어의 **동작 의미**는 CPU 쪽 ISA 문서를 기준으로 하고, 여기서는 어셈블러가 받아들이는 형태와 인코딩만 다룹니다.
 
 ## 1. 도구 사용법
 
 ```
-dasm <input.txt> <output.o> [-file] [-token] [-preproc] [-eval] [-bin]
-dlnk <output.bin> <input1.o> [input2.o ...]
+dasm <input.txt> [-o <output.o>] [-file] [-token] [-preproc] [-eval] [-bin]
+dlnk <input1.o> [input2.o ...] [-o <output.bin>] [-padbss] [-v]
+hexdump <file> [-o <output.txt>] [-nodec] [-width N] [-bundle N]
 ```
 
-| 옵션 | 출력 |
-|---|---|
-| `-file` | 입력 파일 원문 |
-| `-token` | 렉서 토큰 목록 |
-| `-preproc` | 전처리 후 토큰 목록 |
-| `-eval` | parse / evaluate 성공 여부 |
-| `-bin` | 섹션별 바이트 + 최종 오브젝트 바이트 |
+| 도구 | 옵션 | 동작 |
+|---|---|---|
+| 공통 | `-o <파일>` | 출력 파일. 기본값: dasm은 입력 파일 확장자를 `.o`로 바꾼 이름, dlnk는 `a.out`, hexdump는 stdout |
+| 공통 | `-h`, `-help` | 사용법 출력 |
+| dasm | `-file` | 입력 파일 원문 |
+| dasm | `-token` | 렉서 토큰 목록 |
+| dasm | `-preproc` | 전처리 후 토큰 목록 |
+| dasm | `-eval` | parse / evaluate 성공 여부 |
+| dasm | `-bin` | 섹션별 바이트 + 최종 오브젝트 바이트 |
+| dlnk | `-padbss` | `.bss` 크기만큼 0을 바이너리 끝에 채움 (9절) |
+| dlnk | `-v` | 링크 요약(`linked N file(s) -> ...`)을 stderr에 출력 |
+| hexdump | `-nodec` | 오른쪽 문자 열 없이 16진수만 |
+| hexdump | `-width N` | 한 줄 바이트 수 (기본 4) |
+| hexdump | `-bundle N` | 줄 안에서 묶는 바이트 수 (기본: width와 같음) |
 
-- 종료 코드: 성공 `0`, 실패 `-1`.
+- 옵션과 입력의 순서는 자유입니다. 값은 `-o out.o`와 `-o=out.o` 둘 다 됩니다. `--` 뒤의 인자는 전부 입력으로 봅니다.
+- 숫자 값은 10진수나 `0x` 16진수입니다.
+- stdout에는 요청한 출력(덤프)만 나가고, 오류·경고는 stderr로 나갑니다. 성공하면 기본적으로 아무것도 출력하지 않습니다.
+- 종료 코드: 성공 `0`, 처리 실패(입력을 못 읽음, 어셈블/링크 오류) `1`, 명령줄 오류(모르는 옵션, 값 누락, 입력 없음) `2`.
 - `dasm`이 실패하면 출력 파일을 만들지 않고, 같은 이름의 기존 파일도 지웁니다.
-- `dlnk`는 오브젝트 파일이 비었거나 깨졌으면 `invalid object file '<경로>'`를 내고 실패합니다.
-- `dlnk`는 어느 파일에도 정의되지 않은 이름이면 `undefined symbol`, 같은 이름이 두 파일에 정의돼 있으면 `duplicate symbol`을 내고 실패합니다.
 - 입력 경로는 실행한 셸의 현재 디렉터리 기준입니다.
 - 출력 오브젝트 파일 이름(디렉터리·확장자 제외)이 라벨 이름 앞에 붙어 파일 간 충돌을 막습니다(`main.o`의 `loop` → `main#loop`). **링크할 오브젝트들의 파일 이름은 서로 달라야 합니다.**
 - `dasm`은 처음 실행할 때 실행 파일 옆에 `dasm_table.bin`(파서 테이블 캐시)을 만듭니다. 실행 파일을 교체하면 이 파일을 지워야 합니다.
@@ -334,7 +343,7 @@ extern add1
     call zero.32B, add1
 ```
 
-`dlnk out.bin main.o lib.o`
+`dlnk main.o lib.o -o out.bin`
 
 ### 아직 문법에 연결되지 않은 것
 
@@ -344,15 +353,19 @@ extern add1
 
 - 최종 바이너리는 주소 0부터 `TEXT` → `DATA` → `BSS` 순서로 배치됩니다.
 - 그룹 안에서는 처음 등장한 (종류, 이름) 순서를 따릅니다. 같은 종류·같은 이름의 섹션은 파일 안에서든 파일 사이에서든 하나로 합쳐지고, 입력 파일 순서대로 이어 붙습니다.
-- `.bss`는 주소만 차지하고 출력 바이너리에는 들어가지 않습니다. 바이너리는 text와 data 바이트뿐입니다.
+- `.bss`는 주소만 차지하고 출력 바이너리에는 들어가지 않습니다. 바이너리는 text와 data 바이트뿐입니다. `-padbss`를 주면 `.bss` 크기만큼 0이 바이너리 끝에 붙습니다(주소는 그대로).
 - 다른 파일의 이름은 `global`/`extern`으로 참조합니다(8절). 그 밖의 이름은 파일마다 따로라서, 여러 파일에 같은 라벨 이름이 있어도 충돌하지 않습니다.
 
 ## 10. 오류 메시지
 
+소스 위치가 있는 오류(전처리·parse·evaluate)는 GCC 형식이라 편집기에서 바로 열립니다.
+
 ```
-error at <파일 경로> line <파일 안 줄 번호>: <그 줄의 소스>
- <오류 내용>: <토큰>
+<파일 경로>:<파일 안 줄 번호>: error: <오류 내용>: <토큰>
+    <그 줄의 소스>
 ```
+
+도구 자체 오류(명령줄, 파일 입출력, 링크)는 `<도구 이름>: error: <내용>` 형식입니다. 예: `dlnk: error: undefined symbol 'foo' (used in 'b.o')`.
 
 | 단계 | 대표 오류 |
 |---|---|
@@ -360,3 +373,4 @@ error at <파일 경로> line <파일 안 줄 번호>: <그 줄의 소스>
 | parse | `unexpected token: <토큰>` (입력 끝이면 `<EOF>`) |
 | evaluate | `missing expression` (정의되지 않은 이름), `negative index` (`gen[-1]`), `not constant` (데이터 크기가 상수가 아님), `global symbol is not defined in this file`, `extern symbol is defined in this file` |
 | link | `invalid object file '<경로>'`, `undefined symbol '<이름>'`, `duplicate symbol '<이름>'` |
+| 공통 | `cannot read file '<경로>'`, `cannot write file '<경로>'`, `no input file`, `unknown flag '<옵션>'`, `missing value for '<옵션>'`, `invalid value for '<옵션>': '<값>'`, `unexpected argument '<인자>'` |

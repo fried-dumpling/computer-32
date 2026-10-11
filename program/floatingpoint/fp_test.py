@@ -1,9 +1,9 @@
-"""Tests float.txt on the ISA-32 emulator against numpy float32 / exact references.
+"""Tests float.asm on the ISA-32 emulator against numpy float32 / exact references.
 
 usage: python fp_test.py [--quick] [--seed N]
 
-Builds fp_harness.txt (which includes float.txt) with tools/bin/dasm + dlnk,
-then for each case writes op/args into the harness mailbox, runs the
+Builds fp_harness.asm and float.asm as two objects with tools/bin/dasm, links
+them with dlnk, then for each case writes op/args into the harness mailbox, runs the
 program and compares the result bit-for-bit.
 """
 
@@ -29,9 +29,11 @@ SENTINEL = [0x5A5A0000 + i for i in range(5, 13)]
 
 def build():
     tmp = tempfile.mkdtemp(prefix="fptest_")
-    obj, out = os.path.join(tmp, "fp_harness.o"), os.path.join(tmp, "fp_harness.bin")
-    for cmd in ([os.path.join(TOOLS, "dasm.exe"), "fp_harness.txt", obj],
-                [os.path.join(TOOLS, "dlnk.exe"), out, obj]):
+    obj, lib = os.path.join(tmp, "fp_harness.o"), os.path.join(tmp, "float.o")
+    out = os.path.join(tmp, "fp_harness.bin")
+    for cmd in ([os.path.join(TOOLS, "dasm.exe"), "fp_harness.asm", "-o", obj],
+                [os.path.join(TOOLS, "dasm.exe"), "float.asm", "-o", lib],
+                [os.path.join(TOOLS, "dlnk.exe"), obj, lib, "-o", out]):
         r = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True)
         if r.returncode != 0:
             print(r.stdout[-2000:], r.stderr[-2000:])
@@ -60,6 +62,7 @@ class Harness:
             cpu.r[5 + i] = v
         cpu.run()
         self.max_steps = max(self.max_steps, cpu.steps)
+        self.end = (cpu.word(self.c) - self.str) // 4    # fp_str2f end index
         if cpu.r[5:13] != SENTINEL:
             raise EmuError("callee-saved gen[5..12] not preserved")
         if cpu.r[R_STACK] != self.str + 4 * 64 + 4 * 512:
@@ -112,15 +115,46 @@ def frac_to_f32(fr, neg):
     return sign | ((e + 127) << 23) | (q - (1 << 23))
 
 
+def ref_parse(s):
+    """strtod-like scan: returns (value bits, end index)."""
+    i = 0
+    while i < len(s) and s[i] == " ":
+        i += 1
+    neg = i < len(s) and s[i] == "-"
+    if i < len(s) and s[i] in "+-":
+        i += 1
+    sign = 0x80000000 if neg else 0
+    word = s[i:i + 3].lower()
+    if word == "inf":
+        return sign | 0x7F800000, i + 3
+    if word == "nan":
+        return sign | 0x7FC00000, i + 3
+    j = i
+    while j < len(s) and s[j].isdigit():
+        j += 1
+    k = j
+    if k < len(s) and s[k] == ".":
+        k += 1
+        while k < len(s) and s[k].isdigit():
+            k += 1
+    mant = s[i:k]
+    if not any(ch.isdigit() for ch in mant):
+        return 0, 0
+    end, text = k, mant
+    if k < len(s) and s[k] in "eE":
+        e = k + 1
+        if e < len(s) and s[e] in "+-":
+            e += 1
+        d = e
+        while d < len(s) and s[d].isdigit():
+            d += 1
+        if d > e:
+            end, text = d, mant + "e" + s[k + 1:d]
+    return frac_to_f32(Fraction(Decimal(text)), neg), end
+
+
 def ref_s2f(s):
-    t = s.strip()
-    neg = t.startswith("-")
-    body = t.lstrip("+-")
-    if body[:1].lower() == "i":
-        return (0x80000000 if neg else 0) | 0x7F800000
-    if body[:1].lower() == "n":
-        return (0x80000000 if neg else 0) | 0x7FC00000
-    return frac_to_f32(Fraction(Decimal(body)), neg)
+    return ref_parse(s)[0]
 
 
 def ref_f2s(b, p):
@@ -207,14 +241,14 @@ def main():
             "3.4028235e38", "3.4028236e38", "1e39", "1.17549435e-38", "1.4e-45", "7e-46",
             "7.1e-46", "1e-50", "123456789", "16777217", "0.000001", "inf", "-INF", "nan",
             "340282346638528859811704183484516925440", "0.30000001192092896",
-            "1.00000005960464477539", "2.5e-1x", "1.5.3"]
+            "1.00000005960464477539", "2.5e-1x", "1.5.3", "1e", "1e+", "2E-x", "-", "",
+            "abc", " .", "5.", "infinity", "nAn", "-Inf+1", "inx", "na", "3*4", "-0.0e5)"]
     strs += [rand_decimal(rng) for _ in range(60 if quick else 400)]
     for s in strs:
         got, _, _ = h.run(OP_S2F, s=s)
-        if s in ("2.5e-1x", "1.5.3"):
-            want = ref_s2f(s.split("x")[0] if "x" in s else "1.5")
-        else:
-            want = ref_s2f(s)
+        want, want_end = ref_parse(s)
+        if h.end != want_end:
+            report("str2f end", repr(s), h.end, want_end)
         if got != want:
             digits = sum(ch.isdigit() for ch in s.split("e")[0].split("E")[0].lstrip("+-0."))
             report("str2f", repr(s) + (" (>12 digits)" if digits > 12 else ""),

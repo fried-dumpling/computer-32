@@ -1,36 +1,36 @@
 ; =====================================================================
-;  float.txt : IEEE-754 binary32 software floating point library
-; ---------------------------------------------------------------------
-;  usage : #include<floatingpoint/float.txt>   (path is relative to the
-;          file given to dasm). The library jumps over itself, so it can
-;          be included before or after the main code.
-;  rounding : round-to-nearest-even, subnormals, +-0, +-inf, NaN
-;  ABI (ISA-32) : args gen[1..4], return gen[0]
-;                 gen[5..12] preserved, gen[1..4] / gen[13..20] destroyed
-;  fp_add    : gen[0] = gen[1] + gen[2]
-;  fp_sub    : gen[0] = gen[1] - gen[2]
-;  fp_mul    : gen[0] = gen[1] * gen[2]
-;  fp_div    : gen[0] = gen[1] / gen[2]
-;  fp_str2f  : gen[0] = float(string at gen[1])
-;              string = 1 char per word, 0 terminated (like strBuff)
-;              [spaces][+|-](digits[.digits] | .digits)[(e|E)[+|-]digits]
-;              "inf" / "nan" (any case) also accepted
-;  fp_f2str  : string(gen[1]) -> buffer at gen[2], gen[3] = significant
-;              digits (1..9, 9 = exact round trip), printf("%.*g") format
-;              returns gen[0] = string length (buffer needs <= 17 words)
+;  float.asm : IEEE-754 binary32 software floating point library
+;              (implementation, API and usage : float.hsm)
+;  assemble separately : dasm floatingpoint/float.asm -o float.o
+;  the first instruction jumps over the library, so the object may also
+;  be linked first, but link the main program first anyway.
 ; =====================================================================
 
-#ifndef FP_LIB_INC
-#define FP_LIB_INC 1
+#define FP_IMPL 1
+#include<float.hsm>
+
+global fp_add
+global fp_sub
+global fp_mul
+global fp_div
+global fp_str2f
+global fp_f2str
 
 #define FP_BIGN 14              ; bigint limbs (16 bit payload / word)
 #define FP_BIGSZ (4*14)
 #define FP_MAXDIG 12            ; exact decimal digits kept by fp_str2f
 
-; reg = (hi << 16) | lo
+; reg = (hi << 16) | lo. same order as add_terminal.txt (proven on the
+; circuit) : S16H first, then 16L writes the lower half only
 #macro FP_SET 3
-    set #1.32B, #3
     set #1.S16H, #2
+    set #1.16L, #3
+#end
+
+; *out++ = reg   (out ptr = gen[5], used by fp_f2str)
+#macro FP_PUTC 1
+    st.gen[5] #1.32B, 0
+    addi gen[5].32B, 4
 #end
 
 #macro FP_SAVE 0
@@ -518,13 +518,13 @@ fp_add:
     cmpi gen[4].32B, 3
     jmp.zero zero.32B, fp_ret_nan
     cmpi gen[3].32B, 2
-    ijmp.zero zero.32B, fp_add_ainf
+    ijmp.zero zero.32B, fp_add_afin
     cmpi gen[4].32B, 2                  ; inf + inf
     ijmp.zero zero.32B, fp_ret_a
     cmp gen[5].32B, gen[8].32B
     jmp.zero zero.32B, fp_ret_a
     jmp.one zero.32B, fp_ret_dnan       ; inf - inf
-fp_add_ainf:
+fp_add_afin:
     cmpi gen[4].32B, 2
     jmp.zero zero.32B, fp_ret_b
     cmpi gen[3].32B, 0
@@ -684,11 +684,11 @@ fp_div:
     jmp.zero zero.32B, fp_ret_nan
     bxr gen[5].32B, gen[8].32B          ; sign
     cmpi gen[3].32B, 2
-    ijmp.zero zero.32B, fp_div_ainf
+    ijmp.zero zero.32B, fp_div_afin
     cmpi gen[4].32B, 2
     jmp.zero zero.32B, fp_ret_dnan      ; inf / inf
     jmp.one zero.32B, fp_ret_inf
-fp_div_ainf:
+fp_div_afin:
     cmpi gen[4].32B, 2
     jmp.zero zero.32B, fp_ret_zero      ; x / inf
     cmpi gen[4].32B, 0
@@ -729,14 +729,19 @@ fp_div_pack:
     jmp.one zero.32B, fp_ret
 
 ; =====================================================================
-;  fp_str2f : gen[1] = string ptr -> gen[0] = float
+;  fp_str2f : gen[1] = string ptr -> gen[0] = float, gen[1] = end ptr
+;             end = first char not used (like strtod). no number : +0,
+;             end = start
 ;  gen[5] ptr, gen[6] sign, gen[7] digits kept, gen[8] decimal exp,
 ;  gen[9] dropped nonzero digit, gen[10] char, gen[11] exp value,
-;  gen[12] flag ('.' seen / exp sign)
+;  gen[12] mantissa : bit0 '.' seen, bit1 digit seen / exponent : sign
+;  gen[3] first exponent digit ptr, gen[4] end ptr. the bigint calls in
+;  the digit loop keep gen[3], gen[4]. fp_s2f_calc moves end to gen[10].
 ; =====================================================================
 fp_str2f:
     FP_SAVE()
     mov gen[5].32B, gen[1].32B
+    mov gen[4].32B, gen[1].32B          ; end = start
     set gen[6].32B, 0
     set gen[7].32B, 0
     set gen[8].32B, 0
@@ -772,9 +777,9 @@ fp_s2f_dig:                             ; mantissa digits
     ld.gen[5] gen[10].32B, 0
     cmpi gen[10].32B, '.'
     ijmp.zero zero.32B, fp_s2f_num
-    cmpi gen[12].32B, 0
+    testi gen[12].32B, 1
     ijmp.zero zero.32B, fp_s2f_mend     ; second '.'
-    set gen[12].32B, 1
+    bori gen[12].32B, 1
     jmp.one zero.32B, fp_s2f_next
 fp_s2f_num:
     subi gen[10].32B, '0'
@@ -782,11 +787,12 @@ fp_s2f_num:
     jmp.neg zero.32B, fp_s2f_mend
     cmpi gen[10].32B, 10
     ijmp.neg zero.32B, fp_s2f_mend
+    bori gen[12].32B, 2                 ; digit seen
     cmpi gen[7].32B, 0
     ijmp.zero zero.32B, fp_s2f_have
     cmpi gen[10].32B, 0
     ijmp.zero zero.32B, fp_s2f_have
-    cmpi gen[12].32B, 0                 ; leading zero
+    testi gen[12].32B, 1                ; leading zero
     jmp.zero zero.32B, fp_s2f_next
     subi gen[8].32B, 1
     jmp.one zero.32B, fp_s2f_next
@@ -799,7 +805,7 @@ fp_s2f_have:
     mov gen[2].32B, gen[10].32B
     call zero.32B, fp_big_addsmall
     addi gen[7].32B, 1
-    cmpi gen[12].32B, 0
+    testi gen[12].32B, 1
     jmp.zero zero.32B, fp_s2f_next
     subi gen[8].32B, 1
     jmp.one zero.32B, fp_s2f_next
@@ -808,7 +814,7 @@ fp_s2f_extra:                           ; digits beyond FP_MAXDIG
     jmp.zero zero.32B, fp_s2f_extra2
     set gen[9].32B, 1
 fp_s2f_extra2:
-    cmpi gen[12].32B, 0
+    testi gen[12].32B, 1
     ijmp.zero zero.32B, fp_s2f_next
     addi gen[8].32B, 1
 fp_s2f_next:
@@ -816,6 +822,9 @@ fp_s2f_next:
     jmp.one zero.32B, fp_s2f_dig
 
 fp_s2f_mend:                            ; exponent part
+    testi gen[12].32B, 2
+    jmp.zero zero.32B, fp_s2f_none      ; no digit at all
+    mov gen[4].32B, gen[5].32B          ; end = after the mantissa
     ld.gen[5] gen[10].32B, 0
     bori gen[10].32B, 0x20
     cmpi gen[10].32B, 'e'
@@ -828,11 +837,13 @@ fp_s2f_mend:                            ; exponent part
     ijmp.zero zero.32B, fp_s2f_eplus
     set gen[12].32B, 1
     addi gen[5].32B, 4
-    jmp.one zero.32B, fp_s2f_edig
+    jmp.one zero.32B, fp_s2f_estart
 fp_s2f_eplus:
     cmpi gen[10].32B, '+'
-    ijmp.zero zero.32B, fp_s2f_edig
+    ijmp.zero zero.32B, fp_s2f_estart
     addi gen[5].32B, 4
+fp_s2f_estart:
+    mov gen[3].32B, gen[5].32B
 fp_s2f_edig:
     ld.gen[5] gen[10].32B, 0
     subi gen[10].32B, '0'
@@ -850,6 +861,9 @@ fp_s2f_edig:
     add gen[11].32B, gen[10].32B
     jmp.one zero.32B, fp_s2f_edig
 fp_s2f_eend:
+    cmp gen[5].32B, gen[3].32B
+    jmp.zero zero.32B, fp_s2f_calc      ; no exponent digit : 'e' not used
+    mov gen[4].32B, gen[5].32B
     cmpi gen[12].32B, 0
     jmp.zero zero.32B, fp_s2f_epos
     sub gen[8].32B, gen[11].32B
@@ -858,9 +872,10 @@ fp_s2f_epos:
     add gen[8].32B, gen[11].32B
 
 fp_s2f_calc:                            ; value = N * 10^K
+    mov gen[10].32B, gen[4].32B         ; end ptr, kept through bigint
     mov gen[5].32B, gen[6].32B          ; sign -> gen[5] for fp_ret_*
     cmpi gen[7].32B, 0
-    jmp.zero zero.32B, fp_ret_zero
+    jmp.zero zero.32B, fp_s2f_zero
     cmpi gen[9].32B, 0                  ; dropped digits : append a 1
     jmp.zero zero.32B, fp_s2f_range
     set gen[1].32B, fp_bigA
@@ -874,11 +889,11 @@ fp_s2f_range:
     mov gen[3].32B, gen[7].32B
     add gen[3].32B, gen[8].32B          ; value in [10^(t-1), 10^t)
     cmpi gen[3].32B, 40
-    ijmp.neg zero.32B, fp_ret_inf       ; >= 1e39
+    ijmp.neg zero.32B, fp_s2f_big       ; >= 1e39
     addi gen[3].32B, 46
     cmpi gen[3].32B, 0
-    jmp.neg zero.32B, fp_ret_zero       ; < 1e-46
-    jmp.zero zero.32B, fp_ret_zero
+    jmp.neg zero.32B, fp_s2f_zero       ; < 1e-46
+    jmp.zero zero.32B, fp_s2f_zero
     set gen[1].32B, fp_bigB
     set gen[2].32B, 1
     call zero.32B, fp_big_set32
@@ -901,12 +916,44 @@ fp_s2f_div:
     addi gen[14].32B, 127
     mov gen[13].32B, gen[5].32B
     call zero.32B, fp_pack
+    mov gen[1].32B, gen[10].32B
+    jmp.one zero.32B, fp_ret
+fp_s2f_big:
+    mov gen[1].32B, gen[10].32B
+    jmp.one zero.32B, fp_ret_inf
+fp_s2f_zero:
+    mov gen[1].32B, gen[10].32B
+    jmp.one zero.32B, fp_ret_zero
+
+fp_s2f_none:                            ; no number : +0, end = start
+    mov gen[1].32B, gen[4].32B
+    set gen[0].32B, 0
     jmp.one zero.32B, fp_ret
 
-fp_s2f_inf:
+fp_s2f_inf:                             ; "inf", any case
+    ld.gen[5] gen[10].32B, 4
+    bori gen[10].32B, 0x20
+    cmpi gen[10].32B, 'n'
+    ijmp.zero zero.32B, fp_s2f_none
+    ld.gen[5] gen[10].32B, 8
+    bori gen[10].32B, 0x20
+    cmpi gen[10].32B, 'f'
+    ijmp.zero zero.32B, fp_s2f_none
+    mov gen[1].32B, gen[5].32B
+    addi gen[1].32B, 12
     mov gen[5].32B, gen[6].32B
     jmp.one zero.32B, fp_ret_inf
-fp_s2f_nan:
+fp_s2f_nan:                             ; "nan", any case
+    ld.gen[5] gen[10].32B, 4
+    bori gen[10].32B, 0x20
+    cmpi gen[10].32B, 'a'
+    ijmp.zero zero.32B, fp_s2f_none
+    ld.gen[5] gen[10].32B, 8
+    bori gen[10].32B, 0x20
+    cmpi gen[10].32B, 'n'
+    ijmp.zero zero.32B, fp_s2f_none
+    mov gen[1].32B, gen[5].32B
+    addi gen[1].32B, 12
     FP_SET(gen[0], 0x7FC0, 0x0000)
     mov gen[13].32B, gen[6].32B
     shiftli gen[13].32B, 31
@@ -938,8 +985,7 @@ fp_f2s_p2:
     cmpi gen[13].32B, 0
     jmp.zero zero.32B, fp_f2s_nosign
     set gen[1].32B, '-'
-    st.gen[5] gen[1].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[1])
 fp_f2s_nosign:
     cmpi gen[0].32B, 2
     jmp.zero zero.32B, fp_f2s_inf
@@ -1088,8 +1134,7 @@ fp_f2s_dz:
     cmp gen[11].32B, gen[7].32B
     ijmp.pos zero.32B, fp_f2s_end
     set gen[13].32B, '.'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     mov gen[1].32B, gen[7].32B
     addi gen[1].32B, 1
     mov gen[2].32B, gen[11].32B
@@ -1097,19 +1142,16 @@ fp_f2s_dz:
     jmp.one zero.32B, fp_f2s_end
 fp_f2s_small:                           ; fixed, X < 0 : 0.000ddd
     set gen[13].32B, '0'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     set gen[13].32B, '.'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     set gen[14].32B, '0'
     mov gen[13].32B, gen[7].32B
 fp_f2s_zlp:
     addi gen[13].32B, 1
     cmpi gen[13].32B, 0
     jmp.zero zero.32B, fp_f2s_zend
-    st.gen[5] gen[14].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[14])
     jmp.one zero.32B, fp_f2s_zlp
 fp_f2s_zend:
     set gen[1].32B, 0
@@ -1123,15 +1165,13 @@ fp_f2s_sci:                             ; d.ddde+XX
     cmpi gen[11].32B, 0
     jmp.zero zero.32B, fp_f2s_exp
     set gen[13].32B, '.'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     set gen[1].32B, 1
     mov gen[2].32B, gen[11].32B
     call zero.32B, fp_f2s_put
 fp_f2s_exp:
     set gen[13].32B, 'e'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     set gen[13].32B, '+'
     cmpi gen[7].32B, 0
     ijmp.neg zero.32B, fp_f2s_esign
@@ -1140,8 +1180,7 @@ fp_f2s_exp:
     sub gen[14].32B, gen[7].32B
     mov gen[7].32B, gen[14].32B
 fp_f2s_esign:
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     set gen[13].32B, '0'
 fp_f2s_etens:
     cmpi gen[7].32B, 10
@@ -1150,39 +1189,30 @@ fp_f2s_etens:
     addi gen[13].32B, 1
     jmp.one zero.32B, fp_f2s_etens
 fp_f2s_eones:
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     addi gen[7].32B, '0'
-    st.gen[5] gen[7].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[7])
     jmp.one zero.32B, fp_f2s_end
 
 fp_f2s_nan:
     set gen[13].32B, 'n'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     set gen[13].32B, 'a'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     set gen[13].32B, 'n'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     jmp.one zero.32B, fp_f2s_end
 fp_f2s_inf:
     set gen[13].32B, 'i'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     set gen[13].32B, 'n'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     set gen[13].32B, 'f'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     jmp.one zero.32B, fp_f2s_end
 fp_f2s_zero:
     set gen[13].32B, '0'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
 fp_f2s_end:
     st.gen[5] zero.32B, 0
     mov gen[0].32B, gen[5].32B
@@ -1199,13 +1229,10 @@ fp_f2s_put:
     shiftli gen[13].32B, 2
     ld.gen[13] gen[13].32B, fp_digits
     addi gen[13].32B, '0'
-    st.gen[5] gen[13].32B, 0
-    addi gen[5].32B, 4
+    FP_PUTC(gen[13])
     addi gen[1].32B, 1
     jmp.one zero.32B, fp_f2s_put
 fp_f2s_put_end:
     ret
 
 fp_lib_end:
-
-#end

@@ -1,3 +1,5 @@
+#include<float.hsm>
+
 .data
 t_magic: 4, 0x7E57F00D
 t_op:    4, 0
@@ -41,6 +43,7 @@ do_div:
 do_s2f:
     set gen[1].32B, t_str
     call zero.32B, fp_str2f
+    st.zero gen[1].32B, t_c             ; end ptr
     jmp.one zero.32B, done
 do_f2s:
     set gen[2].32B, t_str
@@ -49,4 +52,3 @@ done:
     st.zero gen[0].32B, t_res
     halt
 
-#include<float.txt>

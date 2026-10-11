@@ -1,0 +1,53 @@
+; =====================================================================
+;  io.hsm : keyboard / terminal library (API)
+; ---------------------------------------------------------------------
+;  usage : #include<io/io.hsm>  in the program, then assemble io/io.asm
+;          separately and link both objects:
+;            dasm main.asm -o main.o
+;            dasm io/io.asm -o io.o
+;            dlnk main.o io.o -o main.bin           (main.o first)
+;  ABI (ISA-32) : args gen[1..4], return gen[0]
+;                 gen[5..12] preserved, gen[1..4] / gen[13..20] destroyed
+;  strings : 1 char per word, 0 terminated (like strBuff)
+;
+;  io_putc     : print char gen[1]
+;  io_newline  : print '\n'
+;  io_print    : print string at gen[1], gen[0] = length
+;  io_println  : io_print + '\n', gen[0] = length (without '\n')
+;  io_printint : print gen[1] as signed decimal
+;  io_printhex : print gen[1] as 8 hex digits (no 0x prefix)
+;  io_getc     : wait for a key, gen[0] = char (no echo)
+;  io_trygetc  : gen[0] = char, or 0 if no key is waiting (no echo)
+;  io_getline  : read a line into buffer gen[1] of gen[2] words (>= 1)
+;                gen[3] = prompt string printed first (0 : none)
+;                echoes input, Enter ('\n' or '\r') ends the line,
+;                keys beyond gen[2]-1 chars are ignored.
+;                backspace (8 / 127) erases one char. the terminal cannot
+;                erase, so it prints '\n', the prompt and the line again.
+;                gen[0] = length, buffer is 0 terminated
+;  limits : io_ code and data must sit below 0x8000 (labels are used as
+;           signed 16 bit offsets). no global state, reentrant.
+; =====================================================================
+
+#ifndef IO_H
+#define IO_H 1
+
+#define IO_BASE 0x4000000
+#define IO_KEY_IN 0             ; current key
+#define IO_KEY_V 4              ; nonzero if a key is waiting
+#define IO_KEY_R 8              ; store : consume the current key
+#define IO_TERM_OUT 12          ; store : print a char
+
+#ifndef IO_IMPL
+extern io_putc
+extern io_newline
+extern io_print
+extern io_println
+extern io_printint
+extern io_printhex
+extern io_getc
+extern io_trygetc
+extern io_getline
+#end
+
+#end

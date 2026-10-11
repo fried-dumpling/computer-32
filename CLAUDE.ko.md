@@ -13,7 +13,8 @@
 ISA-32 어셈블리(`.txt`)를 바이너리로 컴파일합니다. 컴파일된 실행 파일은 `tools/bin/dasm.exe`에 있습니다.
 
 ```
-tools/bin/dasm.exe <입력.txt> <출력.bin> [플래그]
+tools/bin/dasm.exe <입력.txt> [-o <출력.o>] [플래그]
+tools/bin/dlnk.exe <입력1.o> [입력2.o ...] [-o <출력.bin>] [-padbss] [-v]
 ```
 
 디버그 플래그 (복수 사용 가능):

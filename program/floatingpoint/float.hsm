@@ -1,0 +1,48 @@
+; =====================================================================
+;  float.hsm : IEEE-754 binary32 software floating point library (API)
+; ---------------------------------------------------------------------
+;  usage : #include<floatingpoint/float.hsm>  in the program, then assemble
+;          floatingpoint/float.asm separately and link both objects:
+;            dasm main.asm -o main.o
+;            dasm floatingpoint/float.asm -o float.o
+;            dlnk main.o float.o -o main.bin        (main.o first)
+;  rounding : round-to-nearest-even, subnormals, +-0, +-inf, NaN
+;  ABI (ISA-32) : args gen[1..4], return gen[0]
+;                 gen[5..12] preserved, gen[1..4] / gen[13..20] destroyed
+;  fp_add    : gen[0] = gen[1] + gen[2]
+;  fp_sub    : gen[0] = gen[1] - gen[2]
+;  fp_mul    : gen[0] = gen[1] * gen[2]
+;  fp_div    : gen[0] = gen[1] / gen[2]
+;  fp_str2f  : gen[0] = float(string at gen[1]), gen[1] = end ptr
+;              string = 1 char per word, 0 terminated (like strBuff)
+;              [spaces][+|-](digits[.digits] | .digits)[(e|E)[+|-]digits]
+;              "inf" / "nan" (any case) also accepted
+;              end = first char not used (like strtod endptr).
+;              no number : gen[0] = +0, end = start
+;  fp_f2str  : float gen[1] -> string at buffer gen[2], gen[3] = significant
+;              digits (1..9, 9 = exact round trip), printf("%.*g") format
+;              returns gen[0] = string length (buffer needs FP_STRBUF words)
+;  limits  : - all fp_ code and data must sit below 0x8000. labels are used
+;              as signed 16 bit offsets (call/jmp zero, label and
+;              ld.reg x, fp_pow10 / fp_digits).
+;            - NOT reentrant : fp_str2f / fp_f2str use the global buffers
+;              fp_bigA, fp_bigB, fp_digits. do not call them from an
+;              interrupt handler that can interrupt another fp_ call.
+;              (fp_add/sub/mul/div use registers and stack only)
+; =====================================================================
+
+#ifndef FP_H
+#define FP_H 1
+
+#define FP_STRBUF 17            ; words needed by the fp_f2str buffer
+
+#ifndef FP_IMPL
+extern fp_add
+extern fp_sub
+extern fp_mul
+extern fp_div
+extern fp_str2f
+extern fp_f2str
+#end
+
+#end

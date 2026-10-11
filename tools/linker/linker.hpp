@@ -19,6 +19,10 @@
 #include "stackmachine.hpp"
 
 namespace linker {
+    // when set, mergeByType fills .bss with real zero bytes at the end of the final binary
+    // (otherwise .bss only takes address space and the binary ends after .data) -- dlnk -padbss
+    bool bssPadding = false;
+
     namespace format {
 		using u32 = unsigned __int32;
 		using u8 = unsigned __int8;
@@ -396,6 +400,9 @@ namespace linker {
                     // this is the one place the pipeline actually copies bytes (out of initialBin)
                     for (auto si = it->ninIndex.indexes.cbegin(); si != it->ninIndex.indexes.cend(); ++si)
                         group->insert(group->end(), data.initialBin.begin() + si->first, data.initialBin.begin() + si->second);
+                    // .bss has no bytes of its own; pad its whole size with zeros when requested
+                    if (it->type == SectionType::BSS && bssPadding)
+                        group->resize(*groupSize, 0);
 
                     Section placement = {};
                     placement.name = it->name;

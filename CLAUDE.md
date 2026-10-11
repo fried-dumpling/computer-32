@@ -13,7 +13,8 @@ Custom 32-bit out-of-order CPU based on the **ISA-32** instruction set architect
 Compiles ISA-32 assembly (`.txt`) to binary. Pre-built binary at `tools/bin/dasm.exe`.
 
 ```
-tools/bin/dasm.exe <input.txt> <output.bin> [flags]
+tools/bin/dasm.exe <input.txt> [-o <output.o>] [flags]
+tools/bin/dlnk.exe <input1.o> [input2.o ...] [-o <output.bin>] [-padbss] [-v]
 ```
 
 Debug flags (can combine):
