@@ -29,6 +29,8 @@ enum AsmFlag {
 	FLAG_PREPROC,
 	FLAG_EVAL,
 	FLAG_BIN,
+	FLAG_BIG,
+	FLAG_LITTLE,
 	FLAG_HELP,
 	FLAG_HELP_LONG
 };
@@ -53,11 +55,13 @@ int main(int argc, char* argv[]) {
 		{ "-preproc", FLAG_PREPROC,   false, {}, "print the tokens after preprocessing" },
 		{ "-eval",    FLAG_EVAL,      false, {}, "print the parse/evaluate result" },
 		{ "-bin",     FLAG_BIN,       false, {}, "print the section bytes and the object file" },
+		{ "-big",     FLAG_BIG,       false, {}, "emit big-endian code/data" },
+		{ "-little",  FLAG_LITTLE,    false, {}, "emit little-endian code/data (default)" },
 		{ "-h",       FLAG_HELP,      false, {}, "show this help" },
 		{ "-help",    FLAG_HELP_LONG, false, {}, "show this help" },
 	}, 1, { ' ', '\t' }, iotools::executable + " <input file> [-o <output file>] [flags]");
 
-	int flags;
+	iotools::u64 flags;
 	std::vector<std::string> inputs;
 	if (!terminal.parse(flags, inputs, argc, argv))
 		return terminal.printParseError();
@@ -71,6 +75,9 @@ int main(int argc, char* argv[]) {
 	bool dumpPreproc = CLI::has(flags, FLAG_PREPROC);
 	bool dumpEvaluate = CLI::has(flags, FLAG_EVAL);
 	bool dumpBinary = CLI::has(flags, FLAG_BIN);
+	if (CLI::has(flags, FLAG_BIG) && CLI::has(flags, FLAG_LITTLE))
+		return iotools::Terminal::usageError("-big and -little cannot be used together", terminal.usage());
+	assembler::bigEndian = CLI::has(flags, FLAG_BIG);
 	std::string inputArg = inputs[0];
 	std::string outputFile = terminal.value(FLAG_OUTPUT);
 

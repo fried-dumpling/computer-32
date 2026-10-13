@@ -11,6 +11,7 @@
 #include <queue>
 #include <map>
 #include <set>
+#include <algorithm>
 
 #include "lexer.hpp"
 #include "preprocesser.hpp"
@@ -21,6 +22,10 @@
 #include "../common/iotool.hpp"
 
 namespace assembler {
+	// byte order of the emitted code/data (dasm -big / -little, default little); also recorded
+	// in the object file so the linker patches relocations in the same order
+	bool bigEndian = false;
+
 	namespace lexer {
 		using u64 = unsigned __int64;
 
@@ -1110,7 +1115,12 @@ namespace assembler {
 			_extern,
 
 			allocate,
+			allocate_list,
+			allocate_string,
 			allocate_zero,
+
+			list,
+			list_tail,
 
 			reg_ex,
 
@@ -1162,7 +1172,11 @@ namespace assembler {
 			outer_section,
 
 			allocate,
+			allocate_list,
+			allocate_string,
 			allocate_zero,
+
+			list,
 
 			instruction_N,
 			instruction_R,
@@ -1228,7 +1242,11 @@ namespace assembler {
 			{ NonterminalType::global, "global" },
 			{ NonterminalType::_extern, "extern" },
 			{ NonterminalType::allocate, "allocate" },
+			{ NonterminalType::allocate_list, "allocate_list" },
+			{ NonterminalType::allocate_string, "allocate_string" },
 			{ NonterminalType::allocate_zero, "allocate_zero" },
+			{ NonterminalType::list, "list" },
+			{ NonterminalType::list_tail, "list_tail" },
 
 			{ NonterminalType::reg_ex, "reg_ex"},
 
@@ -1293,7 +1311,10 @@ namespace assembler {
 			{ ASTNodeType::instruction_CACHE, "instruction_CACHE" },
 
 			{ ASTNodeType::allocate, "allocate" },
+			{ ASTNodeType::allocate_list, "allocate_list" },
+			{ ASTNodeType::allocate_string, "allocate_string" },
 			{ ASTNodeType::allocate_zero, "allocate_zero" },
+			{ ASTNodeType::list, "list" },
 			{ ASTNodeType::label, "label" },
 			{ ASTNodeType::equate, "equate" },
 			{ ASTNodeType::global, "global" },
@@ -1376,10 +1397,14 @@ namespace assembler {
 			{ { NT::outer_section, AT::outer_section, -1 }, { { NT::_extern, true, false } } },
 
 			{ { NT::data_section, AT::data_section, -1 }, { { NT::allocate, true, false }, { NT::data_section, true, true } } },
+			{ { NT::data_section, AT::data_section, -1 }, { { NT::allocate_list, true, false }, { NT::data_section, true, true } } },
+			{ { NT::data_section, AT::data_section, -1 }, { { NT::allocate_string, true, false }, { NT::data_section, true, true } } },
 			{ { NT::data_section, AT::data_section, -1 }, { { NT::label, true, false }, { NT::data_section, true, true } } },
 			{ { NT::data_section, AT::data_section, -1 }, { { NT::equate, true, false }, { NT::data_section, true, true } } },
 
 			{ { NT::data_section, AT::data_section, -1 }, { { NT::allocate, true, false } } },
+			{ { NT::data_section, AT::data_section, -1 }, { { NT::allocate_list, true, false } } },
+			{ { NT::data_section, AT::data_section, -1 }, { { NT::allocate_string, true, false } } },
 			{ { NT::data_section, AT::data_section, -1 }, { { NT::label, true, false } } },
 			{ { NT::data_section, AT::data_section, -1 }, { { NT::equate, true, false } } },
 
@@ -1513,12 +1538,19 @@ namespace assembler {
 
 			{ { NT::label, AT::label, 0 }, { { TT::identifier, false, false }, { TT::colon, false, false } } },
 			{ { NT::equate, AT::equate, 0 }, { { TT::identifier, false, false }, { TT::equ, false, false }, { NT::expression, true, false } } },
+			
+			{ { NT::list, AT::list, -1 }, { { TT::openbrace, false, false }, { NT::list_tail, true, true } } },
+			{ { NT::list, AT::list, -1 }, { { TT::openbrace, false, false }, { TT::closebrace, false, false } } },
+			{ { NT::list_tail, AT::list, -1 }, { { NT::expression, true, false }, { TT::comma, false, false },  { NT::list_tail, true, true } } },
+			{ { NT::list_tail, AT::list, -1 }, { { NT::expression, true, false }, { TT::closebrace, false, false} } },
 
 			{ { NT::global, AT::global, 1}, { { TT::global, false, false }, { TT::identifier, true, false } } },
 			{ { NT::_extern, AT::_extern, 1}, { { TT::_extern, false, false}, { TT::identifier, true, false } } },
 
-			{ { NT::allocate, AT::allocate, 0 }, { { NT::expression, true, false }, { TT::comma, false, false },  { NT::expression, true, false } } },
-			{ { NT::allocate_zero, AT::allocate_zero, 0 }, { { NT::expression, true, false } } },
+			{ { NT::allocate, AT::allocate, -1 }, { { NT::expression, true, false }, { TT::comma, false, false },  { NT::expression, true, false } } },
+			{ { NT::allocate_list, AT::allocate_list, -1 }, { { NT::expression, true, false }, { TT::openparen, false, false }, { NT::expression, true, false }, { TT::closeparen, false, false }, { TT::comma, false, false }, { NT::list, true, false } } },
+			{ { NT::allocate_string, AT::allocate_string, -1 }, { { NT::expression, true, false }, { TT::comma, false, false }, { TT::string, true, false } } },
+			{ { NT::allocate_zero, AT::allocate_zero, -1 }, { { NT::expression, true, false } } },
 
 			{ { NT::index, AT::index, -1 }, { { TT::openbrack, false, false }, { NT::expression, true, false }, { TT::closebrack, false, false } } },
 
@@ -1705,7 +1737,9 @@ namespace assembler {
 				NEGATIVE_INDEX,      // index[...] evaluated to a negative constant
 				NOT_CONSTANT,        // a size/length expression (allocate, allocate_zero) must fold to a constant
 				GLOBAL_UNDEFINED,    // `global name` but name is never defined in this file
-				EXTERN_DEFINED       // `extern name` but name is also defined in this file
+				EXTERN_DEFINED,      // `extern name` but name is also defined in this file
+				INVALID_SIZE,        // negative total size, or list element size <= 0 / not dividing the total
+				INITIALIZER_TOO_LONG // list has more elements / string more bytes than the total size holds
 			};
 
 			inline const char* evaluateErrorName(int code) {
@@ -1716,6 +1750,8 @@ namespace assembler {
 				case EvaluateError::NOT_CONSTANT: return "not constant";
 				case EvaluateError::GLOBAL_UNDEFINED: return "global symbol is not defined in this file";
 				case EvaluateError::EXTERN_DEFINED: return "extern symbol is defined in this file";
+				case EvaluateError::INVALID_SIZE: return "invalid size";
+				case EvaluateError::INITIALIZER_TOO_LONG: return "initializer too long";
 				}
 				return "unknown error";
 			}
@@ -1920,6 +1956,36 @@ namespace assembler {
 				return ans;
 			}
 
+			// "..." string literal -> bytes. Escapes match char2int: \n \t \\ \' \" and decimal \65;
+			// also \r. Any other escaped character stands for itself.
+			std::vector<u8> string2bytes(const std::string& text) {
+				std::vector<u8> out;
+				size_t end = (text.size() >= 2) ? text.size() - 1 : text.size();
+				for (size_t i = 1; i < end; i++) {
+					if (text[i] != '\\' || i + 1 >= end) {
+						out.push_back((u8)text[i]);
+						continue;
+					}
+					char c = text[++i];
+					switch (c) {
+					case 'n': out.push_back('\n'); break;
+					case 't': out.push_back('\t'); break;
+					case 'r': out.push_back('\r'); break;
+					default:
+						if (c >= '0' && c <= '9') {
+							int v = 0;
+							for (int n = 0; n < 3 && i < end && text[i] >= '0' && text[i] <= '9'; n++, i++)
+								v = v * 10 + (text[i] - '0');
+							i--;
+							out.push_back((u8)v);
+						}
+						else
+							out.push_back((u8)c);
+					}
+				}
+				return out;
+			}
+
 			int pow(int base, u32 power) {
 				int ans = 1;
 				for (u32 i = 0; i < power; i++)
@@ -2080,6 +2146,8 @@ namespace assembler {
 					case (u64)ASTNodeType::instruction_CACHE + (u64)TokenType::__end:
 					case (u64)ASTNodeType::label + (u64)TokenType::__end:
 					case (u64)ASTNodeType::allocate + (u64)TokenType::__end:
+					case (u64)ASTNodeType::allocate_list + (u64)TokenType::__end:
+					case (u64)ASTNodeType::allocate_string + (u64)TokenType::__end:
 					case (u64)ASTNodeType::allocate_zero + (u64)TokenType::__end:
 					case (u64)TokenType::curline:
 						data->sectioningArr.push_back(cur);
@@ -2383,6 +2451,47 @@ namespace assembler {
 					break;
 				}
 
+				// total(element), { e0, e1, ... }: sizes fixed here, elements may be relocated later
+				case (u64)ASTNodeType::allocate_list + (u64)TokenType::__end: {
+					size_t section_id = data->sectionIdMap[cur];
+
+					auto total = data->expressionValue.find(cur->child[0]);
+					auto element = data->expressionValue.find(cur->child[1]);
+					if (total == data->expressionValue.end() || element == data->expressionValue.end())
+						return (int)EvaluateError::MISSING_EXPRESSION;
+					if (total->second.type != ExprType::CONSTANT || element->second.type != ExprType::CONSTANT)
+						return (int)EvaluateError::NOT_CONSTANT;
+
+					s32 t = total->second.value, e = element->second.value;
+					if (t < 0 || e <= 0 || t % e)
+						return (int)EvaluateError::INVALID_SIZE;
+					if ((s32)cur->child[2]->child.size() > t / e)
+						return (int)EvaluateError::INITIALIZER_TOO_LONG;
+
+					data->sectionByte[section_id] += t;
+					break;
+				}
+
+				// total, "string": bytes of the string, zero-padded to total
+				case (u64)ASTNodeType::allocate_string + (u64)TokenType::__end: {
+					size_t section_id = data->sectionIdMap[cur];
+
+					auto total = data->expressionValue.find(cur->child[0]);
+					if (total == data->expressionValue.end())
+						return (int)EvaluateError::MISSING_EXPRESSION;
+					if (total->second.type != ExprType::CONSTANT)
+						return (int)EvaluateError::NOT_CONSTANT;
+
+					s32 t = total->second.value;
+					if (t < 0)
+						return (int)EvaluateError::INVALID_SIZE;
+					if ((s32)string2bytes(cur->child[1]->text).size() > t)
+						return (int)EvaluateError::INITIALIZER_TOO_LONG;
+
+					data->sectionByte[section_id] += t;
+					break;
+				}
+
 				case (u64)ASTNodeType::allocate_zero + (u64)TokenType::__end: {
 					size_t section_id = data->sectionIdMap[cur];
 
@@ -2400,36 +2509,21 @@ namespace assembler {
 				return (int)EvaluateError::SUCCESS;
 			}
 
-			void push32(std::vector<u8>& list, u32 inst) {
-				union {
-					u32 u32data;
-					u8 u8data[4];
-				} conv;
+			void pushByteN(std::vector<u8>& list, u32 data, int size);
 
-				conv.u32data = inst;
-				list.push_back(conv.u8data[3]);
-				list.push_back(conv.u8data[2]);
-				list.push_back(conv.u8data[1]);
-				list.push_back(conv.u8data[0]);
+			void push32(std::vector<u8>& list, u32 inst) {
+				pushByteN(list, inst, 4);
 			}
 
+			// big-endian: the low `size` bytes MSB first; past 4 bytes the value repeats so that
+			// it ends on a whole copy (5, 0x11223344 -> 44 11 22 33 44). little-endian is the exact
+			// byte reverse of that (44 33 22 11 44).
 			void pushByteN(std::vector<u8>& list, u32 data, int size) {
-				union {
-					u32 u32data;
-					u8 u8data[4];
-				} conv;
-				conv.u32data = data;
-
-				for (size; size > 4; size--) {
-					list.push_back(conv.u8data[(size-1)%4]);
-				}
-
-				switch (size) {
-				case 4: list.push_back(conv.u8data[3]);
-				case 3: list.push_back(conv.u8data[2]);
-				case 2: list.push_back(conv.u8data[1]);
-				case 1: list.push_back(conv.u8data[0]);
-				}
+				size_t start = list.size();
+				for (int i = size - 1; i >= 0; i--)
+					list.push_back((u8)(data >> ((i % 4) * 8)));
+				if (!bigEndian)
+					std::reverse(list.begin() + start, list.end());
 			}
 
 			void appendReplace(std::vector<ReplaceData>& dest, const std::vector<ReplaceData>& src, u32 shift) {
@@ -2439,10 +2533,14 @@ namespace assembler {
 				}
 			}
 
+			// key = the byte holding bit `offset` of the field: counted back from the last byte
+			// (big-endian) or forward from the first (little-endian) of the `byte`-wide value
 			void registerReplace(EvalData* data, u32 sectionId, const std::vector<ReplaceData>& replace, u32 byte) {
-				u32 basePos = (u32)data->sections[sectionId].data.size() + byte - 1;
-				for (auto it = replace.cbegin(); it != replace.cend(); ++it)
-					data->sections[sectionId].operationMap.insert({ basePos-it->offset/8, ReplaceData{it->index, it->size, it->offset%8}});
+				u32 start = (u32)data->sections[sectionId].data.size();
+				for (auto it = replace.cbegin(); it != replace.cend(); ++it) {
+					u32 pos = bigEndian ? start + byte - 1 - it->offset / 8 : start + it->offset / 8;
+					data->sections[sectionId].operationMap.insert({ pos, ReplaceData{it->index, it->size, it->offset % 8} });
+				}
 			}
 
 			int evaluateCode(AST* cur, void* vpData) {
@@ -2501,6 +2599,50 @@ namespace assembler {
 
 					registerReplace(data, sectionId, data->dataValue[cur].replace, data->dataValue[cur].length);
 					pushByteN(data->sections[sectionId].data, data->dataValue[cur].data, data->dataValue[cur].length);
+					break;
+				}
+
+				// each element is laid out like a single allocate of the element size; elements
+				// past the end of the list are zero. calculateAddr already checked the sizes.
+				case (u64)ASTNodeType::allocate_list + (u64)TokenType::__end: {
+					u32 total = (u32)data->expressionValue[cur->child[0]].value;
+					u32 element = (u32)data->expressionValue[cur->child[1]].value;
+					const std::vector<AST*>& elements = cur->child[2]->child;
+
+					for (u32 i = 0; i < total / element; i++) {
+						if (i >= elements.size()) {
+							pushByteN(data->sections[sectionId].data, 0, element);
+							continue;
+						}
+
+						auto find = data->expressionValue.find(elements[i]);
+						if (find == data->expressionValue.end())
+							return (int)EvaluateError::MISSING_EXPRESSION;
+
+						std::vector<ReplaceData> replace;
+						u32 value = 0;
+						if (find->second.type == ExprType::CONSTANT)
+							value = find->second.value;
+						else {
+							ReplaceData rep = {};
+							rep.index = data->operationVector.size();
+							rep.offset = 0;
+							rep.size = (element < 4) ? element * 8 : 32;
+							replace.push_back(rep);
+							data->operationVector.push_back(find->second.operations);
+						}
+
+						registerReplace(data, sectionId, replace, element);
+						pushByteN(data->sections[sectionId].data, value, element);
+					}
+					break;
+				}
+
+				case (u64)ASTNodeType::allocate_string + (u64)TokenType::__end: {
+					u32 total = (u32)data->expressionValue[cur->child[0]].value;
+					std::vector<u8> bytes = string2bytes(cur->child[1]->text);
+					bytes.resize(total, 0);
+					data->sections[sectionId].data.insert(data->sections[sectionId].data.end(), bytes.begin(), bytes.end());
 					break;
 				}
 
@@ -2718,6 +2860,7 @@ namespace assembler {
 
 		inline bool formatData(const EvalData& data) {
 			format.clear();
+			format.endian = bigEndian ? format_data::Endian::BIG : format_data::Endian::LITTLE;
 
 			std::unordered_map<std::string, u32> usedIdentifierIndex;
 
@@ -2815,7 +2958,7 @@ namespace assembler {
 		}
 	}
 
-	const unsigned long long version = 407;
+	const unsigned long long version = 409;
 
 	namespace cache {
 		using u64 = unsigned __int64;

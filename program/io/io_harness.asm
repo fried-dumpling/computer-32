@@ -17,6 +17,10 @@ t_str:
     4, 'i'
     4, 0
 t_pr:   4,'>' 4,' ' 4,0
+t_b4:   8, "abcd"                 ; packed strings (io_printb)
+t_b5:   8, "Hello"
+t_b3:   4, "xyz"
+t_b0:   4, ""
 
 .bss
 t_buf:  4*5
@@ -44,6 +48,20 @@ lp:
     call zero.32B, io_printint
     set gen[1].32B, t_str
     call zero.32B, io_println
+    mov gen[1].32B, gen[0].32B
+    call zero.32B, io_printint
+    call zero.32B, io_newline
+
+    set gen[1].32B, t_b4                ; packed : 4, 5, 3, 0 chars + length
+    call zero.32B, pb_len
+    set gen[1].32B, t_b5
+    call zero.32B, pb_len
+    set gen[1].32B, t_b3
+    call zero.32B, pb_len
+    set gen[1].32B, t_b0
+    call zero.32B, pb_len
+    set gen[1].32B, t_b5
+    call zero.32B, io_printlnb
     mov gen[1].32B, gen[0].32B
     call zero.32B, io_printint
     call zero.32B, io_newline
@@ -76,3 +94,10 @@ line:
     mov gen[1].32B, gen[0].32B
     call zero.32B, io_printint
     halt
+
+    ; io_printb gen[1], then its length and a newline
+pb_len:
+    call zero.32B, io_printb
+    mov gen[1].32B, gen[0].32B
+    call zero.32B, io_printint
+    jmp.one zero.32B, io_newline

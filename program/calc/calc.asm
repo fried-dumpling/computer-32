@@ -2,10 +2,10 @@
 ;  calc.asm : float calculator on the terminal (floatingpoint + io)
 ;
 ;  build (in program/) :
-;    dasm calc.asm -o calc.o
+;    dasm calc/calc.asm -o calc.o
 ;    dasm floatingpoint/float.asm -o float.o
 ;    dasm io/io.asm -o io.o
-;    dlnk calc.o float.o io.o -o calc.bin
+;    dlnk calc.o float.o io.o -o calc/calc.bin
 ;
 ;  > 1.5 * (2 + -0.5) / 4
 ;  = 0.5625
@@ -23,21 +23,20 @@
 ;  registers kept for the whole parse (the libraries preserve them) :
 ;    gen[12] = cursor, gen[11] = first error position (0 : none)
 ; =====================================================================
-#include<io/io.hsm>
-#include<floatingpoint/float.hsm>
+#include<../io/io.hsm>
+#include<../floatingpoint/float.hsm>
 
 #define LINE 128                ; input buffer (words)
 #define DIGITS 7                ; significant digits of the result
 #define PROMPT_W 2              ; width of "> ", for the error caret
 
 .data
-s_title:    4,'f' 4,'l' 4,'o' 4,'a' 4,'t' 4,' ' 4,'c' 4,'a' 4,'l' 4,'c'
-            4,' ' 4,'(' 4,'+' 4,' ' 4,'-' 4,' ' 4,'*' 4,' ' 4,'/' 4,' '
-            4,'(' 4,')' 4,',' 4,' ' 4,'q' 4,' ' 4,'=' 4,' ' 4,'q' 4,'u'
-            4,'i' 4,'t' 4,')' 4,0
-s_prompt:   4,'>' 4,' ' 4,0
-s_eq:       4,'=' 4,' ' 4,0
-s_err:      4,'^' 4,' ' 4,'e' 4,'r' 4,'r' 4,'o' 4,'r' 4,0
+    ; messages : packed strings for io_printb (size > length : 0 after).
+    ; the prompt goes to io_getline, so it stays 1 char per word.
+s_title:    36, "float calc (+ - * / (), q = quit)"
+s_prompt:   12(4), {'>', ' '}
+s_eq:       4, "= "
+s_err:      8, "^ error"
 
 .bss
 buf:        4*LINE
@@ -49,7 +48,7 @@ stk_end:
 main:
     set stack.32B, stk_end
     set gen[1].32B, s_title
-    call zero.32B, io_println
+    call zero.32B, io_printlnb
 
 loop:
     set gen[1].32B, buf
@@ -80,7 +79,7 @@ eval_chk:
     ijmp.zero zero.32B, show_err
 
     set gen[1].32B, s_eq                ; = value
-    call zero.32B, io_print
+    call zero.32B, io_printb
     mov gen[1].32B, gen[5].32B
     set gen[2].32B, obuf
     set gen[3].32B, DIGITS
@@ -103,7 +102,7 @@ show_err_sp:
     jmp.one zero.32B, show_err_sp
 show_err_msg:
     set gen[1].32B, s_err
-    call zero.32B, io_println
+    call zero.32B, io_printlnb
     jmp.one zero.32B, loop
 
 quit:

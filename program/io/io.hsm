@@ -9,11 +9,17 @@
 ;  ABI (ISA-32) : args gen[1..4], return gen[0]
 ;                 gen[5..12] preserved, gen[1..4] / gen[13..20] destroyed
 ;  strings : 1 char per word, 0 terminated (like strBuff)
+;            io_printb / io_printlnb take packed strings instead
 ;
 ;  io_putc     : print char gen[1]
 ;  io_newline  : print '\n'
 ;  io_print    : print string at gen[1], gen[0] = length
 ;  io_println  : io_print + '\n', gen[0] = length (without '\n')
+;  io_printb   : print packed string at gen[1] : 4 chars per word, first
+;                char in the top byte, 0 terminated, as .data stores
+;                  msg: 8, "Hi\n"     (size > length leaves 0 after it)
+;                gen[1] must be word aligned. gen[0] = length
+;  io_printlnb : io_printb + '\n', gen[0] = length (without '\n')
 ;  io_printint : print gen[1] as signed decimal
 ;  io_printhex : print gen[1] as 8 hex digits (no 0x prefix)
 ;  io_getc     : wait for a key, gen[0] = char (no echo)
@@ -43,6 +49,8 @@ extern io_putc
 extern io_newline
 extern io_print
 extern io_println
+extern io_printb
+extern io_printlnb
 extern io_printint
 extern io_printhex
 extern io_getc

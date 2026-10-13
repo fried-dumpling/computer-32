@@ -6,15 +6,16 @@
 ## 1. 도구 사용법
 
 ```
-dasm <input.txt> [-o <output.o>] [-file] [-token] [-preproc] [-eval] [-bin]
-dlnk <input1.o> [input2.o ...] [-o <output.bin>] [-padbss] [-v]
-hexdump <file> [-o <output.txt>] [-nodec] [-width N] [-bundle N]
+dasm <input.txt> [-o <output.o>] [-big|-little] [-file] [-token] [-preproc] [-eval] [-bin]
+dlnk <input1.o> [input2.o ...] [-o <output.bin>] [-big|-little] [-padbss] [-v]
+hexdump <file> [-o <output.txt>] [-big|-little] [-nodec] [-width N] [-bundle N]
 ```
 
 | 도구 | 옵션 | 동작 |
 |---|---|---|
 | 공통 | `-o <파일>` | 출력 파일. 기본값: dasm은 입력 파일 확장자를 `.o`로 바꾼 이름, dlnk는 `a.out`, hexdump는 stdout |
 | 공통 | `-h`, `-help` | 사용법 출력 |
+| 공통 | `-little`, `-big` | 바이트 순서. 기본은 `-little`, 둘을 같이 주면 오류 (아래 참고) |
 | dasm | `-file` | 입력 파일 원문 |
 | dasm | `-token` | 렉서 토큰 목록 |
 | dasm | `-preproc` | 전처리 후 토큰 목록 |
@@ -28,6 +29,13 @@ hexdump <file> [-o <output.txt>] [-nodec] [-width N] [-bundle N]
 
 - 옵션과 입력의 순서는 자유입니다. 값은 `-o out.o`와 `-o=out.o` 둘 다 됩니다. `--` 뒤의 인자는 전부 입력으로 봅니다.
 - 숫자 값은 10진수나 `0x` 16진수입니다.
+
+### 바이트 순서 (`-little` / `-big`)
+
+- dasm: 명령어 워드와 데이터 값을 이 순서로 씁니다. 오브젝트 파일에 순서가 기록됩니다(오브젝트 자체의 헤더·표는 항상 같은 형식).
+- dlnk: 모든 입력 오브젝트가 같은 순서여야 합니다. 다르면 `object file 'x.o' is big-endian, linking little-endian (use -big)`로 실패합니다. 재배치도 이 순서로 채웁니다.
+- hexdump: 파일 바이트는 그대로 두고 표시만 바꿉니다. `-little`(기본)은 각 묶음(`-bundle`) 안의 바이트를 거꾸로 보여서 리틀엔디안 워드가 값 그대로 읽히고, `-big`은 파일 순서 그대로 보입니다. 오른쪽 문자 열은 항상 파일 순서입니다. 파일 끝에서 모자란 바이트는 리틀엔디안이면 묶음의 왼쪽(상위)이 빕니다.
+- 아래 예시의 바이트는 `-big` 기준으로 적었습니다. `-little`이면 각 값의 바이트가 정확히 거꾸로 놓입니다(예: `4, 0x11223344` → `44 33 22 11`, 명령어 `60 D0 00 04` → `04 00 D0 60`).
 - stdout에는 요청한 출력(덤프)만 나가고, 오류·경고는 stderr로 나갑니다. 성공하면 기본적으로 아무것도 출력하지 않습니다.
 - 종료 코드: 성공 `0`, 처리 실패(입력을 못 읽음, 어셈블/링크 오류) `1`, 명령줄 오류(모르는 옵션, 값 누락, 입력 없음) `2`.
 - `dasm`이 실패하면 출력 파일을 만들지 않고, 같은 이름의 기존 파일도 지웁니다.
@@ -62,7 +70,7 @@ start:
 
 ### 섹션별로 쓸 수 있는 문장
 
-| 섹션 | 라벨 `name:` | 명령어 | 데이터 `size, value` | 예약 `size` | `name equ expr` |
+| 섹션 | 라벨 `name:` | 명령어 | 데이터 `size, value` / 목록 / 문자열 | 예약 `size` | `name equ expr` |
 |---|---|---|---|---|---|
 | `.text` | O | O | X | X | **X** |
 | `.data` | O | X | O | X | O |
@@ -87,7 +95,7 @@ PTR  equ buffer + 8
 
 ```asm
 .data
-v:   4, 0x11223344      ; 4바이트: 11 22 33 44 (빅엔디안)
+v:   4, 0x11223344      ; 4바이트: 11 22 33 44 (-big) / 44 33 22 11 (-little)
 h:   2, 0xAABB          ; 2바이트: AA BB (값의 하위 바이트)
 buf: 4*20, 0            ; 80바이트를 0으로
 p:   4, v               ; 4바이트: v의 최종 주소 (링커가 채움)
@@ -101,13 +109,31 @@ area: 256               ; 256바이트 예약 (바이트는 출력되지 않음)
   - `size`는 바이트 수이고, **상수여야 합니다**. 뒤에서 정의되는 라벨은 쓸 수 없습니다.
   - `value`는 아무 식이나 됩니다.
 - 채우기 규칙:
-  - `size <= 4`: 값의 하위 `size`바이트를 빅엔디안으로 넣습니다.
-  - `size > 4`: 값을 반복하는데, **끝 기준**으로 맞춥니다. 마지막 4바이트가 값 그대로이고, 남는 앞부분에는 값의 하위 바이트가 들어갑니다. 예: `5, 0x11223344` → `44 11 22 33 44`.
+  - `size <= 4`: 값의 하위 `size`바이트를 넣습니다(바이트 순서는 1절).
+  - `size > 4`: 값을 반복하는데, `-big`이면 **끝 기준**으로 맞춥니다. 마지막 4바이트가 값 그대로이고, 남는 앞부분에는 값의 하위 바이트가 들어갑니다. 예: `5, 0x11223344` → `44 11 22 33 44`. `-little`은 이것을 통째로 뒤집은 `44 33 22 11 44`입니다.
 - `value`가 라벨처럼 링커가 채워야 하는 값일 때:
   - `size < 4`이면 하위 `size*8`비트만 채워집니다.
-  - `size > 4`이면 마지막 4바이트만 채워지고 나머지는 0입니다.
+  - `size > 4`이면 값 그대로인 4바이트(`-big`은 마지막, `-little`은 처음 4바이트)만 채워지고 나머지는 0입니다.
 - `size`가 4의 배수가 아니면 그 뒤 라벨들이 4바이트 정렬에서 벗어납니다.
 - `.bss`의 형식은 `size`입니다. 주소 공간만 차지하고 최종 바이너리에는 들어가지 않습니다.
+
+### 목록과 문자열
+
+```asm
+.data
+arr: 8(2), {1, 0x203, -1}   ; 8바이트, 원소당 2바이트: 00 01 02 03 FF FF 00 00
+tbl: 12(4), {arr, tbl}      ; 원소마다 링커가 주소를 채움, 남은 원소 1개는 0
+msg: 8, "Hi\n\0"            ; 48 69 0A 00 00 00 00 00
+```
+
+- 목록: `total(element), {값, 값, ...}`
+  - `total`은 전체 바이트 수, `element`는 원소 하나의 바이트 수입니다. 둘 다 상수여야 하고, `total`은 `element`의 배수여야 합니다.
+  - 원소는 각각 `element, 값` 데이터 하나와 똑같이 채워집니다(위 채우기 규칙과 링커가 채우는 값 규칙 그대로).
+  - 원소가 `total / element`개보다 적으면 나머지는 0입니다. 많으면 오류입니다. 빈 목록 `{}`는 전체를 0으로 채웁니다.
+- 문자열: `total, "문자열"`
+  - 문자열의 바이트를 그대로 넣고, `total`까지 남는 부분은 0으로 채웁니다. 끝에 0을 자동으로 붙이지 않으니, 0으로 끝나야 하면 `total`을 문자열보다 크게 잡거나 `\0`을 쓰세요.
+  - 문자열이 `total`보다 길면 오류입니다.
+  - 이스케이프: `\n`, `\t`, `\r`, `\\`, `\"`, `\'`, `\` 뒤 10진 숫자 최대 3자리(`\0`, `\65`). 그 밖의 `\x`는 `x` 자신입니다.
 
 ## 5. 식(expression)
 
@@ -140,7 +166,7 @@ area: 256               ; 256바이트 예약 (바이트는 출력되지 않음)
 | 2진 | `0b101010` |
 | 문자 | `'A'`, `'\n'`, `'\t'`, `'\\'`, `'\65'` (`\` 뒤 숫자는 **10진** 코드) |
 
-문자열 리터럴(`"..."`)은 렉서는 인식하지만 문법에서는 아직 쓸 수 없습니다.
+문자열 리터럴(`"..."`)은 `.data`의 문자열 데이터(4절)에서만 쓸 수 있습니다. 식 안에서는 쓸 수 없습니다.
 
 ### 라벨이 들어간 식
 
@@ -173,7 +199,7 @@ area: 256               ; 256바이트 예약 (바이트는 출력되지 않음)
 
 ## 7. 명령어
 
-명령어는 모두 4바이트 빅엔디안 워드입니다. `R`은 레지스터 바이트, `I16`은 16비트 즉시값, `I8`은 8비트 즉시값입니다.
+명령어는 모두 4바이트 워드이고, 메모리에는 `-little`(기본)이면 `[7:0]`부터, `-big`이면 `[31:24]`부터 놓입니다. `R`은 레지스터 바이트, `I16`은 16비트 즉시값, `I8`은 8비트 즉시값입니다.
 
 | 형식 | 문법 | 인코딩 `[31:24] [23:16] [15:8] [7:0]` |
 |---|---|---|
@@ -345,10 +371,6 @@ extern add1
 
 `dlnk main.o lib.o -o out.bin`
 
-### 아직 문법에 연결되지 않은 것
-
-문자열 리터럴(`"..."`). 렉서는 인식하지만 쓰면 parse 오류가 납니다.
-
 ## 9. 링크와 메모리 배치
 
 - 최종 바이너리는 주소 0부터 `TEXT` → `DATA` → `BSS` 순서로 배치됩니다.
@@ -371,6 +393,6 @@ extern add1
 |---|---|
 | preprocess | `duplicate include`, `invalid include path`, `macro argument out of range`, `wrong number of macro arguments`, `expected ( after macro name`, `expected identifier after #define`, `#end without matching #ifdef/#ifndef`, `#ifdef/#ifndef without matching #end`, `unterminated directive` |
 | parse | `unexpected token: <토큰>` (입력 끝이면 `<EOF>`) |
-| evaluate | `missing expression` (정의되지 않은 이름), `negative index` (`gen[-1]`), `not constant` (데이터 크기가 상수가 아님), `global symbol is not defined in this file`, `extern symbol is defined in this file` |
+| evaluate | `missing expression` (정의되지 않은 이름), `negative index` (`gen[-1]`), `not constant` (데이터 크기가 상수가 아님), `invalid size` (음수 크기, 원소 크기가 0 이하이거나 전체 크기를 나누지 못함), `initializer too long` (목록 원소나 문자열이 크기보다 큼), `global symbol is not defined in this file`, `extern symbol is defined in this file` |
 | link | `invalid object file '<경로>'`, `undefined symbol '<이름>'`, `duplicate symbol '<이름>'` |
 | 공통 | `cannot read file '<경로>'`, `cannot write file '<경로>'`, `no input file`, `unknown flag '<옵션>'`, `missing value for '<옵션>'`, `invalid value for '<옵션>': '<값>'`, `unexpected argument '<인자>'` |

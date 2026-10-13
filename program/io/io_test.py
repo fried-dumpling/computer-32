@@ -39,6 +39,7 @@ def build():
 def expected():
     out = "".join(f"{v} {v & 0xFFFFFFFF:08X}\n" for v in VALS)
     out += "hi2hi\n2\n"
+    out += "abcd4\nHello5\nxyz3\n0\n" + "Hello\n5\n"      # io_printb / io_printlnb
     out += "> ab\n> acde\n" + "4[acde]\n"
     out += "x\n" + "1[x]\n"
     out += "Z0"

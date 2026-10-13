@@ -22,6 +22,8 @@ using CLI = iotools::Terminal::TerminalIO<int>;
 enum LinkFlag {
 	FLAG_OUTPUT,
 	FLAG_PADBSS,
+	FLAG_BIG,
+	FLAG_LITTLE,
 	FLAG_VERBOSE,
 	FLAG_HELP,
 	FLAG_HELP_LONG
@@ -34,12 +36,14 @@ int main(int argc, char* argv[]) {
 	terminal.setup({
 		{ "-o",      FLAG_OUTPUT,    true,  {}, "output binary (default: a.out)" },
 		{ "-padbss", FLAG_PADBSS,    false, {}, "fill .bss with zero bytes at the end of the binary" },
+		{ "-big",    FLAG_BIG,       false, {}, "link big-endian objects" },
+		{ "-little", FLAG_LITTLE,    false, {}, "link little-endian objects (default)" },
 		{ "-v",      FLAG_VERBOSE,   false, {}, "print a summary of the link" },
 		{ "-h",      FLAG_HELP,      false, {}, "show this help" },
 		{ "-help",   FLAG_HELP_LONG, false, {}, "show this help" },
 	}, -1, { ' ', '\t' }, iotools::executable + " <input file1> [input file2] ... [-o <output file>] [flags]");
 
-	int flags;
+	iotools::u64 flags;
 	std::vector<std::string> inputFiles;
 	if (!terminal.parse(flags, inputFiles, argc, argv))
 		return terminal.printParseError();
@@ -50,6 +54,9 @@ int main(int argc, char* argv[]) {
 
 	std::string outputFile = terminal.value(FLAG_OUTPUT, "a.out");
 	linker::bssPadding = CLI::has(flags, FLAG_PADBSS);
+	if (CLI::has(flags, FLAG_BIG) && CLI::has(flags, FLAG_LITTLE))
+		return iotools::Terminal::usageError("-big and -little cannot be used together", terminal.usage());
+	linker::bigEndian = CLI::has(flags, FLAG_BIG);
 
 	std::vector<std::pair<std::string, std::vector<unsigned char>>> rawObjects;
 	for (auto it = inputFiles.begin(); it != inputFiles.end(); ++it) {

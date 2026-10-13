@@ -13,6 +13,8 @@ global io_putc
 global io_newline
 global io_print
 global io_println
+global io_printb
+global io_printlnb
 global io_printint
 global io_printhex
 global io_getc
@@ -72,6 +74,36 @@ io_print_end:
 io_println:
     call zero.32B, io_print
     jmp.one zero.32B, io_newline        ; io_newline keeps gen[0]
+
+    ; packed string (4 chars per word, first char in the top byte, as
+    ; .data "..." stores it). gen[14] = word, gen[15] = shift, gen[16] = char
+io_printb:
+    IO_LDBASE(gen[13])
+    set gen[0].32B, 0
+io_pb_word:
+    ld.gen[1] gen[14].32B, 0
+    set gen[15].32B, 24
+io_pb_byte:
+    mov gen[16].32B, gen[14].32B
+    shiftr gen[16].32B, gen[15].32B
+    bndi gen[16].32B, 0xFF
+    cmpi gen[16].32B, 0
+    jmp.zero zero.32B, io_pb_end
+    st.gen[13] gen[16].32B, IO_TERM_OUT
+    addi gen[0].32B, 1
+    cmpi gen[15].32B, 0
+    jmp.zero zero.32B, io_pb_next
+    subi gen[15].32B, 8
+    jmp.one zero.32B, io_pb_byte
+io_pb_next:
+    addi gen[1].32B, 4
+    jmp.one zero.32B, io_pb_word
+io_pb_end:
+    ret
+
+io_printlnb:
+    call zero.32B, io_printb
+    jmp.one zero.32B, io_newline
 
     ; gen[15] = pow10 table offset, gen[16] = 1 after the first digit
 io_printint:

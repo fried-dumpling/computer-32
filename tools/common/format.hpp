@@ -28,6 +28,13 @@ namespace format_data {
 		SELECT
 	};
 
+	// byte order of the target binary (Format::binary and the linked output). The object
+	// file's own fields (header, mapper, ...) are always stored big-endian by push32/read32.
+	enum class Endian : u32 {
+		LITTLE = 0,
+		BIG = 1
+	};
+
 	inline void push32(std::vector<u8>& list, u32 inst) {
 		union {
 			u32 u32data;
@@ -159,9 +166,10 @@ namespace format_data {
 		u32 expressionsStart, expressionsEnd;
 		u32 definedIdentifierStart, definedIdentifierEnd;
 		u32 usedIdentifierStart, usedIdentifierEnd;
+		u32 endian;
 
 		static u32 size() {
-			return 13 * (u32)sizeof(u32);
+			return 14 * (u32)sizeof(u32);
 		}
 
 		void getRaw(std::vector<u8>& out) {
@@ -178,6 +186,7 @@ namespace format_data {
 			push32(out, definedIdentifierEnd);
 			push32(out, usedIdentifierStart);
 			push32(out, usedIdentifierEnd);
+			push32(out, endian);
 		}
 
 		void loadRaw(std::vector<u8>::const_iterator& it) {
@@ -194,6 +203,7 @@ namespace format_data {
 			definedIdentifierEnd = read32(it);
 			usedIdentifierStart = read32(it);
 			usedIdentifierEnd = read32(it);
+			endian = read32(it);
 		}
 	} Header;
 
@@ -204,6 +214,7 @@ namespace format_data {
 		std::vector<std::vector<Operation>> expressions;
 		std::vector<Identifier> definedIdentifier;
 		std::vector<std::string> usedIdentifier;
+		Endian endian = Endian::LITTLE;   // byte order of `binary`
 
 		void clear() {
 			sections.clear();
@@ -212,6 +223,7 @@ namespace format_data {
 			expressions.clear();
 			definedIdentifier.clear();
 			usedIdentifier.clear();
+			endian = Endian::LITTLE;
 		}
 
 		void getRaw(std::vector<u8>& out) {
@@ -241,6 +253,7 @@ namespace format_data {
 			header.expressionsStart = offset; offset += (u32)expressionsRaw.size(); header.expressionsEnd = offset;
 			header.definedIdentifierStart = offset; offset += (u32)definedIdentifierRaw.size(); header.definedIdentifierEnd = offset;
 			header.usedIdentifierStart = offset; offset += (u32)usedIdentifierRaw.size(); header.usedIdentifierEnd = offset;
+			header.endian = (u32)endian;
 
 			header.getRaw(out);
 			out.insert(out.end(), sectionsRaw.begin(), sectionsRaw.end());
@@ -264,6 +277,9 @@ namespace format_data {
 			it = in.cbegin();
 			Header header = {};
 			header.loadRaw(it);
+			if (header.endian != (u32)Endian::LITTLE && header.endian != (u32)Endian::BIG)
+				return false;
+			endian = (Endian)header.endian;
 
 			// regions are stored back to back right after the header, covering the rest of the file
 			u32 bounds[12] = { header.sectionsStart, header.sectionsEnd, header.binaryStart, header.binaryEnd,

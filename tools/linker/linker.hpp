@@ -22,6 +22,9 @@ namespace linker {
     // when set, mergeByType fills .bss with real zero bytes at the end of the final binary
     // (otherwise .bss only takes address space and the binary ends after .data) -- dlnk -padbss
     bool bssPadding = false;
+    // byte order of the output (dlnk -big / -little, default little); every input object must
+    // have been assembled with the same order, since relocations are patched in it
+    bool bigEndian = false;
 
     namespace format {
 		using u32 = unsigned __int32;
@@ -545,8 +548,9 @@ namespace linker {
                                 return false;
 
                             // patch `reloc.size` bits of `value`, LSB at bit `reloc.offset` of
-                            // the byte at bytePos, extending toward earlier bytes for a wider
-                            // field -- mirrors the assembler's own registerReplace bit layout
+                            // the byte at bytePos, extending toward earlier (big-endian) or later
+                            // (little-endian) bytes for a wider field -- mirrors the assembler's
+                            // own registerReplace bit layout
                             u32 bitsLeft = reloc.size;
                             u32 bitOffset = reloc.offset;
                             u32 shifted = value;
@@ -564,9 +568,13 @@ namespace linker {
                                 bitOffset = 0;
 
                                 if (bitsLeft > 0) {
-                                    if (bytePos == 0)
-                                        return false; // field runs off the start of the binary
-                                    bytePos--;
+                                    if (bigEndian) {
+                                        if (bytePos == 0)
+                                            return false; // field runs off the start of the binary
+                                        bytePos--;
+                                    }
+                                    else if (++bytePos >= data.totalBin.size())
+                                        return false; // field runs off the end of the binary
                                 }
                             }
                         }
@@ -620,6 +628,12 @@ namespace linker {
             format::Format obj = {};
             if (!obj.loadRaw(it->second)) {
                 errorMessage = "invalid object file '" + it->first + "'";
+                return false;
+            }
+            format_data::Endian expected = bigEndian ? format_data::Endian::BIG : format_data::Endian::LITTLE;
+            if (obj.endian != expected) {
+                errorMessage = "object file '" + it->first + "' is " + (obj.endian == format_data::Endian::BIG ? "big" : "little")
+                    + "-endian, linking " + (bigEndian ? "big" : "little") + "-endian (use " + (bigEndian ? "-little" : "-big") + ")";
                 return false;
             }
             objects.push_back({ it->first, obj });

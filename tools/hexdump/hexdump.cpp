@@ -32,89 +32,58 @@ namespace hexdump {
     }
 
     namespace dump  {
-
-        void dumpDecode(std::ostream& out, std::vector<u8>& in, int width, int bundle) {
+        // hex column for in[start, start+count): `width` slots split into groups of `bundle`.
+        // little-endian shows each group's bytes in reverse so a group reads as one value; slots
+        // past the end of the file are blank (on the high-order side of a little-endian group).
+        std::string hexColumn(const std::vector<u8>& in, size_t start, size_t count, int width, int bundle, bool little) {
             bool lower = false;
-
-            size_t count = 0;
-            std::string curHex;
-            std::string curText;
-            for (auto it = in.begin(); it != in.end(); ++it) {
-                curHex += util::convHex(*it, lower);
-                curHex += " ";
-
-                switch (*it) {
-                case '\n':
-                    curText += "\\n";
-                    break;
-                case '\t':
-                    curText += "\\t";
-                    break;
-                default:
-                    if(std::isprint(*it))
-                        curText += *it;
-                    else
-                        curText += ".";
-                    curText += " ";
-                    break;
-                }
-                count++;
-
-                if (count == width) {
-                    count = 0;
-                    out << curHex << "| " << curText << std::endl;
-                    curHex.clear();
-                    curText.clear();
-                }
-                else {
-                    if (!(count % bundle)) {
-                        curHex += " ";
-                        curText += " ";
-                    }
+            std::string out;
+            for (int group = 0; group < width; group += bundle) {
+                if (group)
+                    out += " ";
+                int groupLen = (width - group < bundle) ? width - group : bundle;
+                for (int j = 0; j < groupLen; j++) {
+                    size_t index = (size_t)group + (little ? groupLen - 1 - j : j);
+                    out += (index < count) ? util::convHex(in[start + index], lower) + " " : "   ";
                 }
             }
-            if (count) {
-                out << curHex;
-                for (int i = 0; i < width - count; i++) {
-                    out << "   ";
-                    if (!((i + 1) % bundle) && i + 1 < width - count) {
-                        out << " ";
-                    }
+            return out;
+        }
+
+        // text column in file order
+        std::string textColumn(const std::vector<u8>& in, size_t start, size_t count, int bundle) {
+            std::string out;
+            for (size_t i = 0; i < count; i++) {
+                if (i && !(i % bundle))
+                    out += " ";
+                u8 c = in[start + i];
+                switch (c) {
+                case '\n':
+                    out += "\\n";
+                    break;
+                case '\t':
+                    out += "\\t";
+                    break;
+                default:
+                    out += std::isprint(c) ? (char)c : '.';
+                    out += " ";
+                    break;
                 }
-                out << "| " << curText << std::endl;
+            }
+            return out;
+        }
+
+        void dumpDecode(std::ostream& out, std::vector<u8>& in, int width, int bundle, bool little) {
+            for (size_t start = 0; start < in.size(); start += width) {
+                size_t count = (in.size() - start < (size_t)width) ? in.size() - start : width;
+                out << hexColumn(in, start, count, width, bundle, little) << "| " << textColumn(in, start, count, bundle) << std::endl;
             }
         }
 
-        void dumpNonDecode(std::ostream& out, std::vector<u8>& in, int width, int bundle) {
-            bool lower = false;
-
-            size_t count = 0;
-            std::string curHex;
-            for (auto it = in.begin(); it != in.end(); ++it) {
-                curHex += util::convHex(*it, lower);
-                curHex += " ";
-                count++;
-
-                if (count == width) {
-                    count = 0;
-                    out << curHex << std::endl;
-                    curHex.clear();
-                }
-                else {
-                    if (!(count % bundle)) {
-                        curHex += " ";
-                    }
-                }
-            }
-            if (count) {
-                out << curHex;
-                for (int i = 0; i < width - count; i++) {
-                    out << "   ";
-                    if (!((i + 1) % bundle) && i + 1 < width - count) {
-                        out << " ";
-                    }
-                }
-                out << std::endl;
+        void dumpNonDecode(std::ostream& out, std::vector<u8>& in, int width, int bundle, bool little) {
+            for (size_t start = 0; start < in.size(); start += width) {
+                size_t count = (in.size() - start < (size_t)width) ? in.size() - start : width;
+                out << hexColumn(in, start, count, width, bundle, little) << std::endl;
             }
         }
     }
@@ -130,6 +99,8 @@ enum HexFlag {
     FLAG_WIDTH,
     FLAG_BUNDLE,
     FLAG_OUTPUT,
+    FLAG_BIG,
+    FLAG_LITTLE,
     FLAG_HELP,
     FLAG_HELP_LONG
 };
@@ -153,11 +124,13 @@ int main(int argc, char* argv[]) {
         { "-width",  FLAG_WIDTH,     true,  {}, "bytes per line (default 4)" },
         { "-bundle", FLAG_BUNDLE,    true,  {}, "bytes per group within a line (default: width)" },
         { "-o",      FLAG_OUTPUT,    true,  {}, "write the dump to a file instead of stdout" },
+        { "-big",    FLAG_BIG,       false, {}, "show each group in file order (big-endian words)" },
+        { "-little", FLAG_LITTLE,    false, {}, "show each group's bytes reversed (little-endian words, default)" },
         { "-h",      FLAG_HELP,      false, {}, "show this help" },
         { "-help",   FLAG_HELP_LONG, false, {}, "show this help" },
     }, 1, { ' ', '\t' }, iotools::executable + " <file> [-o <output file>] [flags]");
 
-    int flags;
+    iotools::u64 flags;
     std::vector<std::string> inputs;
     if (!terminal.parse(flags, inputs, argc, argv))
         return terminal.printParseError();
@@ -173,6 +146,9 @@ int main(int argc, char* argv[]) {
     if (CLI::has(flags, FLAG_BUNDLE) && !readCount(terminal, FLAG_BUNDLE, bundle))
         return iotools::Terminal::usageError(iotools::Terminal::invalidValue("-bundle", terminal.value(FLAG_BUNDLE)), terminal.usage());
     bool nodec = CLI::has(flags, FLAG_NODEC);
+    if (CLI::has(flags, FLAG_BIG) && CLI::has(flags, FLAG_LITTLE))
+        return iotools::Terminal::usageError("-big and -little cannot be used together", terminal.usage());
+    bool little = !CLI::has(flags, FLAG_BIG);
 
     vector<hexdump::u8> data;
     if (!iotools::readBinaryFile(inputs[0], data)) {
@@ -193,9 +169,9 @@ int main(int argc, char* argv[]) {
     }
 
     if (nodec)
-        hexdump::dump::dumpNonDecode(*out, data, width, bundle);
+        hexdump::dump::dumpNonDecode(*out, data, width, bundle, little);
     else
-        hexdump::dump::dumpDecode(*out, data, width, bundle);
+        hexdump::dump::dumpDecode(*out, data, width, bundle, little);
 
     return iotools::Terminal::EXIT_OK;
 }

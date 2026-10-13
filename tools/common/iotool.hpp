@@ -50,6 +50,7 @@ namespace iotools {
 
 	using u8 = unsigned __int8;
 	using u32 = unsigned __int32;
+	using u64 = unsigned __int64;
 
 	bool readTextFile(const std::string& filename, std::string& outText) {
 		std::fstream fin;
@@ -209,7 +210,7 @@ namespace iotools {
 		}
 
 		// Command-line parser shared by the tools.
-		//  - FlagType is an enum whose values (0..31) are the flag's bit in the `flags` result.
+		//  - FlagType is an enum whose values (0..63) are the flag's bit in the `flags` result.
 		//  - flags and inputs may appear in any order; "--" makes every later argument an input.
 		//  - a flag with `hasvalue` takes the next argument as its value, or an inline one
 		//    after '=' ("-o out.o" or "-o=out.o"); read it back with value().
@@ -247,14 +248,14 @@ namespace iotools {
 			TerminalIO(void) : count(-1) {}
 
 			bool setup(const std::vector<FlagData>& flags, const int count, std::vector<char> seperator, const std::string& synopsis = "") {
-				if (flags.size() > 32)
+				if (flags.size() > 64)
 					return false;
 
 				this->flagList = flags;
 				this->flagMap.clear();
 				for (auto it = flags.cbegin(); it != flags.cend(); ++it) {
 					int bit = (int)it->type;
-					if (bit < 0 || bit >= 32 || this->flagMap.count(it->text))
+					if (bit < 0 || bit >= 64 || this->flagMap.count(it->text))
 						return false;
 					this->flagMap.insert({ it->text, (int)(it - flags.cbegin()) });
 				}
@@ -266,7 +267,7 @@ namespace iotools {
 			}
 
 			// parses an already-split argument list (e.g. argv[1..])
-			bool parse(int& flags, std::vector<std::string>& inputs, const std::vector<std::string>& args) {
+			bool parse(u64& flags, std::vector<std::string>& inputs, const std::vector<std::string>& args) {
 				flags = 0;
 				inputs.clear();
 				this->values.clear();
@@ -306,20 +307,20 @@ namespace iotools {
 					else if (eq != std::string::npos)
 						return fail("flag '" + name + "' does not take a value");
 
-					flags |= 1 << (int)flag.type;
+					flags |= 1ull << (int)flag.type;
 					for (auto si = flag.follow.cbegin(); si != flag.follow.cend(); ++si)
-						flags |= 1 << (int)*si;
+						flags |= 1ull << (int)*si;
 				}
 
 				return true;
 			}
 
-			bool parse(int& flags, std::vector<std::string>& inputs, int argc, char* argv[]) {
+			bool parse(u64& flags, std::vector<std::string>& inputs, int argc, char* argv[]) {
 				return parse(flags, inputs, std::vector<std::string>(argv + 1, argv + argc));
 			}
 
 			// parses one command-line string, split on `seperator` characters
-			bool parse(int& flags, std::vector<std::string>& inputs, const std::string& text) {
+			bool parse(u64& flags, std::vector<std::string>& inputs, const std::string& text) {
 				std::vector<std::string> args;
 				std::string cur;
 				bool quoted = false, pending = false;
@@ -347,7 +348,7 @@ namespace iotools {
 				return parse(flags, inputs, args);
 			}
 
-			static bool has(int flags, FlagType type) {
+			static bool has(u64 flags, FlagType type) {
 				return (flags >> (int)type) & 1;
 			}
 
