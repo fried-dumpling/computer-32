@@ -6,21 +6,25 @@
 ## 1. 도구 사용법
 
 ```
-dasm <input.txt> [-o <output.o>] [-file] [-token] [-preproc] [-eval] [-bin]
-dlnk <input1.o> [input2.o ...] [-o <output.bin>] [-padbss] [-v]
-hexdump <file> [-o <output.txt>] [-nodec] [-width N] [-bundle N]
+dasm <input.txt> [-o <output.o>] [-big|-little] [-file] [-token] [-preproc] [-eval] [-bin]
+dlnk <input1.o> [input2.o ...] [-o <output.bin>] [-big|-little] [-org N] [-padbss] [-raw | -start <label>] [-v]
+hexdump <file> [-o <output.txt>] [-big|-little] [-nodec] [-width N] [-bundle N]
 ```
 
 | 도구 | 옵션 | 동작 |
 |---|---|---|
 | 공통 | `-o <파일>` | 출력 파일. 기본값: dasm은 입력 파일 확장자를 `.o`로 바꾼 이름, dlnk는 `a.out`, hexdump는 stdout |
 | 공통 | `-h`, `-help` | 사용법 출력 |
+| 공통 | `-little`, `-big` | 바이트 순서. 기본은 `-little`, 둘을 같이 주면 오류 (아래 참고) |
 | dasm | `-file` | 입력 파일 원문 |
 | dasm | `-token` | 렉서 토큰 목록 |
 | dasm | `-preproc` | 전처리 후 토큰 목록 |
 | dasm | `-eval` | parse / evaluate 성공 여부 |
 | dasm | `-bin` | 섹션별 바이트 + 최종 오브젝트 바이트 |
+| dlnk | `-org N` | 출력 첫 바이트의 주소 (기본 0, 9절) |
 | dlnk | `-padbss` | `.bss` 크기만큼 0을 바이너리 끝에 채움 (9절) |
+| dlnk | `-raw` | 헤더 없이 프로그램만 출력 (9절) |
+| dlnk | `-start <label>` | 헤더의 시작 주소로 쓸 라벨 (기본 `_start`, 9절). `-raw`와 같이 쓸 수 없음 |
 | dlnk | `-v` | 링크 요약(`linked N file(s) -> ...`)을 stderr에 출력 |
 | hexdump | `-nodec` | 오른쪽 문자 열 없이 16진수만 |
 | hexdump | `-width N` | 한 줄 바이트 수 (기본 4) |
@@ -28,6 +32,13 @@ hexdump <file> [-o <output.txt>] [-nodec] [-width N] [-bundle N]
 
 - 옵션과 입력의 순서는 자유입니다. 값은 `-o out.o`와 `-o=out.o` 둘 다 됩니다. `--` 뒤의 인자는 전부 입력으로 봅니다.
 - 숫자 값은 10진수나 `0x` 16진수입니다.
+
+### 바이트 순서 (`-little` / `-big`)
+
+- dasm: 명령어 워드와 데이터 값을 이 순서로 씁니다. 오브젝트 파일에 순서가 기록됩니다(오브젝트 자체의 헤더·표는 항상 같은 형식).
+- dlnk: 모든 입력 오브젝트가 같은 순서여야 합니다. 다르면 `object file 'x.o' is big-endian, linking little-endian (use -big)`로 실패합니다. 재배치도 이 순서로 채웁니다.
+- hexdump: 파일 바이트는 그대로 두고 표시만 바꿉니다. `-little`(기본)은 각 묶음(`-bundle`) 안의 바이트를 거꾸로 보여서 리틀엔디안 워드가 값 그대로 읽히고, `-big`은 파일 순서 그대로 보입니다. 오른쪽 문자 열은 항상 파일 순서입니다. 파일 끝에서 모자란 바이트는 리틀엔디안이면 묶음의 왼쪽(상위)이 빕니다.
+- 아래 예시의 바이트는 `-big` 기준으로 적었습니다. `-little`이면 각 값의 바이트가 정확히 거꾸로 놓입니다(예: `4, 0x11223344` → `44 33 22 11`, 명령어 `60 D0 00 04` → `04 00 D0 60`).
 - stdout에는 요청한 출력(덤프)만 나가고, 오류·경고는 stderr로 나갑니다. 성공하면 기본적으로 아무것도 출력하지 않습니다.
 - 종료 코드: 성공 `0`, 처리 실패(입력을 못 읽음, 어셈블/링크 오류) `1`, 명령줄 오류(모르는 옵션, 값 누락, 입력 없음) `2`.
 - `dasm`이 실패하면 출력 파일을 만들지 않고, 같은 이름의 기존 파일도 지웁니다.
@@ -56,13 +67,14 @@ start:
 
 - 소스는 섹션의 나열입니다: `.text`, `.data`, `.bss`. 순서와 반복은 자유입니다.
 - 섹션 이름을 붙일 수 있습니다: `.text boot`, `.data tables`. 이름이 없으면 `""`입니다.
+- 섹션 이름도 라벨처럼 파일 안에서만 보입니다(오브젝트에 `파일명#이름`). 다른 파일의 같은 이름 섹션과 합치려면 `global section 이름`을 씁니다(8절 끝).
 - 줄바꿈과 공백은 의미가 없습니다. `lp: nop`처럼 한 줄에 써도 됩니다.
 - 주석: `;`부터 줄 끝까지(`;` 하나만 있는 줄도 주석), 또는 `/* ... */`. 주석 안에는 한글(UTF-8)을 써도 됩니다. 주석 밖에서는 ASCII만 허용됩니다.
 - 섹션 밖(처음·섹션 사이·끝)에는 `global 이름` / `extern 이름` 선언을 쓸 수 있습니다(8절 끝).
 
 ### 섹션별로 쓸 수 있는 문장
 
-| 섹션 | 라벨 `name:` | 명령어 | 데이터 `size, value` | 예약 `size` | `name equ expr` |
+| 섹션 | 라벨 `name:` | 명령어 | 데이터 `size, value` / 목록 / 문자열 | 예약 `size` | `name equ expr` |
 |---|---|---|---|---|---|
 | `.text` | O | O | X | X | **X** |
 | `.data` | O | X | O | X | O |
@@ -87,7 +99,7 @@ PTR  equ buffer + 8
 
 ```asm
 .data
-v:   4, 0x11223344      ; 4바이트: 11 22 33 44 (빅엔디안)
+v:   4, 0x11223344      ; 4바이트: 11 22 33 44 (-big) / 44 33 22 11 (-little)
 h:   2, 0xAABB          ; 2바이트: AA BB (값의 하위 바이트)
 buf: 4*20, 0            ; 80바이트를 0으로
 p:   4, v               ; 4바이트: v의 최종 주소 (링커가 채움)
@@ -101,13 +113,31 @@ area: 256               ; 256바이트 예약 (바이트는 출력되지 않음)
   - `size`는 바이트 수이고, **상수여야 합니다**. 뒤에서 정의되는 라벨은 쓸 수 없습니다.
   - `value`는 아무 식이나 됩니다.
 - 채우기 규칙:
-  - `size <= 4`: 값의 하위 `size`바이트를 빅엔디안으로 넣습니다.
-  - `size > 4`: 값을 반복하는데, **끝 기준**으로 맞춥니다. 마지막 4바이트가 값 그대로이고, 남는 앞부분에는 값의 하위 바이트가 들어갑니다. 예: `5, 0x11223344` → `44 11 22 33 44`.
+  - `size <= 4`: 값의 하위 `size`바이트를 넣습니다(바이트 순서는 1절).
+  - `size > 4`: 값을 반복하는데, `-big`이면 **끝 기준**으로 맞춥니다. 마지막 4바이트가 값 그대로이고, 남는 앞부분에는 값의 하위 바이트가 들어갑니다. 예: `5, 0x11223344` → `44 11 22 33 44`. `-little`은 이것을 통째로 뒤집은 `44 33 22 11 44`입니다.
 - `value`가 라벨처럼 링커가 채워야 하는 값일 때:
   - `size < 4`이면 하위 `size*8`비트만 채워집니다.
-  - `size > 4`이면 마지막 4바이트만 채워지고 나머지는 0입니다.
+  - `size > 4`이면 값 그대로인 4바이트(`-big`은 마지막, `-little`은 처음 4바이트)만 채워지고 나머지는 0입니다.
 - `size`가 4의 배수가 아니면 그 뒤 라벨들이 4바이트 정렬에서 벗어납니다.
 - `.bss`의 형식은 `size`입니다. 주소 공간만 차지하고 최종 바이너리에는 들어가지 않습니다.
+
+### 목록과 문자열
+
+```asm
+.data
+arr: 8(2), {1, 0x203, -1}   ; 8바이트, 원소당 2바이트: 00 01 02 03 FF FF 00 00
+tbl: 12(4), {arr, tbl}      ; 원소마다 링커가 주소를 채움, 남은 원소 1개는 0
+msg: 8, "Hi\n\0"            ; 48 69 0A 00 00 00 00 00
+```
+
+- 목록: `total(element), {값, 값, ...}`
+  - `total`은 전체 바이트 수, `element`는 원소 하나의 바이트 수입니다. 둘 다 상수여야 하고, `total`은 `element`의 배수여야 합니다.
+  - 원소는 각각 `element, 값` 데이터 하나와 똑같이 채워집니다(위 채우기 규칙과 링커가 채우는 값 규칙 그대로).
+  - 원소가 `total / element`개보다 적으면 나머지는 0입니다. 많으면 오류입니다. 빈 목록 `{}`는 전체를 0으로 채웁니다.
+- 문자열: `total, "문자열"`
+  - 문자열의 바이트를 그대로 넣고, `total`까지 남는 부분은 0으로 채웁니다. 끝에 0을 자동으로 붙이지 않으니, 0으로 끝나야 하면 `total`을 문자열보다 크게 잡거나 `\0`을 쓰세요.
+  - 문자열이 `total`보다 길면 오류입니다.
+  - 이스케이프: `\n`, `\t`, `\r`, `\\`, `\"`, `\'`, `\` 뒤 10진 숫자 최대 3자리(`\0`, `\65`). 그 밖의 `\x`는 `x` 자신입니다.
 
 ## 5. 식(expression)
 
@@ -140,7 +170,7 @@ area: 256               ; 256바이트 예약 (바이트는 출력되지 않음)
 | 2진 | `0b101010` |
 | 문자 | `'A'`, `'\n'`, `'\t'`, `'\\'`, `'\65'` (`\` 뒤 숫자는 **10진** 코드) |
 
-문자열 리터럴(`"..."`)은 렉서는 인식하지만 문법에서는 아직 쓸 수 없습니다.
+문자열 리터럴(`"..."`)은 `.data`의 문자열 데이터(4절)에서만 쓸 수 있습니다. 식 안에서는 쓸 수 없습니다.
 
 ### 라벨이 들어간 식
 
@@ -173,7 +203,7 @@ area: 256               ; 256바이트 예약 (바이트는 출력되지 않음)
 
 ## 7. 명령어
 
-명령어는 모두 4바이트 빅엔디안 워드입니다. `R`은 레지스터 바이트, `I16`은 16비트 즉시값, `I8`은 8비트 즉시값입니다.
+명령어는 모두 4바이트 워드이고, 메모리에는 `-little`(기본)이면 `[7:0]`부터, `-big`이면 `[31:24]`부터 놓입니다. `R`은 레지스터 바이트, `I16`은 16비트 즉시값, `I8`은 8비트 즉시값입니다.
 
 | 형식 | 문법 | 인코딩 `[31:24] [23:16] [15:8] [7:0]` |
 |---|---|---|
@@ -224,12 +254,13 @@ area: 256               ; 256바이트 예약 (바이트는 출력되지 않음)
 
 | 명령어 | 문법 | 인코딩 |
 |---|---|---|
-| `intervec` | `intervec reg, I8, I8` | `78 00 I8 I8`. 첫 피연산자는 키워드 `reg` 자체이고 0으로 인코딩됩니다. **아직 연결이 덜 된 형식입니다.** |
+| `intervec` | `intervec R, I8, I8` | `78 R m d`: `int_vec[d] = R + m` (m 0~255, d 0~63) |
 | `interpri` | `interpri I8, I8` | `79 00 I8 I8` |
 | `ldexp` / `stexp` | `ldexp R, <ex>` | `7A/7B R 00 ex` |
-| `pctl` | `pctl enable` / `pctl disable` | `7D` / `7C` `00 00 00` |
-| `getabs` | `getabs R1, R2` | `7E R1 R2 00` |
-| `flush` / `inval` | `flush R, I8, <cache>` | `7F/80 R I8 cache` |
+| `pctl` | `pctl enable` / `pctl disable` | `7C 00 00 01` / `7C 00 00 00` |
+| `getabs` | `getabs R1, R2` | `7D R1 R2 00` |
+| `flush` / `inval` | `flush R, I8, <cache>` | `7E R m id`. ISA의 `cache` 명령 하나이고, `flush`는 id에 md 비트(0x80)를 켜고 `inval`은 끕니다. m은 부호 있는 8비트(-128~127, 하위 8비트로 인코딩) |
+| `atom` | `atom I8` | `7F 00 00 len`: 뒤따르는 len개 명령어를 원자적으로 실행 |
 
 `ldexp`/`stexp`의 `<ex>`와 `flush`/`inval`의 `<cache>` 값:
 
@@ -239,11 +270,11 @@ area: 256               ; 256바이트 예약 (바이트는 출력되지 않음)
 | `panicvec` | 1 | `L1D` | 0x02 |
 | `istack` | 2 | `TLB` | 0x04 |
 | `intlevel` | 3 | `L2` | 0x08 |
-| `pagebase` | 4 | `ALL` | 0x80 |
+| `pagebase` | 4 | `ALL` | 0x40 |
 
 ### 예약어
 
-명령어 이름, 레지스터 이름, 모드, 플래그, `<ex>`/`<cache>` 이름, `enable`/`disable`, `global`/`extern`/`equ`는 라벨이나 `#define` 이름으로 쓸 수 없습니다. 예: `test:`, `pos equ 1`, `ALL:`.
+명령어 이름, 레지스터 이름, 모드, 플래그, `<ex>`/`<cache>` 이름, `enable`/`disable`, `global`/`extern`/`equ`/`section`은 라벨이나 `#define` 이름으로 쓸 수 없습니다. 예: `test:`, `pos equ 1`, `ALL:`.
 
 ## 8. 전처리기
 
@@ -343,17 +374,40 @@ extern add1
     call zero.32B, add1
 ```
 
+#### `global section`
+
+```asm
+global section boot  ; 이름 있는 섹션
+global section       ; 이름 없는 섹션(.text / .data / .bss)
+.text boot
+    nop
+```
+
+- 섹션 이름은 기본적으로 `파일명#이름`으로 저장되어, 링커는 **같은 파일 안의** 같은 (종류, 이름) 섹션만 합칩니다.
+- `global section 이름`을 쓰면 그 이름의 섹션(종류 무관)을 접두사 없이 저장합니다. 여러 파일이 모두 `global section`으로 선언한 같은 (종류, 이름) 섹션은 링크할 때 하나로 합쳐집니다.
+- 이름을 생략하면(`global section`) 이름 없는 섹션을 뜻합니다.
+- 이 파일에 그 이름의 섹션이 없으면 `global section is not defined in this file` 오류입니다.
+- `global`/`extern`처럼 섹션 밖에서만 쓰고, 위치는 섹션 정의보다 뒤여도 됩니다.
+
 `dlnk main.o lib.o -o out.bin`
-
-### 아직 문법에 연결되지 않은 것
-
-문자열 리터럴(`"..."`). 렉서는 인식하지만 쓰면 parse 오류가 납니다.
 
 ## 9. 링크와 메모리 배치
 
-- 최종 바이너리는 주소 0부터 `TEXT` → `DATA` → `BSS` 순서로 배치됩니다.
-- 그룹 안에서는 처음 등장한 (종류, 이름) 순서를 따릅니다. 같은 종류·같은 이름의 섹션은 파일 안에서든 파일 사이에서든 하나로 합쳐지고, 입력 파일 순서대로 이어 붙습니다.
+- 최종 바이너리는 주소 0(`-org N`을 주면 N)부터 `TEXT` → `DATA` → `BSS` 순서로 배치됩니다.
+- `-org N`: 처음 배치되는 그룹(text, text가 없으면 data)이 주소 N에서 시작하고 모든 라벨 주소가 N만큼 커집니다. `equ` 상수는 그대로입니다. 바이너리 파일 앞에 N바이트를 채우지는 않으므로, 파일의 첫 바이트가 주소 N에 올라간다고 보면 됩니다. 16비트 즉시값 등 필드보다 큰 주소는 하위 비트만 들어갑니다.
+- 그룹 안에서는 처음 등장한 (종류, 이름) 순서를 따릅니다. 같은 종류·같은 이름의 섹션은 하나로 합쳐지고 입력 파일 순서대로 이어 붙습니다. 섹션 이름은 파일마다 따로라서(`파일명#이름`) 파일 사이에서는 `global section`으로 선언한 섹션만 합쳐집니다(8절).
+  - 예: `a.o`에 `.text x`, `.text y`, `b.o`에 `.text x`가 있으면 기본은 `a#x`, `a#y`, `b#x` 순서이고, 두 파일 모두 `global section x`면 `x`(a, b), `a#y` 순서입니다.
 - `.bss`는 주소만 차지하고 출력 바이너리에는 들어가지 않습니다. 바이너리는 text와 data 바이트뿐입니다. `-padbss`를 주면 `.bss` 크기만큼 0이 바이너리 끝에 붙습니다(주소는 그대로).
+- **헤더 (기본)**: 출력 파일 맨 앞에 8바이트 헤더가 붙습니다. 각 필드는 출력 바이트 순서(`-big`/`-little`)의 4바이트 워드입니다.
+
+  | 바이트 | 내용 |
+  |---|---|
+  | 0–3 | 시작 라벨의 주소 (`-org` 포함) |
+  | 4–7 | 프로그램 길이: 헤더를 뺀 나머지 바이트 수 (`-padbss`면 bss 포함) |
+
+  - 헤더는 주소에 영향을 주지 않습니다. 프로그램의 첫 바이트(헤더 바로 뒤)가 주소 0(또는 `-org N`)입니다.
+  - 시작 라벨은 기본 `_start`이고 `-start <label>`로 바꿉니다. `global`로 내보낸 이름을 먼저 찾고, 없으면 파일 지역 라벨 중에서 찾습니다. 지역 라벨은 한 파일에만 있어야 합니다(여러 파일에 있으면 오류 — `global`로 선언).
+  - 라벨이 없으면 링크 오류입니다. 헤더가 필요 없으면 `-raw`를 줍니다(예전 출력과 같음).
 - 다른 파일의 이름은 `global`/`extern`으로 참조합니다(8절). 그 밖의 이름은 파일마다 따로라서, 여러 파일에 같은 라벨 이름이 있어도 충돌하지 않습니다.
 
 ## 10. 오류 메시지
@@ -371,6 +425,6 @@ extern add1
 |---|---|
 | preprocess | `duplicate include`, `invalid include path`, `macro argument out of range`, `wrong number of macro arguments`, `expected ( after macro name`, `expected identifier after #define`, `#end without matching #ifdef/#ifndef`, `#ifdef/#ifndef without matching #end`, `unterminated directive` |
 | parse | `unexpected token: <토큰>` (입력 끝이면 `<EOF>`) |
-| evaluate | `missing expression` (정의되지 않은 이름), `negative index` (`gen[-1]`), `not constant` (데이터 크기가 상수가 아님), `global symbol is not defined in this file`, `extern symbol is defined in this file` |
-| link | `invalid object file '<경로>'`, `undefined symbol '<이름>'`, `duplicate symbol '<이름>'` |
+| evaluate | `missing expression` (정의되지 않은 이름), `negative index` (`gen[-1]`), `not constant` (데이터 크기가 상수가 아님), `invalid size` (음수 크기, 원소 크기가 0 이하이거나 전체 크기를 나누지 못함), `initializer too long` (목록 원소나 문자열이 크기보다 큼), `global symbol is not defined in this file`, `extern symbol is defined in this file`, `global section is not defined in this file` |
+| link | `invalid object file '<경로>'`, `undefined symbol '<이름>'`, `duplicate symbol '<이름>'`, `start label '<이름>' is not defined (use -start <label> or -raw)`, `start label '<이름>' is defined locally in more than one file (...); declare it global` |
 | 공통 | `cannot read file '<경로>'`, `cannot write file '<경로>'`, `no input file`, `unknown flag '<옵션>'`, `missing value for '<옵션>'`, `invalid value for '<옵션>': '<값>'`, `unexpected argument '<인자>'` |

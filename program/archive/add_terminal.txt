@@ -38,7 +38,11 @@
     bcdTest:4, 0    ; bcdTest
     4*20, 0
     stackEnd:
+
+global _start
 .text
+_start:
+
     ; setting gen[24] to IO_BASE
     set gen[24].S16H, IO_BASE >> 16
     set gen[24].16L, IO_BASE & 0xFFFF

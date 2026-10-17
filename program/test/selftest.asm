@@ -72,14 +72,16 @@
 #end
 
 .data
-s_five:     4,'5' 4,0
+s_five:     4, "5"                  ; byte string
 
 .bss
-obuf:       4*FP_STRBUF
+obuf:       FP_STRBUF
 stk:        4*256
 stk_end:
 
+global _start
 .text
+_start:
     set stack.32B, stk_end
     LSET(gen[24], IO_BASE)
     PUTC('s')
@@ -239,11 +241,12 @@ n2:
     mov gen[1].32B, gen[0].32B
     EXPECT(3)
     PUTC(' ')
-    ld.zero gen[1].32B, obuf
+    set gen[1].32B, 0                   ; byte string : 3 chars
+    ld.zero gen[1].8L, obuf
     st.gen[24] gen[1].32B, TERM_OUT
-    ld.zero gen[1].32B, obuf+4
+    ld.zero gen[1].8L, obuf+1
     st.gen[24] gen[1].32B, TERM_OUT
-    ld.zero gen[1].32B, obuf+8
+    ld.zero gen[1].8L, obuf+2
     st.gen[24] gen[1].32B, TERM_OUT
 
     BEGIN('Y')                          ; halt

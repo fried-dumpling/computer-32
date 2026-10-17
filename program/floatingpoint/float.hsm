@@ -14,14 +14,14 @@
 ;  fp_mul    : gen[0] = gen[1] * gen[2]
 ;  fp_div    : gen[0] = gen[1] / gen[2]
 ;  fp_str2f  : gen[0] = float(string at gen[1]), gen[1] = end ptr
-;              string = 1 char per word, 0 terminated (like strBuff)
+;              string = 1 char per byte, 0 terminated, any address
 ;              [spaces][+|-](digits[.digits] | .digits)[(e|E)[+|-]digits]
 ;              "inf" / "nan" (any case) also accepted
 ;              end = first char not used (like strtod endptr).
 ;              no number : gen[0] = +0, end = start
 ;  fp_f2str  : float gen[1] -> string at buffer gen[2], gen[3] = significant
 ;              digits (1..9, 9 = exact round trip), printf("%.*g") format
-;              returns gen[0] = string length (buffer needs FP_STRBUF words)
+;              returns gen[0] = string length (buffer needs FP_STRBUF bytes)
 ;  limits  : - all fp_ code and data must sit below 0x8000. labels are used
 ;              as signed 16 bit offsets (call/jmp zero, label and
 ;              ld.reg x, fp_pow10 / fp_digits).
@@ -34,7 +34,7 @@
 #ifndef FP_H
 #define FP_H 1
 
-#define FP_STRBUF 17            ; words needed by the fp_f2str buffer
+#define FP_STRBUF 20            ; bytes for the fp_f2str buffer (17 used, 4n)
 
 #ifndef FP_IMPL
 extern fp_add

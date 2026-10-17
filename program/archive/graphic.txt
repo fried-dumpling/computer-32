@@ -23,7 +23,11 @@
 .data
     STACKSIZE * 4, 0
     stackEnd:
+
+global _start
 .text
+_start:
+
     LONGSET(stack, stackEnd)
     LONGSET(sbp, stackEnd)
     LONGSET(gen[24], IO_BASE)

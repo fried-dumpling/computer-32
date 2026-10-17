@@ -78,7 +78,9 @@ area:   4*0x480                         ; X = area, X+OFF up to +0x1000
 stk:    4*64
 stk_end:
 
+global _start
 .text
+_start:
     set stack.32B, stk_end
     LSET(gen[24], IO_BASE)
     PUTC('m')

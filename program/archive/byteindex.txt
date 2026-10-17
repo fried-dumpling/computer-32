@@ -1,0 +1,11 @@
+global _start
+
+.text main
+_start:
+    set gen[1].32B, 0x12
+
+main_loop:
+    st.zero gen[1].8L, 0
+    jmp.one zero.32B, main_loop
+    
+

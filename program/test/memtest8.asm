@@ -98,14 +98,16 @@
 #end
 
 .data
-s5:     4,'5' 4,0
+s5:     4, "5"                      ; byte string
 
 .bss
 bigB:   4*BIGN
 stk:    4*128
 stk_end:
 
+global _start
 .text
+_start:
     set stack.32B, stk_end
     LSET(gen[24], IO_BASE)
     set gen[11].32B, 0              ; auto rounds left

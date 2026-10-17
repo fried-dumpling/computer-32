@@ -52,7 +52,9 @@ slotB:  4
 stk:    4*64
 stk_end:
 
+global _start
 .text
+_start:
     set stack.32B, stk_end
     LSET(gen[24], IO_BASE)
     PUTC('m')

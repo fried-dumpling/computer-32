@@ -25,6 +25,16 @@ namespace linker {
     // byte order of the output (dlnk -big / -little, default little); every input object must
     // have been assembled with the same order, since relocations are patched in it
     bool bigEndian = false;
+    // address of the first byte of the output (dlnk -org, default 0): the first placed group
+    // (text, or data when there is no text) starts here and every label is resolved against it.
+    // The binary itself still starts with that first byte -- nothing is padded in front.
+    int origin = 0;
+    // formatted output (default; dlnk -raw turns it off): the binary starts with an 8-byte
+    // header {start address, program length}, each a 4-byte word in the output byte order.
+    // The length is the size of the program after the header; addresses are not shifted by it.
+    bool formatted = true;
+    // label whose address goes into the header (dlnk -start <label>, default _start)
+    std::string startLabel = "_start";
 
     namespace format {
 		using u32 = unsigned __int32;
@@ -217,6 +227,11 @@ namespace linker {
 
                 std::vector<FileData> files;
 
+                // unmerged
+                // ordered section comes here
+                std::vector<Section> orders;
+                
+                // merged
                 // placement ledger, in original section order: where each merged (type, name)
                 // section ended up (absolute start/end) in `totalBin`. ROD is not implemented yet,
                 // so ROD/OUTER sections are skipped entirely (not merged, not placed).
@@ -415,7 +430,7 @@ namespace linker {
                     placements->push_back(placement);
                 }
 
-                data.textBase = 0;
+                data.textBase = (u32)origin;
                 data.dataBase = data.textBase + textSize;
                 data.bssBase = data.dataBase + dataSize;
 
@@ -543,7 +558,8 @@ namespace linker {
                             if (stackMachine::runOperation(elements, value) != 0)
                                 return false;
 
-                            u32 bytePos = si->sectionOffset + ti->first;
+                            // sectionOffset is an address (it includes origin); totalBin starts at origin
+                            u32 bytePos = si->sectionOffset - (u32)origin + ti->first;
                             if (bytePos >= data.totalBin.size())
                                 return false;
 
@@ -602,12 +618,60 @@ namespace linker {
                 return true;
             }
 
+            // finds the start label for the header: a global (unmangled) name first, otherwise a
+            // file-local `<file>#name` -- which must then be defined in exactly one file
+            inline bool findStartLabel(EvalData& data, u32& address) {
+                std::vector<std::string> owners; // files defining it as a local name
+                // it: each file
+                for (auto it = data.files.cbegin(); it != data.files.cend(); ++it) {
+                    auto found = it->definedLabel.find(startLabel);
+                    if (found != it->definedLabel.end()) {
+                        address = found->second;
+                        return true;
+                    }
+                    // si: each name the file defines
+                    for (auto si = it->definedLabel.cbegin(); si != it->definedLabel.cend(); ++si) {
+                        size_t hash = si->first.find('#');
+                        if (hash != std::string::npos && si->first.compare(hash + 1, std::string::npos, startLabel) == 0) {
+                            address = si->second;
+                            owners.push_back(it->name);
+                        }
+                    }
+                }
+                if (owners.size() == 1)
+                    return true;
+                if (owners.empty())
+                    data.errorMessage = "start label '" + startLabel + "' is not defined (use -start <label> or -raw)";
+                else
+                    data.errorMessage = "start label '" + startLabel + "' is defined locally in more than one file ('" + owners[0] + "' and '" + owners[1] + "'); declare it global";
+                return false;
+            }
+
+            // formatted output: prepends {start address, program length} to totalBin. Runs last,
+            // so relocation positions (mapExpr) are unaffected by the header
+            inline bool addHeader(EvalData& data) {
+                if (!formatted)
+                    return true;
+                u32 start;
+                if (!findStartLabel(data, start))
+                    return false;
+                u32 fields[2] = { start, (u32)data.totalBin.size() };
+                std::vector<u8> header;
+                // it: each header field
+                for (auto it = std::begin(fields); it != std::end(fields); ++it)
+                    for (int i = 0; i < 4; i++)
+                        header.push_back((u8)(*it >> (bigEndian ? 24 - 8 * i : 8 * i)));
+                data.totalBin.insert(data.totalBin.begin(), header.begin(), header.end());
+                return true;
+            }
+
             inline bool evaluate(EvalData& data, const std::vector<std::pair<std::string, format::Format>>& objects) {
                 if (!convertData(data, objects)) return false;
                 if (!mergeByName(data)) return false;
                 if (!mergeByType(data)) return false;
                 if (!checkDuplicateSymbols(data)) return false;
                 if (!mapExpr(data)) return false;
+                if (!addHeader(data)) return false;
 
                 return true;
             }

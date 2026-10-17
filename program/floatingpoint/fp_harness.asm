@@ -11,7 +11,9 @@ t_str:   4*64, 0
 t_stk:   4*512, 0
 t_stkend:
 
+global _start
 .text
+_start:
     set stack.32B, t_stkend
     ld.zero gen[1].32B, t_a
     ld.zero gen[2].32B, t_b

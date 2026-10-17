@@ -106,7 +106,8 @@ public class Sim {
             }
 
         Model m = cl.createModel();
-        new ProgramMemoryLoader(new File(prog), true).preInit(m);
+        if (!prog.equals("-"))      // "-" : ROMs load their own files (autoReload)
+            new ProgramMemoryLoader(new File(prog), true).preInit(m);
 
         StringBuilder out = new StringBuilder();
         for (Terminal t : m.findNode(Terminal.class))

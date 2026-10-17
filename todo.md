@@ -1,6 +1,6 @@
 # TODO
 
-> `todo.txt`를 정리한 문서입니다 (원본은 그대로 둠). 상태 표시는 2026-10-12 기준 저장소 내용과 대조한 것입니다.
+> `todo.txt`를 정리한 문서입니다 (원본은 그대로 둠). 상태 표시는 2026-10-12 기준 저장소 내용과 대조한 것이고, 2026-10-17에 갱신했습니다.
 > - `[x]` 완료 · `[~]` 진행 중 / 부분 완료 · `[ ]` 미착수 · `(?)` 코드로 확인되지 않아 직접 확인 필요
 
 ## 요약
@@ -14,7 +14,9 @@
 | 메모리 (ld/st buffer) | 대부분 해결 | queue → age matrix 전환 완료, "memory probably works" (6b8b02b) |
 | IPU / MMU / cache / 멀티채널 RAM | 미착수 | |
 | 외부 RAM | 완료 (테스트용) | `components/ram-test.dig` |
-| forwarding / PC-mux / boot-sequence · 외부 ROM | 목표 설정 | 아래 "다음 목표" 참고 |
+| boot-sequence · 외부 ROM | 동작 | boot ROM → 외부 ROM의 프로그램을 RAM으로 복사 → 실행. add_terminal 회로 회귀 테스트 통과 (2026-10-17) |
+| 메모리 바이트 주소 / 리틀엔디안 | 동작 (store 버그 1건) | `st .8L`/`.16L`이 4바이트를 씀 — 아래 "메모리 폭" 참고 |
+| forwarding / PC-mux | 목표 설정 | 아래 "다음 목표" 참고 |
 
 ---
 
@@ -37,12 +39,26 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 
 ### 3. Boot-sequence | 외부 ROM
 - [x] 외부 RAM (테스트용) — `components/ram-test.dig`
-- [~] 외부 ROM — `components/rom-test.dig` (아직 커밋 안 됨)
-- [ ] 메모리 맵 확정: ROM 영역 / RAM 영역 / IO(`0x4000000`) 주소 디코딩
-- [ ] reset 시퀀스: reset 시 PC = ROM reset vector, 파이프라인·ROB·id-manager·RAS·BTB 초기화
-- [ ] 부트 코드 (ROM): stack / istack 설정, `intervec`·`panicvec` 설정, 프로그램을 RAM으로 복사(또는 ROM에서 바로 실행) 후 점프
-- [ ] 툴 지원: `dlnk`가 text를 ROM 주소에, data/bss를 RAM 주소에 배치할 수 있는지 확인 (필요하면 base 주소 옵션 추가)
-- [ ] 완료 기준: 리셋 후 ROM 부트 코드 → RAM의 add_terminal / calc 실행
+- [x] 외부 ROM — `components/rom-test.dig`. `ld1`이 `D_ST`에 연결돼 있던 버그 수정
+- [x] 메모리 맵 확정 (`boot/src/boot.asm` 머리 주석)
+  - RAM `0x00000000`, key/term `0x04000000`, display `0x08000000`, ROM `0xFC000000` (bit 31:22 == 0x3F0 디코딩)
+  - boot ROM `0xFFFFFF00` (64 word, 명령 전용) — reset PC
+- [~] reset 시퀀스: reset PC = boot ROM은 동작. 파이프라인·ROB·RAS·BTB 초기화는 따로 확인 안 함
+- [~] 부트 코드 `boot/src/boot.asm` → `boot/boot.bin`
+  - [x] ROM의 dlnk 헤더(시작 주소, 길이)를 읽고 프로그램을 RAM으로 word 단위 복사, `block` 후 시작 주소로 점프
+  - [ ] stack / istack 설정, `intervec`·`panicvec` 설정
+  - [ ] 머리 주석의 `org 0x3FFFFF` 정리
+- [x] 툴 지원: `dlnk` 출력에 8바이트 헤더(시작 주소, 길이), `-raw`(헤더 없음), `-start <label>`. 진입 프로그램은 `global _start` + `.text` 첫 줄에 `_start:`
+- [x] BTB 버그 수정: 예측 taken 분기가 target+4를 fetch하던 문제
+- [x] 완료 기준 (add_terminal): 리셋 → boot ROM → ROM의 add_terminal을 RAM으로 복사 → 실행. 12+34=46, 999+1=1000, 65535+65535=131070 확인 (2026-10-17, headless sim)
+- [ ] 완료 기준 (calc): calc를 회로에서 실행 — 바이트 store 버그를 고친 뒤
+
+### 소프트웨어 (2026-10-17)
+- [x] 문자열을 전부 바이트 문자열로 전환 (1 바이트 = 1 글자, 0으로 끝남): `io`, `floatingpoint`, `calc`, `picalc`, `test/selftest`
+  - `io_printb`/`io_printlnb` 삭제, 바이트 읽기 매크로 `IO_LDB` / `FP_LDB`
+  - 에뮬레이터 테스트: io_test, fp_test, pi_test 모두 ALL PASS
+- [x] 에뮬레이터를 `tools/emu/isa32emu.py`로 이동, 리틀엔디안 / 바이트 주소 / dlnk 헤더 지원
+- [ ] calc / picalc / io_harness를 Digital 회로에서 실행 (store 버그 수정 후)
 
 ---
 
@@ -138,6 +154,13 @@ CPU 쪽:
 ### MMU
 - [ ] 나중에 (페이징은 어렵다)
 - [ ] 페이지 구현: 페이지 계산은 ld/st buffer 뒤에서 수행 → 버퍼 안에서 물리/가상 주소 분리
+
+### 메모리 폭 (바이트 주소 / 리틀엔디안)
+2026-10-17 회로 측정. 자세한 내용은 `ISA.md` 3절.
+- [x] 메모리는 바이트 주소 + 리틀엔디안, 비정렬 접근 가능
+- [x] `ld`는 레지스터 모드(`D_MD`)로 폭 결정: `32B`/`16L`/`8L`/`8H`. 부분 load는 나머지 비트 유지
+- [ ] **버그: store가 `D_MD`를 항상 0으로 내보냄** → `st .8L`이 뒤 3바이트를 0으로 덮어씀. 소프트웨어는 1바이트 store 기준으로 작성됨
+- [ ] `set`의 `8L`/`8H`/`S16L`/`S8L`/`S8H` 동작 회로 확인
 
 ### 기타 미착수
 - [ ] cache
@@ -289,4 +312,6 @@ CPU의 추측이 틀렸을 때 발생. store-buffer는 commit 이후에만 쓰�
 | CPU 수정 완료 | 80dae21 ~ 5b7e6ba | "cpu finally fixed!", cpu-32 업데이트 |
 | block/halt, call-with-base, 인터럽트 | a2fee40 ~ 858bfda | block/halt 추가, call base 겸용, 인터럽트 구현 시작 |
 | 부동소수점 / 툴 재구성 | f5c62b6 | floating point 라이브러리 추가, tools 구조 정리 |
-| headless sim 버그 수정 (HEAD) | ed2b121 | headless sim으로 찾은 cpu-32 flush/rename 버그 수정, calc / dsim 추가 |
+| headless sim 버그 수정 | ed2b121 | headless sim으로 찾은 cpu-32 flush/rename 버그 수정, calc / dsim 추가 |
+| test RAM/ROM, boot 이미지, picalc | 4a48323 | 외부 RAM/ROM 테스트 회로, boot 이미지, picalc, todo.md |
+| boot / 바이트 주소 (HEAD) | — | bootloader, ROM·BTB 수정, 바이트 문자열 전환, 에뮬레이터 이동 |

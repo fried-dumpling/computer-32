@@ -1,5 +1,6 @@
-import sys,struct
-sys.path.insert(0,sys.argv[2])
+# usage: python emutrace.py <program.bin (-raw)> <keys> [start addr hex]
+import os,sys,struct
+sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','emu'))
 from isa32emu import CPU
 OPS={0:'add',1:'addc',2:'addi',3:'sub',5:'subi',6:'bxr',7:'bxri',8:'bor',9:'bori',0xA:'bnd',0xB:'bndi',0x10:'shiftl',0x12:'shiftli',0x13:'shiftr',0x15:'shiftri',0x16:'cmp',0x17:'cmpi',0x18:'test',0x19:'testi',0x1A:'set',0x1C:'mov',0x1D:'block',0x1E:'pop',0x1F:'push',0x70:'call',0x71:'ret',0x72:'nop',0x75:'halt'}
 RN={0x19:'sbp',0x1A:'zero',0x1B:'one',0x1C:'full',0x1D:'pc',0x1E:'stack',0x1F:'flag'}
@@ -17,8 +18,8 @@ def dis(w):
     if op in (0x1E,0x1F): return f'{n} {r(a)}'
     return f'{n} {r(a)}, {imm:#x}'
 img=open(sys.argv[1],'rb').read()
-cpu=CPU(img,key_input=sys.argv[3])
-start=int(sys.argv[4],16) if len(sys.argv)>4 else None
+cpu=CPU(img,key_input=sys.argv[2])
+start=int(sys.argv[3],16) if len(sys.argv)>3 else None
 on=False;n=0
 while not cpu.halted and cpu.steps<200000:
     pc=cpu.pc; w=cpu.load(pc)

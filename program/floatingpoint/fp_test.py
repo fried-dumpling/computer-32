@@ -18,9 +18,10 @@ from fractions import Fraction
 
 import numpy as np
 
-from isa32emu import CPU, EmuError, find_word, R_STACK
-
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "..", "tools", "emu"))
+from isa32emu import CPU, EmuError, find_word, R_STACK  # noqa: E402
+
 TOOLS = os.path.normpath(os.path.join(HERE, "..", "..", "tools", "bin"))
 MAGIC = 0x7E57F00D
 OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_S2F, OP_F2S = range(6)
@@ -33,7 +34,7 @@ def build():
     out = os.path.join(tmp, "fp_harness.bin")
     for cmd in ([os.path.join(TOOLS, "dasm.exe"), "fp_harness.asm", "-o", obj],
                 [os.path.join(TOOLS, "dasm.exe"), "float.asm", "-o", lib],
-                [os.path.join(TOOLS, "dlnk.exe"), obj, lib, "-o", out]):
+                [os.path.join(TOOLS, "dlnk.exe"), obj, lib, "-o", out, "-raw"]):
         r = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True)
         if r.returncode != 0:
             print(r.stdout[-2000:], r.stderr[-2000:])
@@ -54,25 +55,18 @@ class Harness:
         cpu.set_word(self.a, a)
         cpu.set_word(self.b, b)
         cpu.set_word(self.c, c)
-        if s is not None:
-            for i, ch in enumerate(s):
-                cpu.set_word(self.str + 4 * i, ord(ch))
-            cpu.set_word(self.str + 4 * len(s), 0)
+        if s is not None:                       # byte string, 0 terminated
+            cpu.set_bytes(self.str, s.encode("latin-1") + b"\0")
         for i, v in enumerate(SENTINEL):
             cpu.r[5 + i] = v
         cpu.run()
         self.max_steps = max(self.max_steps, cpu.steps)
-        self.end = (cpu.word(self.c) - self.str) // 4    # fp_str2f end index
+        self.end = cpu.word(self.c) - self.str          # fp_str2f end index
         if cpu.r[5:13] != SENTINEL:
             raise EmuError("callee-saved gen[5..12] not preserved")
         if cpu.r[R_STACK] != self.str + 4 * 64 + 4 * 512:
             raise EmuError(f"stack not balanced: {cpu.r[R_STACK]:#x}")
-        out = []
-        p = self.str
-        while cpu.word(p) and len(out) < 64:
-            out.append(chr(cpu.word(p)))
-            p += 4
-        return cpu.word(self.res), "".join(out), cpu.steps
+        return cpu.word(self.res), cpu.cstr(self.str, 64), cpu.steps
 
 
 # ---- references ---------------------------------------------------------

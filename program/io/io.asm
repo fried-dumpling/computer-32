@@ -13,8 +13,6 @@ global io_putc
 global io_newline
 global io_print
 global io_println
-global io_printb
-global io_printlnb
 global io_printint
 global io_printhex
 global io_getc
@@ -61,11 +59,11 @@ io_print:
     IO_LDBASE(gen[13])
     set gen[0].32B, 0
 io_print_lp:
-    ld.gen[1] gen[14].32B, 0
+    IO_LDB(gen[14], gen[1], 0)
     cmpi gen[14].32B, 0
     jmp.zero zero.32B, io_print_end
     st.gen[13] gen[14].32B, IO_TERM_OUT
-    addi gen[1].32B, 4
+    addi gen[1].32B, 1
     addi gen[0].32B, 1
     jmp.one zero.32B, io_print_lp
 io_print_end:
@@ -74,36 +72,6 @@ io_print_end:
 io_println:
     call zero.32B, io_print
     jmp.one zero.32B, io_newline        ; io_newline keeps gen[0]
-
-    ; packed string (4 chars per word, first char in the top byte, as
-    ; .data "..." stores it). gen[14] = word, gen[15] = shift, gen[16] = char
-io_printb:
-    IO_LDBASE(gen[13])
-    set gen[0].32B, 0
-io_pb_word:
-    ld.gen[1] gen[14].32B, 0
-    set gen[15].32B, 24
-io_pb_byte:
-    mov gen[16].32B, gen[14].32B
-    shiftr gen[16].32B, gen[15].32B
-    bndi gen[16].32B, 0xFF
-    cmpi gen[16].32B, 0
-    jmp.zero zero.32B, io_pb_end
-    st.gen[13] gen[16].32B, IO_TERM_OUT
-    addi gen[0].32B, 1
-    cmpi gen[15].32B, 0
-    jmp.zero zero.32B, io_pb_next
-    subi gen[15].32B, 8
-    jmp.one zero.32B, io_pb_byte
-io_pb_next:
-    addi gen[1].32B, 4
-    jmp.one zero.32B, io_pb_word
-io_pb_end:
-    ret
-
-io_printlnb:
-    call zero.32B, io_printb
-    jmp.one zero.32B, io_newline
 
     ; gen[15] = pow10 table offset, gen[16] = 1 after the first digit
 io_printint:
@@ -192,7 +160,7 @@ io_trygetc_end:
     ret
 
     ; gen[1] = write ptr, gen[2] = max chars, gen[3] = prompt,
-    ; gen[14] = key, gen[15..16] = reprint temp
+    ; gen[14] = key, gen[15..16] = reprint temp. buffer = bytes
 io_getline:
     IO_LDBASE(gen[13])
     set gen[0].32B, 0
@@ -216,14 +184,14 @@ io_gl_wait:
     cmp gen[0].32B, gen[2].32B
     ijmp.neg zero.32B, io_gl_wait       ; buffer full : ignore
     st.gen[13] gen[14].32B, IO_TERM_OUT ; echo
-    st.gen[1] gen[14].32B, 0
-    addi gen[1].32B, 4
+    st.gen[1] gen[14].8L, 0
+    addi gen[1].32B, 1
     addi gen[0].32B, 1
     jmp.one zero.32B, io_gl_wait
 io_gl_bs:                               ; the terminal cannot erase :
     cmpi gen[0].32B, 0                  ; new line, prompt, line so far
     jmp.zero zero.32B, io_gl_wait
-    subi gen[1].32B, 4
+    subi gen[1].32B, 1
     subi gen[0].32B, 1
     set gen[14].32B, '\n'
     st.gen[13] gen[14].32B, IO_TERM_OUT
@@ -232,28 +200,26 @@ io_gl_prompt:
     cmpi gen[15].32B, 0
     jmp.zero zero.32B, io_gl_line
 io_gl_plp:
-    ld.gen[15] gen[14].32B, 0
+    IO_LDB(gen[14], gen[15], 0)
     cmpi gen[14].32B, 0
     jmp.zero zero.32B, io_gl_line
     st.gen[13] gen[14].32B, IO_TERM_OUT
-    addi gen[15].32B, 4
+    addi gen[15].32B, 1
     jmp.one zero.32B, io_gl_plp
 io_gl_line:
-    mov gen[15].32B, gen[0].32B         ; line start = ptr - 4*len
-    shiftli gen[15].32B, 2
-    mov gen[16].32B, gen[1].32B
-    sub gen[16].32B, gen[15].32B
+    mov gen[16].32B, gen[1].32B         ; line start = ptr - len
+    sub gen[16].32B, gen[0].32B
 io_gl_llp:
     cmp gen[16].32B, gen[1].32B
     jmp.zero zero.32B, io_gl_wait
-    ld.gen[16] gen[14].32B, 0
+    IO_LDB(gen[14], gen[16], 0)
     st.gen[13] gen[14].32B, IO_TERM_OUT
-    addi gen[16].32B, 4
+    addi gen[16].32B, 1
     jmp.one zero.32B, io_gl_llp
 io_gl_end:
     set gen[14].32B, '\n'
     st.gen[13] gen[14].32B, IO_TERM_OUT
-    st.gen[1] zero.32B, 0
+    st.gen[1] zero.8L, 0
     ret
 
 io_lib_end:

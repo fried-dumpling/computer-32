@@ -61,6 +61,9 @@
   - `S16H`: 상위 16비트에 imm을 쓰고 하위 16비트는 유지합니다(selftest A: `set .32B 0x1234` → `set .S16H 0xABCD` = `ABCD1234`).
   - `16L`: 하위 16비트에 imm을 쓰고 상위 16비트는 유지합니다(`S16H` → `16L` 순서로 `0x4000000`을 만드는 IO 코드가 동작함).
   - TODO: `8L`/`8H`/`S16L`/`S8L`/`S8H`는 회로에서 확인하지 않았습니다. 해당 부분만 쓰고 나머지 비트는 유지할 것으로 예상하지만 확인이 필요합니다.
+- `ld`/`st`에서는 레지스터 모드가 메모리 접근 폭입니다(회로의 `D_MD` = 모드 하위 2비트). 메모리는 바이트 주소 + 리틀엔디안이고, 정렬되지 않은 주소도 됩니다. 2026-10-17에 회로에서 확인했습니다.
+  - `ld R.32B` = word, `ld R.16L` = R[15:0]에 half, `ld R.8L` = R[7:0]에 byte, `ld R.8H` = R[15:8]에 byte. 부분 load는 나머지 비트를 **유지**합니다(`0xFFFFFFFF`에 `ld .8L` → `0xFFFFFF22`). 0으로 확장하려면 먼저 `set R.32B, 0`을 합니다.
+  - `st R.16L` / `st R.8L` / `st R.8H`는 R[15:0] / R[7:0] / R[15:8]을 그 폭만큼 쓰는 것이 의도입니다. **현재 회로는 store의 `D_MD`를 항상 0으로 내보내서, 모드로 뽑은 값을 0으로 확장해 4바이트를 씁니다**(`st .8L`이 뒤 3바이트를 0으로 덮어씀). 회로 수정이 필요합니다.
 
 ## 4. 플래그 (`flag` 레지스터)
 
@@ -177,18 +180,13 @@
 
 ## 6. 현재 어셈블러(`dasm`)와 다른 점
 
-xlsx(2026-09-25 수정본) 기준으로 `src/assembler-linker/assembler/assembler.hpp`와 비교한 결과입니다. 어셈블러의 0x7C 이후 opcode는 시트보다 먼저, 대화로 받은 스펙으로 구현된 것입니다.
+2026-10-17에 어셈블러를 시트에 맞춤: `pctl` 7C + byte 3 en(1)/dis(0), `getabs` 7D, `flush`/`inval`은 `cache` 7E 하나(id의 md 비트 0x80: flush=1, inval=0), 캐시 id `all` 0x40, `atom` 7F 추가(`atom len`), `intervec` byte 1은 base 레지스터(`intervec R, m, d`).
+
+남은 차이:
 
 | 항목 | 시트 | 어셈블러 |
 |---|---|---|
-| `pctl` | opcode 7C 하나, en/dis는 byte 3 | `disable` = 7C, `enable` = **7D** (opcode에 더함) |
-| `getabs` | 7D | **7E** |
-| 캐시 명령 | `cache` 7E 하나, flush/inval은 id의 md 비트 | `flush` = **7F**, `inval` = **80**으로 분리 |
-| 캐시 id `all` | 0x40 (bit 7), 0x80은 md | `ALL` = **0x80** |
-| `cache`의 m | 부호 있는 8비트 | `imm8` (& 0xFF, 부호 구분 없음) |
-| `atom` (7F) | 있음 | 없음 |
-| `intervec`의 byte 1 | base 레지스터 | 키워드 `reg` 자체라서 항상 0 |
-| 이름 | `jp` / `jpi` / `break` | `jmp` / `ijmp` / `brk` |
-| `rol` / `ror` | 이름과 반대 방향으로 적힘 | opcode만 시트와 같음(0C–0F) |
-
-시트 쪽이 최신 의도라면 어셈블러의 `instructionBase`, `ctlBase`, `cacheBase`와 `pctl`/`flush`/`inval`/`intervec` 문법을 시트에 맞춰야 합니다.
+| md 비트 방향 | `md: flush/inval`로만 적힘 | flush = 1, inval = 0으로 가정 |
+| 이름 | `jp` / `jpi` / `break` | `jmp` / `ijmp` / `brk` (기존 소스 호환을 위해 유지) |
+| `rol` / `ror` | 이름과 반대 방향으로 적힘 | opcode만 시트와 같음(0C–0F). 회로 확인 필요 |
+| 캐시 id | 비트 조합 가능 | 이름 하나만 받음 |

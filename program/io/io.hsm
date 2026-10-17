@@ -8,23 +8,19 @@
 ;            dlnk main.o io.o -o main.bin           (main.o first)
 ;  ABI (ISA-32) : args gen[1..4], return gen[0]
 ;                 gen[5..12] preserved, gen[1..4] / gen[13..20] destroyed
-;  strings : 1 char per word, 0 terminated (like strBuff)
-;            io_printb / io_printlnb take packed strings instead
+;  strings : 1 char per byte, 0 terminated, as .data stores them :
+;              msg: 8, "Hi\n"     (size > length leaves 0 after it)
+;            any address (byte addressed memory, no alignment)
 ;
 ;  io_putc     : print char gen[1]
 ;  io_newline  : print '\n'
 ;  io_print    : print string at gen[1], gen[0] = length
 ;  io_println  : io_print + '\n', gen[0] = length (without '\n')
-;  io_printb   : print packed string at gen[1] : 4 chars per word, first
-;                char in the top byte, 0 terminated, as .data stores
-;                  msg: 8, "Hi\n"     (size > length leaves 0 after it)
-;                gen[1] must be word aligned. gen[0] = length
-;  io_printlnb : io_printb + '\n', gen[0] = length (without '\n')
 ;  io_printint : print gen[1] as signed decimal
 ;  io_printhex : print gen[1] as 8 hex digits (no 0x prefix)
 ;  io_getc     : wait for a key, gen[0] = char (no echo)
 ;  io_trygetc  : gen[0] = char, or 0 if no key is waiting (no echo)
-;  io_getline  : read a line into buffer gen[1] of gen[2] words (>= 1)
+;  io_getline  : read a line into buffer gen[1] of gen[2] bytes (>= 1)
 ;                gen[3] = prompt string printed first (0 : none)
 ;                echoes input, Enter ('\n' or '\r') ends the line,
 ;                keys beyond gen[2]-1 chars are ignored.
@@ -44,13 +40,18 @@
 #define IO_KEY_R 8              ; store : consume the current key
 #define IO_TERM_OUT 12          ; store : print a char
 
+; #1 = zero-extended byte at #2 + #3  (ld .8L keeps the upper bits)
+;   IO_LDB(gen[14], gen[1], 0)
+#macro IO_LDB 3
+    set #1.32B, 0
+    ld.#2 #1.8L, #3
+#end
+
 #ifndef IO_IMPL
 extern io_putc
 extern io_newline
 extern io_print
 extern io_println
-extern io_printb
-extern io_printlnb
 extern io_printint
 extern io_printhex
 extern io_getc

@@ -33,6 +33,16 @@ tools/bin/hexdump.exe <file.bin> [-width N] [-bundle N]
 
 Default width is 4 bytes per row. Useful for inspecting assembled output.
 
+### Emulator
+
+Instruction-level ISA-32 emulator for testing programs (not the Digital circuit): `tools/emu/isa32emu.py`. Little endian, byte addressed memory, IO at `0x4000000`.
+
+```
+python tools/emu/isa32emu.py <program.bin> ["keyboard input"] [-raw]
+```
+
+Reads the default dlnk output (8 byte header: start address, length); `-raw` for headerless images. Test scripts (`program/*/..._test.py`) import it as a module (`CPU`, `load_image`, `find_word`).
+
 ### Rebuilding Tools
 
 Source is in `tools/assembler/`, `tools/linker/`, `tools/common/` (shared headers, included as `../common/`) and `tools/hexdump/` (C++), mirrored from `computer 32 (new)/src`. Compile with any C++17-compatible compiler. Entry points: `tools/assembler/main.cpp`, `tools/linker/main.cpp`. Full assembler/linker syntax reference: `tools/SYNTAX.md`.

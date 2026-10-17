@@ -57,6 +57,7 @@ namespace assembler {
 			stexp, ldexp,
 			pctl, getabs,
 			flush, inval,
+			atom,
 
 			cpuid, panicvec, istack, intlevel, pagebase,
 			enable, disable,
@@ -75,6 +76,7 @@ namespace assembler {
 			global,
 			_extern,
 			equ,
+			section,
 
 			include,
 			ifndef,
@@ -180,6 +182,7 @@ namespace assembler {
 				{ "getabs", TokenType::getabs },
 				{ "flush", TokenType::flush },
 				{ "inval", TokenType::inval },
+				{ "atom", TokenType::atom },
 
 				{ "istack", TokenType::istack },
 				{ "panicvec", TokenType::panicvec },
@@ -226,6 +229,7 @@ namespace assembler {
 				{ "global", TokenType::global },
 				{ "extern", TokenType::_extern },
 				{ "equ", TokenType::equ },
+				{ "section", TokenType::section },
 
 				{ "#include<[^>\t\n]*>", TokenType::include },
 				{ "#ifndef", TokenType::ifndef },
@@ -349,6 +353,7 @@ namespace assembler {
 			{ TokenType::getabs, "getabs" },
 			{ TokenType::flush, "flush" },
 			{ TokenType::inval, "inval" },
+			{ TokenType::atom, "atom" },
 
 			{ TokenType::istack, "istack" },
 			{ TokenType::panicvec, "panicvec" },
@@ -395,6 +400,7 @@ namespace assembler {
 			{ TokenType::global, "global" },
 			{ TokenType::_extern, "extern" },
 			{ TokenType::equ, "equ" },
+			{ TokenType::section, "section" },
 
 			{ TokenType::include, "include" },
 			{ TokenType::ifndef, "ifndef" },
@@ -1102,6 +1108,7 @@ namespace assembler {
 		NTSTART(NonterminalType)
 			program,
 			section,
+			section_unit,
 
 			text_section,
 			data_section,
@@ -1196,6 +1203,7 @@ namespace assembler {
 			label,
 			equate,
 			global,
+			global_section,
 			_extern,
 
 			reg_ex,
@@ -1230,6 +1238,7 @@ namespace assembler {
 
 			{ NonterminalType::program, "program" },
 			{ NonterminalType::section, "section" },
+			{ NonterminalType::section_unit, "section_unit" },
 
 			{ NonterminalType::text_section, "text_section" },
 			{ NonterminalType::data_section, "data_section" },
@@ -1318,6 +1327,7 @@ namespace assembler {
 			{ ASTNodeType::label, "label" },
 			{ ASTNodeType::equate, "equate" },
 			{ ASTNodeType::global, "global" },
+			{ ASTNodeType::global_section, "global_section" },
 			{ ASTNodeType::_extern, "extern" },
 
 			{ ASTNodeType::reg_ex, "reg_ex" },
@@ -1359,36 +1369,26 @@ namespace assembler {
 			{ { NT::__accept, AT::__accept, -1 }, { { NT::program, true, false } } },
 
 			{ { NT::program, AT::program, -1}, { { NT::section, true, true } } },
-			
-			{ { NT::section, AT::text_section, -1 }, { { TT::text, false , false }, { NT::text_section, true, false }, { NT::section, true, true } } },
-			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, { NT::data_section, true, false }, { NT::section, true, true } } },
-			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, { NT::bss_section, true, false }, { NT::section, true, true } } },
-			{ { NT::section, AT::text_section, -1 }, { { TT::text, false, false }, { TT::identifier, true, false}, { NT::text_section, true, false }, { NT::section, true, true } } },
-			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, { TT::identifier, true, false}, { NT::data_section, true, false }, { NT::section, true, true } } },
-			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, { TT::identifier, true, false}, { NT::bss_section, true, false }, { NT::section, true, true } } },
-			{ { NT::section, AT::outer_section, -1 }, { { NT::outer_section, true, false }, { NT::section, true, true } } },
 
-			{ { NT::section, AT::text_section, -1 }, { { TT::text, false, false }, { NT::text_section, true, false } } },
-			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, { NT::data_section, true, false} } },
-			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, { NT::bss_section, true, false } } },
-			{ { NT::section, AT::text_section, -1 }, { { TT::text, false, false }, { TT::identifier, true, false}, { NT::text_section, true, false } } },
-			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, { TT::identifier, true, false}, { NT::data_section, true, false} } },
-			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, { TT::identifier, true, false}, { NT::bss_section, true, false } } },
-			{ { NT::section, AT::outer_section, -1 }, { { NT::outer_section, true, false } } },
+			// section: the list of sections. Each section_unit keeps its own node (name as child[0]
+			// when given, then its statements, spliced in from the body list) so calculateSection
+			// sees one node per section with its name; the list nodes themselves are spliced away.
+			{ { NT::section, AT::program, -1 }, { { NT::section_unit, true, false }, { NT::section, true, true } } },
+			{ { NT::section, AT::program, -1 }, { { NT::section_unit, true, false } } },
 
-			{ { NT::section, AT::text_section, -1 }, { { TT::text, false , false }, { NT::section, true, true } } },
-			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, { NT::section, true, true } } },
-			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, { NT::section, true, true } } },
-			{ { NT::section, AT::text_section, -1 }, { { TT::text, false , false }, { TT::identifier, true, false}, { NT::section, true, true } } },
-			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, { TT::identifier, true, false}, { NT::section, true, true } } },
-			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, { TT::identifier, true, false}, { NT::section, true, true } } },
-
-			{ { NT::section, AT::text_section, -1 }, { { TT::text, false, false } } },
-			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false } } },
-			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false } } },
-			{ { NT::section, AT::text_section, -1 }, { { TT::text, false, false }, { TT::identifier, true, false} } },
-			{ { NT::section, AT::data_section, -1 }, { { TT::data, false, false }, { TT::identifier, true, false} } },
-			{ { NT::section, AT::bss_section, -1 }, { { TT::bss, false, false }, { TT::identifier, true, false} } },
+			{ { NT::section_unit, AT::text_section, -1 }, { { TT::text, false, false }, { NT::text_section, true, true } } },
+			{ { NT::section_unit, AT::data_section, -1 }, { { TT::data, false, false }, { NT::data_section, true, true } } },
+			{ { NT::section_unit, AT::bss_section, -1 }, { { TT::bss, false, false }, { NT::bss_section, true, true } } },
+			{ { NT::section_unit, AT::text_section, -1 }, { { TT::text, false, false }, { TT::identifier, true, false }, { NT::text_section, true, true } } },
+			{ { NT::section_unit, AT::data_section, -1 }, { { TT::data, false, false }, { TT::identifier, true, false }, { NT::data_section, true, true } } },
+			{ { NT::section_unit, AT::bss_section, -1 }, { { TT::bss, false, false }, { TT::identifier, true, false }, { NT::bss_section, true, true } } },
+			{ { NT::section_unit, AT::text_section, -1 }, { { TT::text, false, false } } },
+			{ { NT::section_unit, AT::data_section, -1 }, { { TT::data, false, false } } },
+			{ { NT::section_unit, AT::bss_section, -1 }, { { TT::bss, false, false } } },
+			{ { NT::section_unit, AT::text_section, -1 }, { { TT::text, false, false }, { TT::identifier, true, false } } },
+			{ { NT::section_unit, AT::data_section, -1 }, { { TT::data, false, false }, { TT::identifier, true, false } } },
+			{ { NT::section_unit, AT::bss_section, -1 }, { { TT::bss, false, false }, { TT::identifier, true, false } } },
+			{ { NT::section_unit, AT::outer_section, -1 }, { { NT::outer_section, true, true } } },
 
 			// outer_section: global/extern declarations outside .text/.data/.bss (before, between or after them)
 			{ { NT::outer_section, AT::outer_section, -1 }, { { NT::global, true, false }, { NT::outer_section, true, true } } },
@@ -1418,9 +1418,11 @@ namespace assembler {
 
 			{ { NT::text_section, AT::text_section, -1 }, { { NT::intruction, true, false }, { NT::text_section, true, true } } },
 			{ { NT::text_section, AT::text_section, -1 }, { { NT::label, true, false }, { NT::text_section, true, true } } },
+			{ { NT::text_section, AT::text_section, -1 }, { { NT::equate, true, false }, { NT::text_section, true, true } } },
 
 			{ { NT::text_section, AT::text_section, -1 }, { { NT::intruction, true, false } } },
 			{ { NT::text_section, AT::text_section, -1 }, { { NT::label, true, false } } },
+			{ { NT::text_section, AT::text_section, -1 }, { { NT::equate, true, false } } },
 
 			{ { NT::intruction, AT::instruction_RR, -1 }, { { TT::add, true, false }, {NT::reg, true, false }, { TT::comma, false, false }, { NT::reg, true, false } } },
 			{ { NT::intruction, AT::instruction_RR, -1 }, { { TT::addc, true, false }, {NT::reg, true, false }, { TT::comma, false, false } ,{ NT::reg, true, false } } },
@@ -1472,13 +1474,15 @@ namespace assembler {
 
 			{ { NT::intruction, AT::instruction_N, -1}, { { TT::syscall, true, false } } },
 			{ { NT::intruction, AT::instruction_N, -1}, { { TT::iret, true, false } } },
-			{ { NT::intruction, AT::instruction_RII, -1}, { { TT::intervec, true, false }, { TT::reg, true, false }, { TT::comma, false, false },  { NT::immidate8, true, false }, { TT::comma, false, false }, { NT::immidate8, true, false } } },
+			{ { NT::intruction, AT::instruction_RII, -1}, { { TT::intervec, true, false }, { NT::reg, true, false }, { TT::comma, false, false },  { NT::immidate8, true, false }, { TT::comma, false, false }, { NT::immidate8, true, false } } },
 			{ { NT::intruction, AT::instruction_IXP, -1}, { { TT::interpri, true, false }, { NT::immidate8, true, false }, { TT::comma, false, false },  { NT::immidate8, true, false }  } },
 
 			{ { NT::intruction, AT::instruction_RXR, -1}, { { TT::ldexp, true, false}, { NT::reg, true, false } , { TT::comma, false, false }, { NT::reg_ex, true, false } } },
 			{ { NT::intruction, AT::instruction_RXR, -1}, { { TT::stexp, true, false}, { NT::reg, true, false } , { TT::comma, false, false }, { NT::reg_ex, true, false } } },
 
+			// pctl en/dis, atom len: opcode + one operand in byte 3
 			{ { NT::intruction, AT::instruction_CTL, -1}, { { TT::pctl, true, false }, { NT::ctlid, true, false } } },
+			{ { NT::intruction, AT::instruction_CTL, -1}, { { TT::atom, true, false }, { NT::immidate8, true, false } } },
 
 			{ { NT::intruction, AT::instruction_RR, -1}, { { TT::getabs, true, false }, { NT::reg, true, false }, { TT::comma, false, false }, { NT::reg, true, false } } },
 
@@ -1545,6 +1549,9 @@ namespace assembler {
 			{ { NT::list_tail, AT::list, -1 }, { { NT::expression, true, false }, { TT::closebrace, false, false} } },
 
 			{ { NT::global, AT::global, 1}, { { TT::global, false, false }, { TT::identifier, true, false } } },
+			// global section <name> / global section (no name = the unnamed sections): sections with that name keep it unmangled
+			{ { NT::global, AT::global_section, 2}, { { TT::global, false, false }, { TT::section, false, false }, { TT::identifier, true, false } } },
+			{ { NT::global, AT::global_section, -1}, { { TT::global, false, false }, { TT::section, false, false } } },
 			{ { NT::_extern, AT::_extern, 1}, { { TT::_extern, false, false}, { TT::identifier, true, false } } },
 
 			{ { NT::allocate, AT::allocate, -1 }, { { NT::expression, true, false }, { TT::comma, false, false },  { NT::expression, true, false } } },
@@ -1739,7 +1746,8 @@ namespace assembler {
 				GLOBAL_UNDEFINED,    // `global name` but name is never defined in this file
 				EXTERN_DEFINED,      // `extern name` but name is also defined in this file
 				INVALID_SIZE,        // negative total size, or list element size <= 0 / not dividing the total
-				INITIALIZER_TOO_LONG // list has more elements / string more bytes than the total size holds
+				INITIALIZER_TOO_LONG, // list has more elements / string more bytes than the total size holds
+				GLOBAL_SECTION_UNDEFINED  // `global section name` but no section of that name in this file
 			};
 
 			inline const char* evaluateErrorName(int code) {
@@ -1752,6 +1760,7 @@ namespace assembler {
 				case EvaluateError::EXTERN_DEFINED: return "extern symbol is defined in this file";
 				case EvaluateError::INVALID_SIZE: return "invalid size";
 				case EvaluateError::INITIALIZER_TOO_LONG: return "initializer too long";
+				case EvaluateError::GLOBAL_SECTION_UNDEFINED: return "global section is not defined in this file";
 				}
 				return "unknown error";
 			}
@@ -1805,6 +1814,7 @@ namespace assembler {
 
 				std::unordered_set<std::string> globalIdentifier;
 				std::unordered_set<std::string> externIdentifier;
+				std::unordered_set<std::string> globalSectionIdentifier;
 
 				std::unordered_map<std::string, ExprData> idenifierValue;
 				std::unordered_map<AST*, ExprData> expressionValue;
@@ -2051,9 +2061,10 @@ namespace assembler {
 				{ TokenType::stexp, 0x7B },
 
 				{ TokenType::pctl, 0x7C },
-				{ TokenType::getabs, 0x7E },
-				{ TokenType::flush, 0x7F },
-				{ TokenType::inval, 0x80 }
+				{ TokenType::getabs, 0x7D },
+				{ TokenType::flush, 0x7E },	// cache, id md bit set
+				{ TokenType::inval, 0x7E },	// cache, id md bit clear
+				{ TokenType::atom, 0x7F }
 			};
 
 			std::map<TokenType, u32> regExBase = {
@@ -2106,8 +2117,11 @@ namespace assembler {
 				{ TokenType::L1D, 0x2 },
 				{ TokenType::TLB, 0x4 },
 				{ TokenType::L2, 0x8 },
-				{ TokenType::ALL, 0x80 }
+				{ TokenType::ALL, 0x40 }
 			};
+
+			// md bit of the cache id byte: set = flush, clear = inval
+			const u32 cacheFlushBit = 0x80;
 
 			int calculateSection(AST* cur, void* vpData) {
 				EvalData* data = (EvalData*)vpData;
@@ -2374,6 +2388,10 @@ namespace assembler {
 				case (u64)ASTNodeType::global + (u64)TokenType::__end:
 					data->globalIdentifier.insert(cur->text);
 					break;
+				case (u64)ASTNodeType::global_section + (u64)TokenType::__end:
+					// no identifier -> "" (the unnamed sections)
+					data->globalSectionIdentifier.insert(cur->child.empty() ? "" : cur->text);
+					break;
 				case (u64)ASTNodeType::_extern + (u64)TokenType::__end:
 					data->externIdentifier.insert(cur->text);
 					break;
@@ -2561,6 +2579,15 @@ namespace assembler {
 					if (data->idenifierValue.find(cur->text) == data->idenifierValue.end())
 						return (int)EvaluateError::GLOBAL_UNDEFINED;
 					break;
+				case (u64)ASTNodeType::global_section + (u64)TokenType::__end: {
+					std::string name = cur->child.empty() ? "" : cur->text;
+					bool found = false;
+					for (auto it = data->sections.cbegin(); it != data->sections.cend() && !found; ++it)
+						found = it->type != SectionType::OUTER && it->name == name;
+					if (!found)
+						return (int)EvaluateError::GLOBAL_SECTION_UNDEFINED;
+					break;
+				}
 				case (u64)ASTNodeType::_extern + (u64)TokenType::__end:
 					if (data->idenifierValue.find(cur->text) != data->idenifierValue.end())
 						return (int)EvaluateError::EXTERN_DEFINED;
@@ -2702,10 +2729,13 @@ namespace assembler {
 					appendReplace(data->instructionValue[cur].replace, data->instructionValue[cur->child[2]].replace, 0);
 					goto pushInstruction;
 				case (u64)ASTNodeType::instruction_CTL + (u64)TokenType::__end:
-					data->instructionValue[cur].data = ((instructionBase[(TokenType)cur->child[0]->type] + data->instructionValue[cur->child[1]].data) << 24);
+					data->instructionValue[cur].data = (instructionBase[(TokenType)cur->child[0]->type] << 24) + data->instructionValue[cur->child[1]].data;
+					appendReplace(data->instructionValue[cur].replace, data->instructionValue[cur->child[1]].replace, 0);
 					goto pushInstruction;
 				case (u64)ASTNodeType::instruction_CACHE + (u64)TokenType::__end:
 					data->instructionValue[cur].data = (instructionBase[(TokenType)cur->child[0]->type] << 24) + (data->instructionValue[cur->child[1]].data << 16) + (data->instructionValue[cur->child[2]].data << 8) + (data->instructionValue[cur->child[3]].data);
+					if ((TokenType)cur->child[0]->type == TokenType::flush)
+						data->instructionValue[cur].data |= cacheFlushBit;
 					appendReplace(data->instructionValue[cur].replace, data->instructionValue[cur->child[1]].replace, 16);
 					appendReplace(data->instructionValue[cur].replace, data->instructionValue[cur->child[2]].replace, 8);
 
@@ -2860,6 +2890,14 @@ namespace assembler {
 
 		inline bool formatData(const EvalData& data) {
 			format.clear();
+
+			// section names are file-local like labels (so the linker only merges same-named
+			// sections within one file), unless declared with `global section`
+			auto sectionName = [&data](const std::string& name) {
+				if (data.globalSectionIdentifier.find(name) != data.globalSectionIdentifier.end())
+					return name;
+				return evaluator::functions::mangleLabel(data.fileName, name);
+			};
 			format.endian = bigEndian ? format_data::Endian::BIG : format_data::Endian::LITTLE;
 
 			std::unordered_map<std::string, u32> usedIdentifierIndex;
@@ -2914,7 +2952,7 @@ namespace assembler {
 				}
 				else {
 					size_t section_id = it->second.coeff.cbegin()->first;
-					nId.section = data.sections[section_id].name;
+					nId.section = sectionName(data.sections[section_id].name);
 					nId.sectionIndex = (u32)section_id;
 				}
 				nId.value = (u32)it->second.value;
@@ -2927,7 +2965,7 @@ namespace assembler {
 
 				for (auto si = it->operationMap.cbegin(); si != it->operationMap.cend(); ++si) {
 					Mapper nMap = {};
-					nMap.sectionName = it->name;
+					nMap.sectionName = sectionName(it->name);
 					nMap.byteIndex = base + si->first;
 					nMap.offset = si->second.offset;
 					nMap.size = si->second.size;
@@ -2939,7 +2977,7 @@ namespace assembler {
 				}
 
 				Section nSec = {};
-				nSec.name = it->name;
+				nSec.name = sectionName(it->name);
 				nSec.type = (u32)it->type;
 				nSec.start = base;
 				nSec.end = base + (u32)it->data.size();
@@ -2958,7 +2996,7 @@ namespace assembler {
 		}
 	}
 
-	const unsigned long long version = 409;
+	const unsigned long long version = 414;
 
 	namespace cache {
 		using u64 = unsigned __int64;

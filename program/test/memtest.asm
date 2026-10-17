@@ -67,7 +67,9 @@ far:    4*0x1100                        ; for alias tests (up to +0x4000)
 stk:    4*256
 stk_end:
 
+global _start
 .text
+_start:
     set stack.32B, stk_end
     LSET(gen[24], IO_BASE)
     PUTC('m')

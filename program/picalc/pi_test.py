@@ -19,7 +19,7 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROG = os.path.normpath(os.path.join(HERE, ".."))
-sys.path.insert(0, os.path.join(PROG, "floatingpoint"))
+sys.path.insert(0, os.path.join(PROG, "..", "tools", "emu"))
 from isa32emu import CPU  # noqa: E402
 
 TOOLS = os.path.normpath(os.path.join(PROG, "..", "tools", "bin"))
@@ -32,7 +32,7 @@ def build():
     out = os.path.join(tmp, "pi.bin")
     for cmd in ([os.path.join(TOOLS, "dasm.exe"), "picalc/pi.asm", "-o", obj],
                 [os.path.join(TOOLS, "dasm.exe"), "io/io.asm", "-o", lib],
-                [os.path.join(TOOLS, "dlnk.exe"), obj, lib, "-o", out]):
+                [os.path.join(TOOLS, "dlnk.exe"), obj, lib, "-o", out, "-raw"]):
         r = subprocess.run(cmd, cwd=PROG, capture_output=True, text=True)
         if r.returncode != 0:
             print(r.stdout[-2000:], r.stderr[-2000:])

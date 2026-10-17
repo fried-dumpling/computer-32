@@ -54,7 +54,7 @@ java -cp "$J;build" NetQuery <circuit.dig> sub ROB-SC.dig net D  # 하위 회로
 ## emutrace.py : 에뮬레이터 trace
 
 ```
-python emutrace.py <program.bin> <floatingpoint 폴더> <keys> [시작주소hex]
+python emutrace.py <program.bin> <keys> [시작주소hex]
 ```
 
 시작 주소부터 명령 140개를 주소, 워드, 역어셈블, SP와 함께 출력합니다.

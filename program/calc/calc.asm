@@ -26,29 +26,30 @@
 #include<../io/io.hsm>
 #include<../floatingpoint/float.hsm>
 
-#define LINE 128                ; input buffer (words)
+#define LINE 128                ; input buffer (bytes)
 #define DIGITS 7                ; significant digits of the result
 #define PROMPT_W 2              ; width of "> ", for the error caret
 
 .data
-    ; messages : packed strings for io_printb (size > length : 0 after).
-    ; the prompt goes to io_getline, so it stays 1 char per word.
+    ; messages : byte strings (size > length : 0 after)
 s_title:    36, "float calc (+ - * / (), q = quit)"
-s_prompt:   12(4), {'>', ' '}
+s_prompt:   4, "> "
 s_eq:       4, "= "
 s_err:      8, "^ error"
 
 .bss
-buf:        4*LINE
-obuf:       4*FP_STRBUF
+buf:        LINE
+obuf:       FP_STRBUF
 stk:        4*512
 stk_end:
 
+global _start
 .text
+_start:
 main:
     set stack.32B, stk_end
     set gen[1].32B, s_title
-    call zero.32B, io_printlnb
+    call zero.32B, io_println
 
 loop:
     set gen[1].32B, buf
@@ -57,10 +58,10 @@ loop:
     call zero.32B, io_getline
     cmpi gen[0].32B, 0
     jmp.zero zero.32B, loop             ; empty line
-    ld.zero gen[13].32B, buf            ; "q" : quit
+    IO_LDB(gen[13], zero, buf)          ; "q" : quit
     cmpi gen[13].32B, 'q'
     ijmp.zero zero.32B, eval
-    ld.zero gen[13].32B, buf+4
+    IO_LDB(gen[13], zero, buf+1)
     cmpi gen[13].32B, 0
     jmp.zero zero.32B, quit
 
@@ -70,7 +71,7 @@ eval:
     call zero.32B, parse_expr
     mov gen[5].32B, gen[0].32B
     call zero.32B, skip_ws              ; anything left is an error
-    ld.gen[12] gen[13].32B, 0
+    IO_LDB(gen[13], gen[12], 0)
     cmpi gen[13].32B, 0
     jmp.zero zero.32B, eval_chk
     call zero.32B, set_err
@@ -79,7 +80,7 @@ eval_chk:
     ijmp.zero zero.32B, show_err
 
     set gen[1].32B, s_eq                ; = value
-    call zero.32B, io_printb
+    call zero.32B, io_print
     mov gen[1].32B, gen[5].32B
     set gen[2].32B, obuf
     set gen[3].32B, DIGITS
@@ -91,7 +92,6 @@ eval_chk:
 show_err:                               ; caret under the bad char
     mov gen[6].32B, gen[11].32B
     subi gen[6].32B, buf
-    shiftri gen[6].32B, 2
     addi gen[6].32B, PROMPT_W
 show_err_sp:
     cmpi gen[6].32B, 0
@@ -102,7 +102,7 @@ show_err_sp:
     jmp.one zero.32B, show_err_sp
 show_err_msg:
     set gen[1].32B, s_err
-    call zero.32B, io_printlnb
+    call zero.32B, io_println
     jmp.one zero.32B, loop
 
 quit:
@@ -114,10 +114,10 @@ quit:
 
     ; skip spaces, destroys gen[13]
 skip_ws:
-    ld.gen[12] gen[13].32B, 0
+    IO_LDB(gen[13], gen[12], 0)
     cmpi gen[13].32B, ' '
     ijmp.zero zero.32B, skip_ws_end
-    addi gen[12].32B, 4
+    addi gen[12].32B, 1
     jmp.one zero.32B, skip_ws
 skip_ws_end:
     ret
@@ -138,13 +138,13 @@ parse_expr:
     mov gen[5].32B, gen[0].32B
 expr_lp:
     call zero.32B, skip_ws
-    ld.gen[12] gen[6].32B, 0
+    IO_LDB(gen[6], gen[12], 0)
     cmpi gen[6].32B, '+'
     jmp.zero zero.32B, expr_op
     cmpi gen[6].32B, '-'
     ijmp.zero zero.32B, expr_end
 expr_op:
-    addi gen[12].32B, 4
+    addi gen[12].32B, 1
     call zero.32B, parse_term
     mov gen[1].32B, gen[5].32B
     mov gen[2].32B, gen[0].32B
@@ -171,13 +171,13 @@ parse_term:
     mov gen[5].32B, gen[0].32B
 term_lp:
     call zero.32B, skip_ws
-    ld.gen[12] gen[6].32B, 0
+    IO_LDB(gen[6], gen[12], 0)
     cmpi gen[6].32B, '*'
     jmp.zero zero.32B, term_op
     cmpi gen[6].32B, '/'
     ijmp.zero zero.32B, term_end
 term_op:
-    addi gen[12].32B, 4
+    addi gen[12].32B, 1
     call zero.32B, parse_factor
     mov gen[1].32B, gen[5].32B
     mov gen[2].32B, gen[0].32B
@@ -199,7 +199,7 @@ term_end:
     ; gen[0] = factor
 parse_factor:
     call zero.32B, skip_ws
-    ld.gen[12] gen[13].32B, 0
+    IO_LDB(gen[13], gen[12], 0)
     cmpi gen[13].32B, '('
     jmp.zero zero.32B, factor_paren
     cmpi gen[13].32B, '-'
@@ -213,21 +213,21 @@ parse_factor:
     mov gen[12].32B, gen[1].32B
     ret
 factor_pos:
-    addi gen[12].32B, 4
+    addi gen[12].32B, 1
     jmp.one zero.32B, parse_factor
 factor_neg:
-    addi gen[12].32B, 4
+    addi gen[12].32B, 1
     call zero.32B, parse_factor
     set gen[13].S16H, 0x8000
     set gen[13].16L, 0
     bxr gen[0].32B, gen[13].32B         ; flip the sign bit
     ret
 factor_paren:
-    addi gen[12].32B, 4
+    addi gen[12].32B, 1
     call zero.32B, parse_expr
     call zero.32B, skip_ws
-    ld.gen[12] gen[13].32B, 0
+    IO_LDB(gen[13], gen[12], 0)
     cmpi gen[13].32B, ')'
     ijmp.zero zero.32B, set_err         ; missing ')'
-    addi gen[12].32B, 4
+    addi gen[12].32B, 1
     ret

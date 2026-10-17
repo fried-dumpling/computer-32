@@ -7,7 +7,7 @@
 | 파일 | 역할 |
 |---|---|
 | `pi.asm` | 프로그램. 입력 처리, BBP limb 계산, 10진수 스트리밍(`dec_addlimb`, `dec_emit`, `dig_*`, `put_dig`), BBP 계산(`pi_frac`, `pi_series`, `pi_powmod`, `pi_fracdiv`) |
-| `pi_test.py` | 빌드 후 에뮬레이터(`../floatingpoint/isa32emu.py`)로 실행하고, Machin 공식으로 구한 정확한 자릿수와 비교합니다 |
+| `pi_test.py` | 빌드 후 에뮬레이터(`tools/emu/isa32emu.py`)로 실행하고, Machin 공식으로 구한 정확한 자릿수와 비교합니다 |
 
 ## 빌드 / 실행
 
@@ -16,7 +16,7 @@
 dasm picalc/pi.asm -o pi.o
 dasm io/io.asm -o io.o
 dlnk pi.o io.o -o picalc/pi.bin
-python floatingpoint/isa32emu.py picalc/pi.bin "0 20\nq\n"
+python ../tools/emu/isa32emu.py picalc/pi.bin "0 20\nq\n"
 ```
 
 ```
@@ -35,7 +35,7 @@ pi (BBP) - pos [count], q = quit
 - 위치 0부터 시작하면 먼저 `3.`을 출력합니다.
 - 자리가 확정되는 대로 바로 출력합니다(limb 하나에 4~5자리). 시작위치 앞의 자리도 계산은 하지만 출력하지 않습니다.
 - 한 줄에 50자리(`PERLINE`), 10자리(`GROUP`)마다 공백을 넣고, 줄 앞에 그 줄 첫 자리의 위치를 붙입니다.
-- 메시지는 `.data` 문자열 리터럴(`36, "pi (BBP) ..."`)로 두고 `io_printb`/`io_printlnb`로 출력합니다. `io_getline`에 넘기는 프롬프트만 word 문자열이어서 목록 문법 `12(4), {'>', ' '}`을 씁니다. `../calc/calc.asm`도 같습니다.
+- 메시지와 프롬프트는 `.data` 문자열 리터럴(`36, "pi (BBP) ..."`, `4, "> "`)로 두고 `io_print`/`io_println`/`io_getline`에 그대로 넘깁니다(바이트 문자열). 입력 버퍼도 바이트 문자열이라 커서는 1씩 움직이고, 글자는 `IO_LDB`로 읽습니다. `../calc/calc.asm`도 같습니다.
 
 ## 알고리즘
 
@@ -105,7 +105,7 @@ python pi_test.py             # 위치 0..99, 350..361, 빈 줄(0 50), 입력 �
 - 요청마다 출력을 나눠서, 출력된 위치 집합과 각 자리를 정확한 값과 비교합니다. `3.` 줄도 확인합니다.
 - 0..99에는 일반 올림이 5번 있고, 350..361에는 9를 들고 있을 때의 올림(358 근처)이 있습니다.
 - 입력 오류: `x`, `5 3 2`, `995 6`, `1001`. 그리고 `0 0`은 출력이 없어야 합니다.
-- **현재 결과 (2026-10-11)**: 에뮬레이터에서 ALL PASS입니다. Digital 회로에서는 아직 실행하지 않았습니다.
+- **현재 결과 (2026-10-17)**: 바이트 문자열로 바꾼 뒤 에뮬레이터에서 ALL PASS입니다. Digital 회로에서는 아직 실행하지 않았습니다.
 
 ### 성능 (에뮬레이터 명령 수)
 

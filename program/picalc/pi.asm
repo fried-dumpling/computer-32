@@ -53,7 +53,7 @@
 ; =====================================================================
 #include<../io/io.hsm>
 
-#define LINE 32                 ; input buffer (words)
+#define LINE 32                 ; input buffer (bytes)
 #define DEFCOUNT 50             ; digits when the line is empty
 #define PERLINE 50              ; digits per output line
 #define GROUP 10                ; space every GROUP digits
@@ -62,16 +62,15 @@
 #define PSAFE 6553              ; top limb of pbig below this : 10x fits
 
 .data
-    ; messages : packed strings for io_printb (size > length : 0 after).
-    ; the prompt goes to io_getline, so it stays 1 char per word.
+    ; messages : byte strings (size > length : 0 after)
 s_title:    36, "pi (BBP) - pos [count], q = quit"
-s_prompt:   12(4), {'>', ' '}
+s_prompt:   4, "> "
 s_three:    4, "3."
 s_colon:    4, ": "
 s_err:      16, "? pos [count]"
 
 .bss
-buf:        4*LINE
+buf:        LINE
 sfrac:      4*NLIMB             ; frac(10^j F_k), 16 bit limbs, MS first
 pbig:       4*(NLIMB+1)         ; 10^j, 16 bit limbs, LS first
 g_kb:       4                   ; k * 4 (bytes of sfrac in use)
@@ -86,21 +85,23 @@ g_grp:      4                   ; digits left in the group
 stk:        4*256
 stk_end:
 
+global _start
 .text
+_start:
 main:
     set stack.32B, stk_end
     set gen[1].32B, s_title
-    call zero.32B, io_printlnb
+    call zero.32B, io_println
 
 loop:
     set gen[1].32B, buf
     set gen[2].32B, LINE
     set gen[3].32B, s_prompt
     call zero.32B, io_getline
-    ld.zero gen[13].32B, buf            ; "q" : quit
+    IO_LDB(gen[13], zero, buf)          ; "q" : quit
     cmpi gen[13].32B, 'q'
     ijmp.zero zero.32B, parse
-    ld.zero gen[13].32B, buf+4
+    IO_LDB(gen[13], zero, buf+1)
     cmpi gen[13].32B, 0
     jmp.zero zero.32B, quit
 
@@ -109,7 +110,7 @@ parse:                                  ; gen[5] = pos, gen[6] = count
     set gen[5].32B, 0
     set gen[6].32B, DEFCOUNT
     call zero.32B, skip_ws
-    ld.gen[12] gen[13].32B, 0
+    IO_LDB(gen[13], gen[12], 0)
     cmpi gen[13].32B, 0
     jmp.zero zero.32B, run              ; empty : defaults
     call zero.32B, read_num
@@ -117,7 +118,7 @@ parse:                                  ; gen[5] = pos, gen[6] = count
     jmp.zero zero.32B, bad              ; no digit
     mov gen[5].32B, gen[0].32B
     call zero.32B, skip_ws
-    ld.gen[12] gen[13].32B, 0
+    IO_LDB(gen[13], gen[12], 0)
     cmpi gen[13].32B, 0
     jmp.zero zero.32B, run              ; no count
     call zero.32B, read_num
@@ -125,7 +126,7 @@ parse:                                  ; gen[5] = pos, gen[6] = count
     jmp.zero zero.32B, bad
     mov gen[6].32B, gen[0].32B
     call zero.32B, skip_ws
-    ld.gen[12] gen[13].32B, 0
+    IO_LDB(gen[13], gen[12], 0)
     cmpi gen[13].32B, 0
     ijmp.zero zero.32B, bad             ; junk after count
 
@@ -151,7 +152,7 @@ run:                                    ; gen[7] = n = pos + count
     cmpi gen[5].32B, 0                  ; "3." before position 0
     ijmp.zero zero.32B, run_go
     set gen[1].32B, s_three
-    call zero.32B, io_printlnb
+    call zero.32B, io_println
 run_go:                                 ; gen[9] = 4 * chunk, gen[10] = its x
     set gen[1].32B, 0
     call zero.32B, pi_frac
@@ -212,7 +213,7 @@ fin:
 
 bad:
     set gen[1].32B, s_err
-    call zero.32B, io_printlnb
+    call zero.32B, io_println
     jmp.one zero.32B, loop
 
 quit:
@@ -224,10 +225,10 @@ quit:
 
     ; skip spaces, destroys gen[13]
 skip_ws:
-    ld.gen[12] gen[13].32B, 0
+    IO_LDB(gen[13], gen[12], 0)
     cmpi gen[13].32B, ' '
     ijmp.zero zero.32B, skip_ws_end
-    addi gen[12].32B, 4
+    addi gen[12].32B, 1
     jmp.one zero.32B, skip_ws
 skip_ws_end:
     ret
@@ -238,7 +239,7 @@ read_num:
     set gen[0].32B, 0
     set gen[1].32B, 0
 read_num_lp:
-    ld.gen[12] gen[13].32B, 0
+    IO_LDB(gen[13], gen[12], 0)
     subi gen[13].32B, '0'
     cmpi gen[13].32B, 10                ; below '0' is negative here
     jmp.neg zero.32B, read_num_dg
@@ -247,7 +248,7 @@ read_num_dg:
     cmpi gen[13].32B, 0
     jmp.neg zero.32B, read_num_end      ; below '0'
     addi gen[1].32B, 1
-    addi gen[12].32B, 4
+    addi gen[12].32B, 1
     cmpi gen[0].32B, 0xFFFF
     ijmp.neg zero.32B, read_num_lp      ; already too big
     mov gen[15].32B, gen[0].32B         ; v = v*10 + c
@@ -460,7 +461,7 @@ put_dig:
     mov gen[1].32B, gen[6].32B          ; line label "index: "
     call zero.32B, io_printint
     set gen[1].32B, s_colon
-    call zero.32B, io_printb
+    call zero.32B, io_print
     set gen[13].32B, GROUP
     st.zero gen[13].32B, g_grp
     jmp.one zero.32B, pd_put
