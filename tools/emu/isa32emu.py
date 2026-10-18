@@ -17,9 +17,8 @@ ld / st use the register mode as the access width (circuit D_MD = mode):
   ld R.8H  : R[15:8] = byte      st R.8H  : byte = R[15:8]
 a partial ld keeps the other bits of R (measured on the circuit : ld .8L
 into 0xFFFFFFFF gives 0xFFFFFF22), so clear R first for a zero-extended
-byte. a partial st writes only its bytes. (the circuit currently drives
-D_MD = 0 for every store, so st .8L / .16L write 4 bytes there. that is
-a circuit bug; programs are written for the 1 / 2 byte store.)
+byte. a partial st writes only its bytes (measured on the circuit,
+2026-10-18).
 
 IO (addr >= IO_BASE) is word wide, any width : KEY_IN, KEY_V read,
 KEY_R / TERM_OUT store.
@@ -28,9 +27,9 @@ strict=True (default) makes flags valid only right after cmp/cmpi/test/testi;
 any other ALU op poisons them, so a branch that depends on flags left by
 add/shift/... raises instead of silently guessing the hardware behavior.
 Only register mode 32B is accepted, except ld / st (32B / 16L / 8L / 8H)
-and `set` with 32B / S16H / 16L. `set R.S16H` writes the upper half and
-keeps the lower half, and `set R.16L` writes the lower half and keeps the
-upper half, as measured on the circuit (selftest A).
+and `set`. `set` writes only the bits of its mode and keeps the others, as
+measured on the circuit: S16H = [31:16], 16L / S16L = [15:0],
+8L / S8L = [7:0], 8H / S8H = [15:8].
 
 Unsupported opcodes (carry ops, rotates, interrupts, ...) raise EmuError.
 
@@ -50,6 +49,9 @@ M32 = 0xFFFFFFFF
 
 # ld / st mode -> (size, shift in the register)
 ACCESS = {0: (4, 0), 1: (2, 0), 2: (1, 0), 3: (1, 8)}
+# set mode -> (shift, mask) of the bits it writes
+SET_FIELD = {1: (0, 0xFFFF), 2: (0, 0xFF), 3: (8, 0xFF),
+             4: (16, 0xFFFF), 5: (0, 0xFFFF), 6: (0, 0xFF), 7: (8, 0xFF)}
 
 
 class EmuError(Exception):
@@ -226,12 +228,9 @@ class CPU:
             rid, mode = a >> 3, a & 7
             if mode == 0:
                 self.wr(a, imm)
-            elif mode == 4:                    # S16H : upper half, keep lower
-                self.r[rid] = (self.r[rid] & 0xFFFF) | (imm << 16)
-            elif mode == 1:                    # 16L : lower half, keep upper
-                self.r[rid] = (self.r[rid] & 0xFFFF0000) | imm
-            else:
-                raise EmuError(f"set mode {mode} not supported at pc={self.pc:#x}")
+            else:                              # write the mode's bits, keep the rest
+                shift, mask = SET_FIELD[mode]
+                self.r[rid] = (self.r[rid] & ~(mask << shift) & M32) | ((imm & mask) << shift)
         elif op == 0x1C:
             self.wr(a, self.rd(b))
         elif op in (0x1D, 0x72):               # block, nop

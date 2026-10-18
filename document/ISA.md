@@ -1,7 +1,7 @@
 # ISA-32 명령어 집합 요약
 
 원본: `ISA-32.xlsx` ("Dumpling Industry's CPU-32 instruction set"). 이 문서는 그 시트를 읽기 쉽게 옮긴 요약입니다. **내용이 다르면 xlsx가 기준입니다.**
-어셈블리 문법(라벨, 식, 전처리기 등)은 `src/assembler-linker/SYNTAX.md`에 있습니다.
+어셈블리 문법(라벨, 식, 전처리기 등)은 `tools/SYNTAX.md`에 있습니다.
 마지막 절에 현재 어셈블러(`dasm`)의 구현과 시트가 다른 부분을 따로 정리했습니다.
 
 ## 1. 명령어 형식
@@ -13,6 +13,7 @@
 | opcode | 피연산자 1 | 피연산자 2 | 피연산자 3 |
 
 - 16비트 즉시값(`imm`, `off`)은 byte 2–3을 함께 씁니다.
+- 명령어는 32비트 word 하나이고 메모리에는 리틀엔디안으로 들어갑니다. word로 보면 byte 0(opcode)이 bit 31:24, byte 3이 bit 7:0입니다. 그래서 메모리 주소로는 opcode가 +3, byte 3이 +0에 있습니다.
 - `u.u`는 사용하지 않는 필드입니다.
 - 레지스터 피연산자는 1바이트로, `레지스터 id << 3 | 모드`입니다(2·3절).
 
@@ -28,7 +29,7 @@
 | 01–04 | `gen[1]`–`gen[4]` | GEN | arg (인자) |
 | 05–0C | `gen[5]`–`gen[12]` | GEN | callee-saved |
 | 0D–14 | `gen[13]`–`gen[20]` | GEN | caller-saved |
-| 15–18 | `gen[21]`–`gen[24]` | GEN | addr |
+| 15–18 | `gen[21]`–`gen[24]` | GEN | addr (base) |
 | 19 | `sbp` | GEN | sbp |
 | 1A | `zero` | CONST | 상수 0 |
 | 1B | `one` | CONST | 상수 1 |
@@ -46,7 +47,8 @@
 | ex-3 | `istack` |
 | ex-4 | `int-level` |
 | ex-5 | `p-base` |
-| ex-6 – ex-9 | 예약 (extra) |
+| ex-6 | `p-limit` |
+| ex-7 – ex-8 | 예약 |
 
 ## 3. 레지스터 모드
 
@@ -57,13 +59,20 @@
 | 2 | `8L` | 6 | `S8L` |
 | 3 | `8H` | 7 | `S8H` |
 
-- `set`에 쓸 때 회로에서 확인된 동작:
-  - `S16H`: 상위 16비트에 imm을 쓰고 하위 16비트는 유지합니다(selftest A: `set .32B 0x1234` → `set .S16H 0xABCD` = `ABCD1234`).
-  - `16L`: 하위 16비트에 imm을 쓰고 상위 16비트는 유지합니다(`S16H` → `16L` 순서로 `0x4000000`을 만드는 IO 코드가 동작함).
-  - TODO: `8L`/`8H`/`S16L`/`S8L`/`S8H`는 회로에서 확인하지 않았습니다. 해당 부분만 쓰고 나머지 비트는 유지할 것으로 예상하지만 확인이 필요합니다.
+- `set`은 모드에 해당하는 비트에만 imm을 쓰고 나머지 비트는 유지합니다. 2026-10-18에 회로에서 `0xFFFFFFFF`에 써서 확인했습니다.
+
+  | 모드 | 쓰는 비트 | 예 (`0xFFFFFFFF`에 `set`) |
+  |---|---|---|
+  | `32` | 31:0 | `set .32B 0x5A5A` → `00005A5A` |
+  | `S16H` | 31:16 | `set .S16H 0x2468` → `2468FFFF` |
+  | `16L`, `S16L` | 15:0 | `set .16L 0x1357` → `FFFF1357`, `set .S16L 0x5678` → `FFFF5678` |
+  | `8L`, `S8L` | 7:0 | `set .8L 0x12` → `FFFFFF12`, `set .S8L 0x9A` → `FFFFFF9A` |
+  | `8H`, `S8H` | 15:8 | `set .8H 0x34` → `FFFF34FF`, `set .S8H 0xBC` → `FFFFBCFF` |
+
+  - `set`에서는 `S16L`/`S8L`/`S8H`가 `16L`/`8L`/`8H`와 같게 동작합니다. 부호 확장은 하지 않습니다.
 - `ld`/`st`에서는 레지스터 모드가 메모리 접근 폭입니다(회로의 `D_MD` = 모드 하위 2비트). 메모리는 바이트 주소 + 리틀엔디안이고, 정렬되지 않은 주소도 됩니다. 2026-10-17에 회로에서 확인했습니다.
   - `ld R.32B` = word, `ld R.16L` = R[15:0]에 half, `ld R.8L` = R[7:0]에 byte, `ld R.8H` = R[15:8]에 byte. 부분 load는 나머지 비트를 **유지**합니다(`0xFFFFFFFF`에 `ld .8L` → `0xFFFFFF22`). 0으로 확장하려면 먼저 `set R.32B, 0`을 합니다.
-  - `st R.16L` / `st R.8L` / `st R.8H`는 R[15:0] / R[7:0] / R[15:8]을 그 폭만큼 쓰는 것이 의도입니다. **현재 회로는 store의 `D_MD`를 항상 0으로 내보내서, 모드로 뽑은 값을 0으로 확장해 4바이트를 씁니다**(`st .8L`이 뒤 3바이트를 0으로 덮어씀). 회로 수정이 필요합니다.
+  - `st R.16L` / `st R.8L` / `st R.8H`는 R[15:0] / R[7:0] / R[15:8]을 그 폭(2 / 1 / 1바이트)만큼만 씁니다. 처음에는 store의 `D_MD`가 항상 0이라 4바이트를 썼는데, 회로를 고친 뒤 2026-10-18에 다시 확인했습니다(`0xAAAAAAAA`에 `st .8L 0x34` at +1, `st .8H` at +3 → `12AA34AA`).
 
 ## 4. 플래그 (`flag` 레지스터)
 
@@ -102,10 +111,10 @@
 | 09 | `bori` | dest | imm | | dest \|= imm |
 | 0A | `bnd` | dest | src | u.u | dest &= src |
 | 0B | `bndi` | dest | imm | | dest &= imm |
-| 0C | `rol` | dest | src | u.u | dest = dest *rollright* src ※ |
-| 0D | `roli` | dest | imm | | dest = dest *rollright* imm ※ |
-| 0E | `ror` | dest | src | u.u | dest = dest *rollleft* src ※ |
-| 0F | `rori` | dest | imm | | dest = dest *rollleft* imm ※ |
+| 0C | `rol` | dest | src | u.u | dest = dest *rollleft* src |
+| 0D | `roli` | dest | imm | | dest = dest *rollleft* imm |
+| 0E | `ror` | dest | src | u.u | dest = dest *rollright* src |
+| 0F | `rori` | dest | imm | | dest = dest *rollright* imm |
 | 10 | `shiftl` | dest | src | u.u | dest <<= src |
 | 11 | `shiftlc` | dest | src | u.u | dest <<= src, flag[carry] |
 | 12 | `shiftli` | dest | imm | | dest <<= imm |
@@ -116,8 +125,6 @@
 | 17 | `cmpi` | src | imm | | src - imm으로 플래그 설정 |
 | 18 | `test` | src1 | src2 | u.u | src1 & src2로 플래그 설정 |
 | 19 | `testi` | src | imm | | src & imm으로 플래그 설정 |
-
-※ 시트에는 `rol`이 *rollright*, `ror`가 *rollleft*로 적혀 있습니다. 이름과 반대이므로 확인이 필요합니다.
 
 ### 레지스터 · 스택 · 메모리 (user)
 
@@ -176,17 +183,19 @@
 | 4 | 0x08 | L2 |
 | 5, 6 | 0x10, 0x20 | 미사용 |
 | 7 | 0x40 | all: 캐시 전체 |
-| 8 | 0x80 | md: flush / inval 선택 |
+| 8 | 0x80 | md: flush(1) / inval(0) |
 
 ## 6. 현재 어셈블러(`dasm`)와 다른 점
 
 2026-10-17에 어셈블러를 시트에 맞춤: `pctl` 7C + byte 3 en(1)/dis(0), `getabs` 7D, `flush`/`inval`은 `cache` 7E 하나(id의 md 비트 0x80: flush=1, inval=0), 캐시 id `all` 0x40, `atom` 7F 추가(`atom len`), `intervec` byte 1은 base 레지스터(`intervec R, m, d`).
 
+2026-10-18 시트에서 `md` 비트가 flush(1) / inval(0)으로 확정되어 어셈블러와 같아졌습니다. `rol` / `ror`도 시트에 이름대로(*rollleft* / *rollright*) 적혀 있습니다.
+
 남은 차이:
 
 | 항목 | 시트 | 어셈블러 |
 |---|---|---|
-| md 비트 방향 | `md: flush/inval`로만 적힘 | flush = 1, inval = 0으로 가정 |
 | 이름 | `jp` / `jpi` / `break` | `jmp` / `ijmp` / `brk` (기존 소스 호환을 위해 유지) |
-| `rol` / `ror` | 이름과 반대 방향으로 적힘 | opcode만 시트와 같음(0C–0F). 회로 확인 필요 |
+| 확장 레지스터 | ex-1 – ex-6 (`cpu-id` … `p-limit`) | `cpuid`(0) / `panicvec`(1) / `istack`(2)만 받음. `int-level` / `p-base` / `p-limit`은 아직 없음 |
+| `rol` / `ror` | *rollleft* / *rollright* | opcode만 시트와 같음(0C–0F). 회로와 에뮬레이터에서 아직 확인 안 함 |
 | 캐시 id | 비트 조합 가능 | 이름 하나만 받음 |
