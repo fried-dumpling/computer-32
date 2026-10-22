@@ -6661,44 +6661,6 @@
       <pos x="1540" y="1220"/>
     </visualElement>
     <visualElement>
-      <elementName>Tunnel</elementName>
-      <elementAttributes>
-        <entry>
-          <string>rotation</string>
-          <rotation rotation="2"/>
-        </entry>
-        <entry>
-          <string>NetName</string>
-          <string>E2</string>
-        </entry>
-      </elementAttributes>
-      <pos x="2960" y="2080"/>
-    </visualElement>
-    <visualElement>
-      <elementName>Demultiplexer</elementName>
-      <elementAttributes>
-        <entry>
-          <string>Selector Bits</string>
-          <int>5</int>
-        </entry>
-      </elementAttributes>
-      <pos x="2980" y="1760"/>
-    </visualElement>
-    <visualElement>
-      <elementName>Tunnel</elementName>
-      <elementAttributes>
-        <entry>
-          <string>rotation</string>
-          <rotation rotation="2"/>
-        </entry>
-        <entry>
-          <string>NetName</string>
-          <string>RW2_sel</string>
-        </entry>
-      </elementAttributes>
-      <pos x="2980" y="2420"/>
-    </visualElement>
-    <visualElement>
       <elementName>Splitter</elementName>
       <elementAttributes>
         <entry>
@@ -10603,10 +10565,6 @@
       <p2 x="1000" y="2080"/>
     </wire>
     <wire>
-      <p1 x="2960" y="2080"/>
-      <p2 x="2980" y="2080"/>
-    </wire>
-    <wire>
       <p1 x="4220" y="2080"/>
       <p2 x="4280" y="2080"/>
     </wire>
@@ -12377,10 +12335,6 @@
     <wire>
       <p1 x="2560" y="2420"/>
       <p2 x="2580" y="2420"/>
-    </wire>
-    <wire>
-      <p1 x="2980" y="2420"/>
-      <p2 x="3000" y="2420"/>
     </wire>
     <wire>
       <p1 x="4240" y="2420"/>
@@ -15509,10 +15463,6 @@
     <wire>
       <p1 x="2360" y="1620"/>
       <p2 x="2360" y="1640"/>
-    </wire>
-    <wire>
-      <p1 x="3000" y="2400"/>
-      <p2 x="3000" y="2420"/>
     </wire>
     <wire>
       <p1 x="4540" y="1380"/>
