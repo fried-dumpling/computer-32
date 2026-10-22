@@ -4,7 +4,7 @@ setlocal
 
 set SCRIPT_DIR=%~dp0
 set SRC=%SCRIPT_DIR%hexdump\hexdump.cpp
-set OUT=%SCRIPT_DIR%build\hexdump.exe
+set OUT=%SCRIPT_DIR%..\bin\hexdump.exe
 
 where g++ >nul 2>nul
 if errorlevel 1 (

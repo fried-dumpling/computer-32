@@ -22,7 +22,7 @@ PROG = os.path.normpath(os.path.join(HERE, ".."))
 sys.path.insert(0, os.path.join(PROG, "..", "tools", "emu"))
 from isa32emu import CPU  # noqa: E402
 
-TOOLS = os.path.normpath(os.path.join(PROG, "..", "tools", "bin"))
+TOOLS = os.path.normpath(os.path.join(PROG, "..", "bin"))
 ERR = "? pos [count]"
 
 

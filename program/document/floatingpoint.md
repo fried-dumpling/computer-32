@@ -82,7 +82,7 @@ python fp_test.py --quick        # 수 분
 python fp_test.py --seed 7       # 전체 (약 9,000건)
 ```
 
-- `../../tools/bin`의 dasm/dlnk로 `fp_harness.asm`와 `float.asm`를 임시 폴더에 빌드합니다.
+- `../../bin`의 dasm/dlnk로 `fp_harness.asm`와 `float.asm`를 임시 폴더에 빌드합니다.
 - harness의 mailbox(매직 `0x7E57F00D` 다음 word들)에 연산과 인자를 넣고 실행하고, 매번 `gen[5..12]` 보존과 스택 균형을 확인합니다.
 - 기준값: 사칙연산은 numpy float32와 비트 단위로 비교(NaN은 quiet bit만 확인), `str2f`는 `Fraction`으로 구한 정확한 반올림 값, `f2str`는 Python `'%.*g'`, 그리고 9자리 왕복.
 - **현재 결과 (2026-10-17)**: 에뮬레이터에서 ALL PASS(add/sub/mul/div 각 2,076건, str2f 446건(값과 끝 포인터), f2str 424건, 왕복).

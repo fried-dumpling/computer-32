@@ -4,7 +4,7 @@ setlocal
 
 set SCRIPT_DIR=%~dp0
 set SRC=%SCRIPT_DIR%assembler\main.cpp
-set OUT=%SCRIPT_DIR%build\assembler.exe
+set OUT=%SCRIPT_DIR%..\bin\dasm.exe
 
 where g++ >nul 2>nul
 if errorlevel 1 (
