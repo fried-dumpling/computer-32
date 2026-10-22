@@ -1,0 +1,111 @@
+#define IO_BASE 0x4000000
+#define KEY_IN 0
+#define KEY_V 4
+#define KEY_R 8
+#define TERM_OUT 12
+
+#define LISTSIZE 100
+#define BUFFSIZE 10
+#define STACKSIZE 100
+
+; <halt>
+#macro HALT 0
+##inf_loop:
+    jmp.one zero.32B, ##inf_loop
+#end
+
+; <block>
+#macro BLOCK 0
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+#end
+
+; <multiply>
+; out: #1 -> product
+; in:  #2 -> multiplicand
+; in:  #3 -> multiplier
+#macro MULT 3
+##mult_loop:
+    test #3.32B, one.32B
+    jmp.zero zero.32B, ##mult_skip
+    add #1.32B, #2.32B
+##mult_skip:
+    shiftri #3.32B, 1
+    shiftli #2.32B, 1
+    cmpi #3.32B, 0
+    ijmp.zero zero.32B, ##mult_loop
+#end
+    
+; <modulo>
+; out: #1 -> remainder
+; in:  #2 -> dividend
+; in:  #3 -> divisor
+; use: #4 -> tmp
+#macro MOD 4
+    set #1.S16H, 0x7FFF
+    set #1.16L, 0xFFFF
+    cmpi #3.32B, 0
+    mov #4.32B, #3.32B
+    jmp.zero zero.32B, ##mod_exit
+
+##mod_init:
+    cmp #3.32B, #1.32B
+    jmp.pos zero.32B, ##mod_main
+    cmp #3.32B, #2.32B
+    jmp.pos zero.32B, ##mod_main
+    shiftli #3.32B, 1
+    jmp.one zero.32B, ##mod_init
+    
+##mod_main:
+    shiftrc #3.32B, one.32B
+    mov #1.32B, #2.32B
+
+    st.zero #1.32B, F
+    st.zero #2.32B, G
+    st.zero #3.32B, H
+
+##mod_loop:
+    cmp #1.32B, #3.32B
+    jmp.neg zero.32B, ##mod_skip
+    sub #1.32B, #3.32B
+
+##mod_skip:
+    shiftri #3.32B, 1
+    cmp #4.32B, #3.32B
+    ijmp.pos zero.32B, ##mod_loop
+##mod_exit:
+#end
+
+.data
+    A: 4, 2             ; inA
+    B: 4, 2             ; inB
+    C: 4, 0xFFFFFFFF    ; aftA
+    D: 4, 0xFFFFFFFF    ; aftB
+    E: 4, 0xFFFFFFFF    ; ansC
+    F: 4, 0xFFFFFFFF    ; #1
+    G: 4, 0xFFFFFFFF    ; #2
+    H: 4, 0xfFFFFFFF    ; #3
+
+.text
+    ld.zero gen[1].32B, A
+    ld.zero gen[2].32B, B
+    MULT(gen[0], gen[1], gen[2])
+    st.zero gen[1].32B, C
+    st.zero gen[2].32B, D
+    st.zero gen[0].32B, E
+
+    HALT()
