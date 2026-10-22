@@ -1,0 +1,6 @@
+log/
+tools/build/
+**/.claude/settings.local.json
+__pycache__/
+*.o
+program/build/

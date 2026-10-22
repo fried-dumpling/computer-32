@@ -2,7 +2,7 @@
 
 usage: python fp_test.py [--quick] [--seed N]
 
-Builds fp_harness.asm and float.asm as two objects with tools/bin/dasm, links
+Builds fp_harness.asm and float.asm as two objects with bin/dasm, links
 them with dlnk, then for each case writes op/args into the harness mailbox, runs the
 program and compares the result bit-for-bit.
 """
@@ -22,7 +22,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "tools", "emu"))
 from isa32emu import CPU, EmuError, find_word, R_STACK  # noqa: E402
 
-TOOLS = os.path.normpath(os.path.join(HERE, "..", "..", "tools", "bin"))
+TOOLS = os.path.normpath(os.path.join(HERE, "..", "..", "bin"))
 MAGIC = 0x7E57F00D
 OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_S2F, OP_F2S = range(6)
 SENTINEL = [0x5A5A0000 + i for i in range(5, 13)]

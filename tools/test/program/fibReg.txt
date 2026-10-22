@@ -1,0 +1,10 @@
+.text
+    set gen[0].32B, 1
+    set gen[1].32B, 1
+
+loop:
+    mov gen[2].32B, gen[1].32B
+    add gen[2].32B, gen[0].32B
+    mov gen[1].32B, gen[0].32B
+    mov gen[0].32B, gen[2].32B
+    jmp.one zero.32B, loop

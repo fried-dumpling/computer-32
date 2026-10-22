@@ -1,5 +1,5 @@
 #define GR_BASE 0x8000000
-#define GR_SIZE (90*160*4)
+#define GR_SIZE (160*90*4)
 
 #macro LSET 2
     set #1.16L, (#2)&0xFFFF

@@ -1,0 +1,19 @@
+#define IO_BASE 0x4000000
+#define KEY_IN 0
+#define KEY_V 4
+#define TERMINAL_OUT 8
+
+.data
+
+
+.text
+    set gen[20].S16H, IO_BASE >> 16
+    set gen[20].16L, IO_BASE & 0xFFFF
+main_loop:  
+    ld.gen[20] gen[0].32B, KEY_V
+    cmp gen[0].32B, zero.32B
+    jmp.zero zero.32B, skip_out
+    ld.gen[20] gen[1].32B, KEY_IN
+    st.gen[20] gen[1].32B, TERMINAL_OUT
+skip_out:
+    jmp.one zero.32B, main_loop

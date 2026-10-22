@@ -15,7 +15,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "tools", "emu"))
 from isa32emu import CPU  # noqa: E402
 
-TOOLS = os.path.normpath(os.path.join(HERE, "..", "..", "tools", "bin"))
+TOOLS = os.path.normpath(os.path.join(HERE, "..", "..", "bin"))
 
 VALS = [0, 7, -1, 10, 1000000000, 2147483647, -2147483648, -123456789, 0x1234ABCD]
 # line 1: backspace and overflow (max 4 chars), line 2: backspace on empty + '\r'

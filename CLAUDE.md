@@ -10,11 +10,11 @@ Custom 32-bit out-of-order CPU based on the **ISA-32** instruction set architect
 
 ### Assembler
 
-Compiles ISA-32 assembly (`.txt`) to binary. Pre-built binary at `tools/bin/dasm.exe`.
+Compiles ISA-32 assembly (`.txt`) to binary. Pre-built binary at `bin/dasm.exe`.
 
 ```
-tools/bin/dasm.exe <input.txt> [-o <output.o>] [flags]
-tools/bin/dlnk.exe <input1.o> [input2.o ...] [-o <output.bin>] [-padbss] [-v]
+bin/dasm.exe <input.txt> [-o <output.o>] [flags]
+bin/dlnk.exe <input1.o> [input2.o ...] [-o <output.bin>] [-padbss] [-v]
 ```
 
 Debug flags (can combine):
@@ -28,7 +28,7 @@ Debug flags (can combine):
 ### Hexdump
 
 ```
-tools/bin/hexdump.exe <file.bin> [-width N] [-bundle N]
+bin/hexdump.exe <file.bin> [-width N] [-bundle N]
 ```
 
 Default width is 4 bytes per row. Useful for inspecting assembled output.
@@ -55,7 +55,7 @@ Strict by default:
 
 ### Rebuilding Tools
 
-Source is in `tools/assembler/`, `tools/linker/`, `tools/common/` (shared headers, included as `../common/`) and `tools/hexdump/` (C++), mirrored from `computer 32 (new)/src`. Compile with any C++17-compatible compiler. Entry points: `tools/assembler/main.cpp`, `tools/linker/main.cpp`. Full assembler/linker syntax reference: `tools/SYNTAX.md`. The lexer table is cached in `tools/bin/dasm_table.bin`; after changing lexer rules, bump the table version (or delete the file) so it is rebuilt.
+Source is in `tools/assembler/`, `tools/linker/`, `tools/common/` (shared headers, included as `../common/`) and `tools/hexdump/` (C++). This is the former `assembler-linker` repo, merged with its history (2026-10-22). Build with `tools/build-asm.cmd`, `build-lnk.cmd`, `build-hex.cmd` (MinGW `g++ -std=c++17`), which write `bin/dasm.exe`, `bin/dlnk.exe`, `bin/hexdump.exe`. Regression sources: `tools/test/program/`. Full assembler/linker syntax reference: `tools/SYNTAX.md`, CLI: `tools/CLI.md`. The lexer table is cached in `bin/dasm_table.bin`; after changing lexer rules, bump the table version (or delete the file) so it is rebuilt.
 
 ## ISA-32 Assembly Syntax
 
