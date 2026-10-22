@@ -1,0 +1,19 @@
+#macro HALT 0
+##loop:
+    jmp.one zero.32B, ##loop
+#end
+
+.data
+    A: 4, 0xB
+    B: 4, 0xC
+    C: 4, 0xD
+
+.text
+    set gen[0].32B, 0xA
+    st.zero gen[0].32B, A
+    ld.zero gen[1].32B, A
+    st.zero gen[1].32B, B
+    ld.zero gen[2].32B, B
+    st.zero gen[2].32B, C
+    ld.zero gen[3].32B, C
+    HALT()

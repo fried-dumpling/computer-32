@@ -1,0 +1,56 @@
+#include<float.hsm>
+
+.data
+t_magic: 4, 0x7E57F00D
+t_op:    4, 0
+t_a:     4, 0
+t_b:     4, 0
+t_c:     4, 0
+t_res:   4, 0
+t_str:   4*64, 0
+t_stk:   4*512, 0
+t_stkend:
+
+global _start
+.text
+_start:
+    set stack.32B, t_stkend
+    ld.zero gen[1].32B, t_a
+    ld.zero gen[2].32B, t_b
+    ld.zero gen[3].32B, t_c
+    ld.zero gen[4].32B, t_op
+    cmpi gen[4].32B, 0
+    jmp.zero zero.32B, do_add
+    cmpi gen[4].32B, 1
+    jmp.zero zero.32B, do_sub
+    cmpi gen[4].32B, 2
+    jmp.zero zero.32B, do_mul
+    cmpi gen[4].32B, 3
+    jmp.zero zero.32B, do_div
+    cmpi gen[4].32B, 4
+    jmp.zero zero.32B, do_s2f
+    jmp.one zero.32B, do_f2s
+do_add:
+    call zero.32B, fp_add
+    jmp.one zero.32B, done
+do_sub:
+    call zero.32B, fp_sub
+    jmp.one zero.32B, done
+do_mul:
+    call zero.32B, fp_mul
+    jmp.one zero.32B, done
+do_div:
+    call zero.32B, fp_div
+    jmp.one zero.32B, done
+do_s2f:
+    set gen[1].32B, t_str
+    call zero.32B, fp_str2f
+    st.zero gen[1].32B, t_c             ; end ptr
+    jmp.one zero.32B, done
+do_f2s:
+    set gen[2].32B, t_str
+    call zero.32B, fp_f2str
+done:
+    st.zero gen[0].32B, t_res
+    halt
+

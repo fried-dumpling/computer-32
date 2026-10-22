@@ -1,0 +1,23 @@
+.data
+    A: 4, 1
+    B: 4, 2
+
+.text
+    set gen[0].32B, 0xA
+    st.zero gen[0].32B, A
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    set gen[0].32B, 0xB
+    st.zero gen[0].32B, B
+loop:
+    jmp.one zero.32B, loop

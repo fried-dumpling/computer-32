@@ -1,0 +1,415 @@
+============== asm & lnk ===================
+assembler partialy finished?
+linker stack machine not ready
+
+<assembler>
+warning when using complex expression?
+
+work on
+#include
+#ifdef
+#ifndef
+
+<linker>
+-> read obj
+-> load identifier(label/const)
+-> combine sections
+-> expand bss
+-> order section type-
+-> calculate expressions
+-> locate/map variable
+
+=> if want? (do not impliment from the start)
+-> shrink longjmp/autojmp
+-> repeat from calc exp until no shrink
+
+-> combine binary
+-> output result
+
+============= computer ====================
+
+<ISA>
+remove NMI
+remove trap-flag
+rearrange ISA
+
+<interrupt>
+iret
+syscall
+-> masks aany other interrupt until IPU fetches it's interrupt
+
+interrupt problems:
+- simultanious interrupt accept & trap bug
+-> both can never run at the same time
+-> have to revert accept or cancel trap
+-> but trap is committed
+-> then revert accept?
+-> reverting accept is impossible
+-> then delay the acceptence in the pipeline
+== solution ==
+>> IPU promises to not change interrupt that it is sending right now until acceptance << important !
+
+- CPU
+-> accept internally: requires some delaying in the pipeline?
+-> if trap is committed: cancel 
+-> can check before executing since it checks if anything else is committed
+-> so we can check whether we are in the window of interrupt nonmask and trap committed by some latch
+
+
+
+## syscall
+-> mask int
+-> run trap
+
+- on commit
+-> unmask int
+
+## iret
+- 
+
+## interrupt
+
+- interrupt signal
+-> buffer signals on C_dt -> C_ct?
+-> check level
+-> if greater & !masked: run interrupt
+-> else: do not accept it
+
+- run interrupt
+-> set mask
+-> store level, addr etc
+-> flush
+-> halt-FDI
+-> wait for last commit
+
+- on last commit & store queue free
+-> get inst-id
+-> load into store queue
+-> jmp to vector
+-> free halt-FDI
+-> free int-mask
+
+- memory process
+-> push to ISC
+-> set inst to valid (store-buff does it)
+
+
+<IPU>
+prerequest interrupt
+order interrupt -> do not adjust current request?
+
+<MMU>
+we'll do it later...
+paging is hard
+
+============= fin?(fixed?) ===============
+
+
+<Memory Issues>
+FL_MEM: 1cycle long -> cause error of some kind...
+-> another random bug!!!
+
+random by what? -> another LD-buff SR-latch issue
+keyboard is inputted by a clocked ROM
+enable/disable is also clocked
+-> start/input is automatic/synced
+
+ld/st not going well
+-> rebuild queue
+-> done by using age matrix
+
+-> just use age matrix?
+% 4x1 on store buffer?
+% 4x2 on load buffer? or none?
+-> load buffer doesn't need strict order cause it's going to be consumed by cpu anyway
+
+store buffer -> on strict instruction order -> instruction order compare? on reserve age matrix?
+load buffer -> whatever it can: since it's not in order
+
+age matrix -> 1 if current is older 0 if not (cur id is set to 1 for convenience)
+
+if one id retires: set that id line to 1 for every module
+-> (except for new id if it comes in simultainously)
+
+if new id reserves: set module's every id except for cur to 0
+
+------ note very big problem on memory
+
+<RAW table>
+
+* invalid flush
+- 
+
+<call & ret>
+*call syncronizer
+-dispatch jmp & stack
+-sync commit
+
+*SCS rollback
+-add double encoder rollback mech
+
+*return sequencer
+-dispatch stack in ret mode
+-dispatch jmp when stack inst has finished
+
+% dispatch of jmp must happen 2 cycle after 
+% sending a busy sig to JPU -> JPU busy sig needed
+<- predictable timing
+
+JPU: call/ret/jmp/ijmp
+
+% or just use JPU's free time <- efficency go low
+
+# idea
+# why don't upgrade current dispatcher to uop-distpatcher?
+
+# idea selected
+% add another valid buffer to the dispatcher
+% making dispatcher accept 2 uop instruction
+
+- normal 1 uop disign use single mux double gate disign to reduce mux count
+
+
+<ALU & other FU(functional unit)>
+*add instruction validator circuit
+-it's placed near ALU for testing and i think it works
+
+%maybe i should add a fetch queue
+
+<Return Address Stack>
+4 module speculative RAS
+8 module architectual RAS
+
+<jmp function unit>
+- unit for calculating jmp address and condition
+
+% branch prediction may be also added in the future here
+
+<BTB & branch prediction>
+- size 16
+
+* datas
+- 2bit predictor (weak <- 0, 1, 2, 3 -> strong)
+- 12bit PC tag
+- 4bit index
+
+% when mispridicted:
+% insert current PC, target, predictor to BTB at index=PC[5:2]
+% insert tag=PC[17:6]
+
+>> JPU logic <<
+IF  (BTB-V && BTB-TAR == R-TAR) {
+	IF (R-J)
+		BTB-PRED++
+	ELSE
+		BTB-PRED--
+
+	IF (BTB-J != R-J)
+		FLUSH()
+
+	BTB-ST()
+} ELSE {
+	IF (R-J) {
+		BTB-OVERRIDE()
+		FLUSH()
+	} ELSE {
+		IF (BTB-J)
+			FLUSH()
+
+		BTB-PRED--
+	}
+	
+
+
+	BTB-ST()
+}
+>> end <<
+
+<flush & rollback>
+- happens when the spectulation of the CPU is wrong
+
+% store-buffer doesn't require flush logic because it only happens after commit
+
+* add wrong-speculation state
+- add wrong-speculation state to id-dispatcher
+
+% when the com1_inst has wrong-spec flag turned on:
+-> disable com2
+-> call flush and rollback with cur inst-id (cause it compare if it is >> greater << than parameter id)
+
+% ROB doesn't require a seperate compare and clear circuit
+% this is because when the id-generator's id rolls back, 
+% it will overwrite the previous ROB's data with correct ones eventually before the commit happens
+
+ * add flush mech
+- reset fetch/decode/issue valid-buffer
+- cancel every instruction that is after current called instruction from the CPU
+-> lot's of comparator
+
+* rollback
+- restore architectual state
+- fill speculative state buffer with architectual state
+
+% rollback and flush happens simultaneously
+% fetch valid-buffer turns on when PC is ready (1 cycle after rollback&flush)
+% the valid-buffer's own on signal buffer may add a 1cycle delay
+-> in that case just activate the buffer with rollback and flush
+
+<memory buffer>
+
+** current chores todo -->
+
+* merge address calculating unit
+- because load/store should happens less frequently than other inst, merge it's ACU
+
+* add memory offset calculation
+- add 5 to 3 compressor logic to lookahead to get memory offset into calculation
+
+* increase buffer size
+% when ACU is merged, st-buffer busy sig may block lda inst and the opposite also happens
+- so the store/load-buffer's size has to be increased to 6~8
+
+> impliment page:
+% the page calculation happens after the ld/st buffer
+- split physical / virtual address within the buffers
+
+<-- end
+
+* add LD, ST buffer
+- ld, st buffer for memory accessability checking and commit delay
+- add reading function to st buffer to forward stored data
+
+LD buff:
+info: addr, data, Avalid, Dvalid, inst-id
+
+when issue:
+allocate buffer fot the dispatched inst.
+
+loading addr (same struct as normal FU ld):
+lda addr to corresponding buffer.
+set Avalid flag to true
+
+loading data:
+lda data to corresponding buffer.
+set Vvalid flag to true
+
+%if buffer is Avalid:
+send the valid lda out to port in id order (using store-buffer's queue)
+
+% if buffer is Dvalid:
+send the valid lda out to ROB in id order (using store-buffer's queue)
+
+* each buffer holds:
+- addr: 32bit
+- data: 32bit
+- Avalid: addr is ready
+- Dvalid: data is ready
+- inst-id & epoch (for comp)
+
+ST buff:
+info: addr, data, inst id, valid bit.
+
+% valid bit means that it is a occupied space and has correct inst-id loaded
+% which happens at a dispatch cycle
+
+when issue:
+allocate memory for the dispatched inst.
+set the valid bit to one.
+
+- notice:
+dispatch only happens one at a time (for now at least)
+
+when reciving data/addr
+set selected set of register to data/addr
+two loading of data/addr set can happen simultaneously
+
+when committed:
+outputs correlating set of datas and remove it from the buffer	
+
+edge case:
+1: load / store gets pushed to buff at the same time
+
+<interrupt>
+* impliment interrupt to CPU
+- outer IPU needed
+
+<IPU>
+<MMU>
+<cache>
+<multi channel RAM>
+
+===================================================
+
+<commit history summary (dev branch, oldest -> newest)>
+
+1809f1c initial commit
+223ce18 feat: creating flush system
+2bb653c chore: file structure modification
+dcf7cad add flush logic to FU, store arbiter, id manager
+fc528fd feat: add clear util to LDB
+b387b50 feat: add branch logic
+238bc55 fix: cpu no2 partially works
+7e78a6e fix: fixing mem&stack
+6fde988 fix: fixing and fixing
+444ff61 fix: fixing id-gen
+5257f17 fix: temp fix on jmp
+5323b13 fix: fix id-generator
+3668f89 add initial readme
+689a6ef fix: fix JPU taking wrong branch
+8f7ce4b chore: last commit before call/ret overhaul
+bdbc0c8 feat: add push, working on ret
+d5848ec feat: more work on call/ret
+dd58123 feat, fix: more work on call/ret
+07ecbbd fix: more fix on ret
+a116394 feat: add stack flush mechanism
+748ee5d fix: found and fixing ret error
+3368760 fix: ret/call fix, and new error
+34e0e76 fix: cpu now works
+5893426 fix: fix branch commit issue, abother store issue detected
+f2d33a2 fix: phantom store issue fixed, memory buffer forwarding issue find
+ccd0a41 feat: testing block
+4d4de35 test: testing block and fixing add_terminal.txt
+9e4ea14 fix: trying to fix some issue
+ef27783 chore: backup commit
+266b98f fix: add_terminal.txt testing works
+4f2865a fix: register slicing error fixed
+48bdd24 fix: alu problem fixed
+3be1215 fix: fix memory flush problem
+59e713a chore: yes there is still a lot of problems
+69c485a feat: changing queue to age matrix
+24df657 feat: age matrix implimented but needs fixing
+8afa9ee docs: add CLAUDE.md and CLAUDE.ko.md for Claude Code guidance
+6b8b02b fix: memory probably works
+802179d chore: gcc vs msvc issues
+734c6a4 fix: fix parser closure comparator and hash-order dependency
+5c33449 fix: fixing more bugs
+5cc9284 test: finding the cause of an error
+d318db0 fix: fix ramdom loading bug
+da2d07e fix: somewhat fixed stall problem
+32db929 chore: some testing
+f628a96 chore: forgot to commit this
+80dae21 fix: cpu finally fixed!
+5b7e6ba feat: update cpu-32
+a2fee40 feat: add block, halt to cpu
+6d29756 feat: call with base, interrupt being implimented
+858bfda feat: interrupt systems being installed
+
+<summary>
+
+- 초기 단계 (1809f1c ~ dcf7cad): 초기 커밋, flush 시스템 최초 구현, 파일 구조 정리, FU/store-arbiter/id-manager에 flush 로직 추가.
+- 파이프라인 기본 구축 (fc528fd ~ b387b50): LDB(load buffer) clear 유틸 추가, branch 로직 추가.
+- CPU 2차 반복 및 초기 안정화 (238bc55 ~ 5323b13): cpu no2 부분 동작, 메모리/스택/id-generator/jmp 관련 반복적 버그 수정.
+- 문서/브랜치 기초 (3668f89): 초기 readme 추가.
+- call/ret 전면 개편 (689a6ef ~ 3368760): JPU 오분기 수정, call/ret 오버홀 전 체크포인트, push 추가, call/ret 반복 작업, stack flush 메커니즘 추가, ret 오류 추적 및 수정.
+- CPU 동작 확인 및 메모리/스토어 이슈 (34e0e76 ~ f2d33a2): cpu가 일단 동작하기 시작, branch commit 이슈 및 phantom store 이슈 발견/수정, 메모리 버퍼 forwarding 이슈 발견.
+- block 명령 테스트 및 레지스터 버그 (ccd0a41 ~ 4f2865a): block 테스트, add_terminal.txt 테스트 프로그램으로 검증, 레지스터 슬라이싱 오류 수정.
+- 대형 안정화 구간 (48bdd24 ~ 59e713a): ALU/메모리 flush 문제 수정, "아직 문제 많음" 자평 커밋.
+- 큐 -> age matrix 전환 (69c485a ~ 24df657): load/store buffer의 ordering을 queue 방식에서 age matrix 방식으로 변경 시작 (todo.txt에 기록된 것처럼 아직 수정 필요한 상태로 커밋).
+- 문서화 (8afa9ee): Claude Code용 CLAUDE.md / CLAUDE.ko.md 추가.
+- 빌드 환경 및 파서 버그 (6b8b02b ~ 734c6a4): 메모리 동작 재확인, gcc/msvc 차이로 인한 문제, 어셈블러 파서의 closure 비교자 및 hash-order 의존성 버그 수정.
+- 반복적 버그 수정 구간 (5c33449 ~ da2d07e): 다수의 버그 수정, 에러 원인 추적용 테스트 커밋, 랜덤 로딩 버그 수정, stall 문제 일부 수정.
+- 커밋 정리 (32db929, f628a96): 테스트 커밋, 누락된 커밋 반영.
+- CPU 수정 완료 선언 및 확장 (80dae21 ~ 5b7e6ba): "cpu finally fixed!" 선언, cpu-32 업데이트.
+- 신규 기능: block/halt, call-with-base, interrupt (a2fee40 ~ 858bfda, 최신): block/halt 명령 추가, call 명령에 base 레지스터 겸용 기능 추가, interrupt 지원 구현 시작, interrupt 시스템 설치 진행 중 (현재 dev 브랜치 HEAD 상태, 아직 작업 중).
+
+</summary>

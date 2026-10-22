@@ -1,0 +1,47 @@
+#define dataA1 3
+#define dataB1 5
+#define dataA2 3
+#define dataB2 3
+
+; <multiply>
+; #1 -> out: result
+; #2 -> in: multiplicand
+; #3 -> in: multiplier
+#macro multiply 3
+##mult_loop:
+    test #3, one.32B
+    jmp.zero zero.32B, ##mult_skip
+    add #1, #2
+##mult_skip:
+    shiftri #3, 1
+    shiftli #2, 1
+    cmp #3, zero.32B
+    ijmp.zero zero.32B, ##mult_loop
+#end
+
+#macro lda 0
+    ld.zero gen[1].32B, A1
+    ld.zero gen[2].32B, B1
+    ld.zero gen[4].32B, A2
+    ld.zero gen[5].32B, B2
+#end
+
+#macro str 0
+    st.zero gen[0].32B, C1
+    st.zero gen[3].32B, C2
+#end
+
+.data
+    A1: 4, dataA1
+    B1: 4, dataB1
+    A2: 4, dataA2
+    B2: 4, dataB2
+    C1: 4, 0
+    C2: 4, 0
+
+.text
+    lda()
+    multiply(gen[0].32B, gen[1].32B, gen[2].32B)
+    multiply(gen[3].32B, gen[4].32B, gen[5].32B)
+    str()
+    halt
