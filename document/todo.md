@@ -8,7 +8,7 @@
 
 | 영역 | 상태 | 비고 |
 |---|---|---|
-| 어셈블러 | 거의 완료 | `#include`, `#ifdef`, `#ifndef` 구현됨 (`tools/SYNTAX.md` §include/ifdef). 확장 레지스터 ex-1 – ex-6 전부 지원 |
+| 어셈블러 | 거의 완료 | `#include`, `#ifdef`, `#ifndef` 구현됨 (`document/SYNTAX.md` §include/ifdef). 확장 레지스터 ex-1 – ex-6 전부 지원 |
 | 링커 | 동작 | 다중 오브젝트 링크, 8바이트 헤더 / `-raw` / `-start`. jmp 축소 최적화는 미구현 (선택 사항) |
 | ISA 정리 | 대부분 완료 (?) | `ISA.md`, `assembler.hpp`에 NMI / trap-flag 흔적 없음 |
 | 인터럽트 | 진행 중 | `syscall`/`iret`/`intervec`/`interpri`/`ldexp`/`stexp`, `ROB-INT.dig` 배선 중 |
@@ -17,6 +17,7 @@
 | 외부 RAM / ROM, boot-sequence | 동작 | boot ROM → 외부 ROM의 프로그램을 RAM으로 복사 → 실행. add_terminal, io_harness, calc, picalc 회로에서 통과 (2026-10-18) |
 | forwarding / PC-mux | 목표 설정 | 아래 "다음 목표" 참고 |
 | IPU / MMU / cache / 멀티채널 RAM | 미착수 | |
+| Git / 저장소 | 진행 중 | assembler-linker를 `tools/`로 병합 완료, 문서·중복·원격 보관 남음 (아래 "다음 목표" 5) |
 
 ---
 
@@ -30,6 +31,7 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 - [ ] flush 시 forwarding 경로의 결과 무효화 (wrong-spec id보다 큰 결과 무시)
 - [ ] 완료 기준: add_terminal / calc가 그대로 동작하고, 의존 명령 연속 실행 시 사이클 수 감소 확인
   - 기준값 (2026-10-18, headless sim): calc 4줄 147,564 명령 / 약 39만 사이클, picalc `0 20` 191,829 명령 / 약 57만 사이클 (IPC 약 0.35~0.38)
+- [ ] `forward-test` 브랜치(WIP)는 부트 ROM 실행 중 PC `0xFFFFFF3C`에서 commit 4개 뒤 멈춤 (dsim은 클럭 DipSwitch가 옮겨져 `-Ddip=-560,-1640` 필요). TRAP·exld/st·flush-mux 등은 dev로 가져왔으므로 남은 건 RS / inst-wfile / ROB / load-buffer `ep_O` / data-select-1(H)
 
 ### 2. PC-mux 최적화
 - [ ] 현재 next-PC 소스 정리: PC+4, BTB 예측 target, RAS(ret), JPU 오예측 수정 target, flush/rollback PC, 인터럽트 벡터, (boot reset vector)
@@ -50,13 +52,36 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 - [ ] `rol`/`ror` 회로 동작 확인 (시트: `rol` = rollleft, `ror` = rollright), 에뮬레이터에 추가
 - [ ] floatingpoint 테스트(`fp_test.py`)는 에뮬레이터 전용 — 회로에서 돌릴 방법 검토 (calc로 간접 확인만 됨)
 
+### 5. Git / 저장소 정리
+`assembler-linker` 리포(`computer 32 (new)/src`)를 히스토리째 `tools/`로 합침(2026-10-22, f288c44). exe는 `bin/`, `log/`·`tools/build/`는 git에서 제외. dev·forward-test push 완료.
+- [ ] `tools/test/program` 중복 정리: `program/archive/`와 겹침. 내용이 다른 파일 `add_terminal.txt`, `fibonacci_raw.txt`, `graphic.txt`는 최신 쪽을 정하고, `run.txt`(src에만 있음)는 남길지 결정
+- [x] `tools/CLAUDE.md`(src 작업 기록) 정리: 유효한 내용은 `document/toolchain.md`(내부 구조·작업 규칙)와 루트 `CLAUDE.md`로 옮기고 삭제 (2026-10-23)
+- [x] `tools/todo.md`, `tools/BUGS.md`: 남은 항목은 아래 "부속별 정리 1. 어셈블러 / 링커"로 옮기고 삭제 (BUGS 3건은 전부 수정된 상태였음) (2026-10-23)
+- [x] `tools/README.md`, `tools/CLI.md`: CLI.md의 구현 규칙은 `document/toolchain.md` 5절로, `SYNTAX.md`는 `document/SYNTAX.md`로 이동, README 삭제 (2026-10-23)
+- [ ] `assembler-linker` 원격: 원본 `src` README에 "computer-32 리포의 `tools/`로 이전됨" 적고 push → `gh repo archive fried-dumpling/assembler-linker`
+- [ ] 레포 밖 정리: 상위 `computer 32 (new)/bin`(옛 dasm) 삭제, `src/` 폴더는 `archive/`로 이동
+- [ ] `fix/parser-comparator`: 로컬이 origin보다 1커밋 앞섬(dev에는 이미 포함) — push 또는 삭제
+- [ ] (선택) `log/` 히스토리 제거: 작업 폴더에선 111MB지만 압축돼 사본에서 지워 봐도 pack 크기가 거의 그대로였음. 히스토리 재작성 + force push가 필요해 보류
+
 ---
 
 ## 부속별 정리
 
 ### 1. 어셈블러 / 링커
 
+내부 구조와 작업 규칙: `document/toolchain.md`.
+
 - [ ] 복잡한 수식 사용 시 warning 출력?
+- [ ] `-align [byte]` 플래그로 word 정렬 (값 생략 시 4바이트, `-align=8` 형식만 허용, 2의 거듭제곱만)
+  - linker: 섹션 조각과 text/data/bss 그룹의 시작 주소를 맞추고, 그 사이는 0으로 채움
+  - assembler: 크기가 4의 배수가 아닌 allocate 뒤의 데이터/라벨을 맞춤
+  - `iotools::Terminal`에 값 생략 옵션 파싱 추가 필요
+- [ ] 데이터 배치 한계: 4바이트보다 큰 allocate에 재배치 값이 들어가면 첫 워드만 패치됨, 크기가 4의 배수가 아니면 뒤 데이터가 정렬되지 않음
+- [ ] 중첩 `#include`의 경로 기준이 항상 최초 입력 파일의 디렉터리 (`PreprocData::fileName`이 갱신되지 않음)
+- [ ] `gen[n]` 인덱스 범위 검사 없음 (25 이상이면 특수 레지스터 id와 겹침)
+- [ ] global/extern 오류 메시지의 토큰이 이름이 아니라 키워드로 표시됨
+- [ ] ISA 남은 확인 (`ISA.md` 6절): 캐시 md 비트 방향(flush=1로 가정), `jp`/`jpi`/`break` 이름 (라벨 충돌 위험으로 별칭 보류). `rol`/`ror`는 위 "다음 목표" 4
+- [ ] (보류) LALR 파서가 테이블 충돌을 조용히 묻음 — `branch`, `factorial_norec`, `prime_old`(`program/archive`) parse 실패, 잘못된 소스가 엉뚱한 위치에서 실패
 
 선택 사항 (처음부터 구현하지 않기로 함):
 - [ ] 링커 longjmp / autojmp 축소
@@ -77,6 +102,17 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 - [ ] CLR priority 정리
 - JPU / MEM-FL > ERR(TRAP) > INT
    
+##### TRAP 재구성 후속 (2026-10-23, forward-test에서 가져옴)
+forward-test의 TRAP 처리, exld/st 디코드(BLOCK·UMM 추가), `Fl_INT` → com1, `flush-mux`(trap 입력 제거, `clr_sel` 4비트), `id-manager-debug`, `regFile4`를 dev로 가져옴. 이전 회로는 `components/flush-mux-old.dig`, `components/trap-ref-old.dig`(dev 508f47c의 TRAP 블록).
+- [ ] **trap/halt 뒤 명령이 지워지지 않음**: 예전엔 trap이 디코드되면 flush-mux의 trap 입력(`clr_sel`=8)이 뒤 명령을 flush했는데, 이 경로를 없애고 대체 로직이 없음
+  - dsim: `A 출력; halt; B 출력`이 dev는 `A`, 지금은 `AB`. `test/selftest`의 Y(halt) 뒤 "출력되면 안 되는" `!`가 출력됨
+  - `syscall`도 같은 경로라 뒤 명령이 실행될 것으로 보임 (테스트 프로그램 없음)
+  - halt가 이전 분기보다 먼저 실행되는 문제(CLAUDE.md "Known circuit problems")와 같이 정리
+- [ ] `id-manager-debug` ECLR 우선순위: 두 commit 슬롯 모두 에러면 com2를 고르고 com1 commit을 막음 (dev는 com1 우선). 의도 확인
+- [ ] `Fl_INT`가 com1 기준으로 바뀜 — 인터럽트 flush id/ep가 맞는지 확인
+- [ ] (dev에서도 있던 문제) `test/selftest`가 Y(halt)에서 `end` 뒤 `00000035`를 출력하고 재시작함
+- [ ] syscall / iret / trap 회귀 테스트 프로그램 작성
+
 ##### 문제: 인터럽트 수락과 trap이 동시에 발생
 - 둘은 동시에 실행될 수 없음 → 수락을 되돌리거나 trap을 취소해야 함
 - 그런데 trap은 이미 commit됨 → 수락을 되돌려야 하는데, 수락 되돌리기는 불가능

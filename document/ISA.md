@@ -1,7 +1,7 @@
 # ISA-32 명령어 집합 요약
 
 원본: `ISA-32.xlsx` ("Dumpling Industry's CPU-32 instruction set"). 이 문서는 그 시트를 읽기 쉽게 옮긴 요약입니다. **내용이 다르면 xlsx가 기준입니다.**
-어셈블리 문법(라벨, 식, 전처리기 등)은 `tools/SYNTAX.md`에 있습니다.
+어셈블리 문법(라벨, 식, 전처리기 등)은 `document/SYNTAX.md`에 있습니다.
 마지막 절에 현재 어셈블러(`dasm`)의 구현과 시트가 다른 부분을 따로 정리했습니다.
 
 ## 1. 명령어 형식

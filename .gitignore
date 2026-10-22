@@ -4,3 +4,4 @@ tools/build/
 __pycache__/
 *.o
 program/build/
+tools/hexdump/*.exe

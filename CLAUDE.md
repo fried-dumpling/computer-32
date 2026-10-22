@@ -55,7 +55,7 @@ Strict by default:
 
 ### Rebuilding Tools
 
-Source is in `tools/assembler/`, `tools/linker/`, `tools/common/` (shared headers, included as `../common/`) and `tools/hexdump/` (C++). This is the former `assembler-linker` repo, merged with its history (2026-10-22). Build with `tools/build-asm.cmd`, `build-lnk.cmd`, `build-hex.cmd` (MinGW `g++ -std=c++17`), which write `bin/dasm.exe`, `bin/dlnk.exe`, `bin/hexdump.exe`. Regression sources: `tools/test/program/`. Full assembler/linker syntax reference: `tools/SYNTAX.md`, CLI: `tools/CLI.md`. The lexer table is cached in `bin/dasm_table.bin`; after changing lexer rules, bump the table version (or delete the file) so it is rebuilt.
+Source is in `tools/assembler/`, `tools/linker/`, `tools/common/` (shared headers, included as `../common/`) and `tools/hexdump/` (C++). This is the former `assembler-linker` repo, merged with its history (2026-10-22). Build with `tools/build-asm.cmd`, `build-lnk.cmd`, `build-hex.cmd` (MinGW `g++ -std=c++17`), which write `bin/dasm.exe`, `bin/dlnk.exe`, `bin/hexdump.exe`. Run the build scripts from PowerShell (git-bash `cmd //c` mangles the quoting). Old regression sources: `program/archive/*.txt`. Full assembler/linker syntax, CLI options and error messages: `document/SYNTAX.md`. Internals (pipelines, object format, relocation, name mangling, CLI conventions, known limits, working rules): `document/toolchain.md`. The parser table is cached in `bin/dasm_table.bin`; after changing lexer rules, grammar or the token/AST enums, bump `version` in `assembler.hpp` (`cache` namespace) so it is rebuilt — a stale table silently runs the old grammar. When the grammar, encoding or options change, update `document/SYNTAX.md` too. Building and checking is fine without asking; replacing `bin/` executables and committing only on request.
 
 ## ISA-32 Assembly Syntax
 
@@ -173,7 +173,7 @@ Opcode table is in `tools/assembler/assembler.hpp` (`instructionBase` map).
 
 ## Programs (`program/`)
 
-Instruction semantics, flags and ABI: `document/ISA.md`. Assembler syntax: `tools/SYNTAX.md`. Build and usage for each program/library: **`program/document/<name>.md`** (`floatingpoint`, `io`, `calc`, `picalc`, `test`). Keep those up to date instead of adding CLAUDE.md files under `program/`.
+Instruction semantics, flags and ABI: `document/ISA.md`. Assembler syntax: `document/SYNTAX.md`. Build and usage for each program/library: **`program/document/<name>.md`** (`floatingpoint`, `io`, `calc`, `picalc`, `test`). Keep those up to date instead of adding CLAUDE.md files under `program/`.
 
 | Dir | Contents |
 |---|---|

@@ -1,7 +1,0 @@
-.data
-    num: 4, 12   ; input number
-    out: 4, 0   ; output number
-
-.text
-    ld.zero gen[1].32B  ; gen[1] = input
-    

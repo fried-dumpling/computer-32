@@ -130,7 +130,7 @@ namespace iotools {
 		return errPosGenerator(std::to_string(line));
 	}
 
-	// Shared terminal conventions for dasm / dlnk / hexdump (see CLI.md):
+	// Shared terminal conventions for dasm / dlnk / hexdump (see document/toolchain.md section 5):
 	// stdout carries only requested output, stderr carries diagnostics,
 	// exit codes are EXIT_OK / EXIT_FAIL / EXIT_USAGE.
 	// Errors every tool can hit (command line, file IO) are built here; errors specific to
