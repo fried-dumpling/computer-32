@@ -59,7 +59,7 @@ namespace assembler {
 			flush, inval,
 			atom,
 
-			cpuid, panicvec, istack, intlevel, pagebase,
+			cpuid, panicvec, istack, intlevel, pagebase, plimit,
 			enable, disable,
 			L1D, L1I, TLB, L2, ALL,
 
@@ -189,6 +189,9 @@ namespace assembler {
 				{ "cpuid", TokenType::cpuid },
 				{ "intlevel", TokenType::intlevel },
 				{ "pagebase", TokenType::pagebase },
+				{ "pbase", TokenType::pagebase },
+				{ "plimit", TokenType::plimit },
+				{ "pagelimit", TokenType::plimit },
 				{ "enable", TokenType::enable },
 				{ "disable", TokenType::disable },
 				{ "L1D", TokenType::L1D },
@@ -360,6 +363,7 @@ namespace assembler {
 			{ TokenType::cpuid, "cpuid" },
 			{ TokenType::intlevel, "intlevel" },
 			{ TokenType::pagebase, "pagebase" },
+			{ TokenType::plimit, "plimit" },
 			{ TokenType::enable, "enable" },
 			{ TokenType::disable, "disable" },
 			{ TokenType::L1D, "L1D" },
@@ -1494,6 +1498,7 @@ namespace assembler {
 			{ { NT::reg_ex, AT::reg_ex, -1}, { { TT::cpuid, true, false } } },
 			{ { NT::reg_ex, AT::reg_ex, -1}, { { TT::intlevel, true, false } } },
 			{ { NT::reg_ex, AT::reg_ex, -1}, { { TT::pagebase, true, false } } },
+			{ { NT::reg_ex, AT::reg_ex, -1}, { { TT::plimit, true, false } } },
 
 			{ { NT::ctlid, AT::ctlid, -1 }, { { TT::enable, true, false } } },
 			{ { NT::ctlid, AT::ctlid, -1 }, { { TT::disable, true, false } } },
@@ -1503,6 +1508,12 @@ namespace assembler {
 			{ { NT::cacheid, AT::cacheid, -1 }, { { TT::TLB, true, false } } },
 			{ { NT::cacheid, AT::cacheid, -1 }, { { TT::L1D, true, false } } },
 			{ { NT::cacheid, AT::cacheid, -1 }, { { TT::L1I, true, false } } },
+			// combined ids (L1I | L1D): children are the id tokens, OR-ed in evaluateCode
+			{ { NT::cacheid, AT::cacheid, -1 }, { { NT::cacheid, true, true }, { TT::verticalbar, false, false }, { TT::ALL, true, false } } },
+			{ { NT::cacheid, AT::cacheid, -1 }, { { NT::cacheid, true, true }, { TT::verticalbar, false, false }, { TT::L2, true, false } } },
+			{ { NT::cacheid, AT::cacheid, -1 }, { { NT::cacheid, true, true }, { TT::verticalbar, false, false }, { TT::TLB, true, false } } },
+			{ { NT::cacheid, AT::cacheid, -1 }, { { NT::cacheid, true, true }, { TT::verticalbar, false, false }, { TT::L1D, true, false } } },
+			{ { NT::cacheid, AT::cacheid, -1 }, { { NT::cacheid, true, true }, { TT::verticalbar, false, false }, { TT::L1I, true, false } } },
 
 			{ { NT::reg, AT::reg, 0 }, { { NT::regid, true, false }, { TT::dot, false, false }, { NT::regmode, true, false } } },
 
@@ -2072,7 +2083,8 @@ namespace assembler {
 				{ TokenType::panicvec, 0x1 },
 				{ TokenType::istack, 0x2 },
 				{ TokenType::intlevel, 0x3 },
-				{ TokenType::pagebase, 0x4 }
+				{ TokenType::pagebase, 0x4 },
+				{ TokenType::plimit, 0x5 }
 			};
 
 			std::map<TokenType, u32> regBase = {
@@ -2781,7 +2793,9 @@ namespace assembler {
 					data->instructionValue[cur].data = ctlBase[(TokenType)cur->child[0]->type];
 					break;
 				case (u64)ASTNodeType::cacheid + (u64)TokenType::__end:
-					data->instructionValue[cur].data = cacheBase[(TokenType)cur->child[0]->type];
+					data->instructionValue[cur].data = 0;
+					for (auto it = cur->child.cbegin(); it != cur->child.cend(); it++)
+						data->instructionValue[cur].data |= cacheBase[(TokenType)(*it)->type];
 					break;
 
 				case (u64)ASTNodeType::immidate16 + (u64)TokenType::__end: {
@@ -2996,7 +3010,7 @@ namespace assembler {
 		}
 	}
 
-	const unsigned long long version = 414;
+	const unsigned long long version = 415;
 
 	namespace cache {
 		using u64 = unsigned __int64;

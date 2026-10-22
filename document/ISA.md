@@ -48,7 +48,7 @@
 | ex-4 | `int-level` |
 | ex-5 | `p-base` |
 | ex-6 | `p-limit` |
-| ex-7 – ex-8 | 예약 |
+| ex-7 – ex-12 | 예약 |
 
 ## 3. 레지스터 모드
 
@@ -86,10 +86,8 @@
 | 05 | `overflow` | out |
 | 06 | `one` | const (항상 1) |
 | 07 | `gen` | in, out |
-| 08 | `pc.ov` | out |
-| 09 | `sc.ov` | out |
-| 0A–0F | `gen1[0..5]` | in, out |
-| 10–1F | `gen2[0..15]` | in, out |
+| 08–0D | `gen1[0..5]` | in, out |
+| 0E–1D | `gen2[0..15]` | in, out |
 
 분기 명령의 조건 필드는 3비트라서 bit 00–07만 조건으로 쓸 수 있습니다.
 
@@ -189,6 +187,8 @@
 
 2026-10-17에 어셈블러를 시트에 맞춤: `pctl` 7C + byte 3 en(1)/dis(0), `getabs` 7D, `flush`/`inval`은 `cache` 7E 하나(id의 md 비트 0x80: flush=1, inval=0), 캐시 id `all` 0x40, `atom` 7F 추가(`atom len`), `intervec` byte 1은 base 레지스터(`intervec R, m, d`).
 
+2026-10-18 어셈블러에 확장 레지스터 `p-limit`(id 5, `plimit`)과 `p-base` 별칭 `pbase`를 추가하고, 캐시 id를 `L1I | L1D`처럼 비트 조합으로 받게 했습니다.
+
 2026-10-18 시트에서 `md` 비트가 flush(1) / inval(0)으로 확정되어 어셈블러와 같아졌습니다. `rol` / `ror`도 시트에 이름대로(*rollleft* / *rollright*) 적혀 있습니다.
 
 남은 차이:
@@ -196,6 +196,5 @@
 | 항목 | 시트 | 어셈블러 |
 |---|---|---|
 | 이름 | `jp` / `jpi` / `break` | `jmp` / `ijmp` / `brk` (기존 소스 호환을 위해 유지) |
-| 확장 레지스터 | ex-1 – ex-6 (`cpu-id` … `p-limit`) | `cpuid`(0) / `panicvec`(1) / `istack`(2)만 받음. `int-level` / `p-base` / `p-limit`은 아직 없음 |
+| 확장 레지스터 이름 | `cpu-id` / `panic-vec` / `int-level` / `p-base` / `p-limit` | `cpuid` / `panicvec` / `intlevel` / `pagebase`(`pbase`) / `plimit`(`pagelimit`). `-`는 빼기 연산자라 이름에 못 씀. id는 ex-n → n-1(0~5)로 같음 |
 | `rol` / `ror` | *rollleft* / *rollright* | opcode만 시트와 같음(0C–0F). 회로와 에뮬레이터에서 아직 확인 안 함 |
-| 캐시 id | 비트 조합 가능 | 이름 하나만 받음 |

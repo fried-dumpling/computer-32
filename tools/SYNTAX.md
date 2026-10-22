@@ -264,13 +264,18 @@ msg: 8, "Hi\n\0"            ; 48 69 0A 00 00 00 00 00
 
 `ldexp`/`stexp`의 `<ex>`와 `flush`/`inval`의 `<cache>` 값:
 
-| `<ex>` | 값 | `<cache>` | 값 |
-|---|---|---|---|
-| `cpuid` | 0 | `L1I` | 0x01 |
-| `panicvec` | 1 | `L1D` | 0x02 |
-| `istack` | 2 | `TLB` | 0x04 |
-| `intlevel` | 3 | `L2` | 0x08 |
-| `pagebase` | 4 | `ALL` | 0x40 |
+| `<ex>` | ISA 이름 | 값 | `<cache>` | 값 |
+|---|---|---|---|---|
+| `cpuid` | ex-1 `cpu-id` | 0 | `L1I` | 0x01 |
+| `panicvec` | ex-2 `panic-vec` | 1 | `L1D` | 0x02 |
+| `istack` | ex-3 `istack` | 2 | `TLB` | 0x04 |
+| `intlevel` | ex-4 `int-level` | 3 | `L2` | 0x08 |
+| `pagebase`, `pbase` | ex-5 `p-base` | 4 | `ALL` | 0x40 |
+| `plimit`, `pagelimit` | ex-6 `p-limit` | 5 | | |
+
+ex-7 – ex-12(값 6~11)는 예약이라 이름이 없습니다.
+
+`<cache>`는 `|`로 여러 개를 합칠 수 있습니다: `inval R, 0, L1I | L1D`(id 0x03). 각 이름은 한 번에 하나씩만 쓰는 비트이고, 같은 이름을 두 번 써도 오류는 아닙니다.
 
 ### 예약어
 

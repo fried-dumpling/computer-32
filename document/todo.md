@@ -8,7 +8,7 @@
 
 | 영역 | 상태 | 비고 |
 |---|---|---|
-| 어셈블러 | 거의 완료 | `#include`, `#ifdef`, `#ifndef` 구현됨 (`tools/SYNTAX.md` §include/ifdef). 확장 레지스터 일부 미지원 |
+| 어셈블러 | 거의 완료 | `#include`, `#ifdef`, `#ifndef` 구현됨 (`tools/SYNTAX.md` §include/ifdef). 확장 레지스터 ex-1 – ex-6 전부 지원 |
 | 링커 | 동작 | 다중 오브젝트 링크, 8바이트 헤더 / `-raw` / `-start`. jmp 축소 최적화는 미구현 (선택 사항) |
 | ISA 정리 | 대부분 완료 (?) | `ISA.md`, `assembler.hpp`에 NMI / trap-flag 흔적 없음 |
 | 인터럽트 | 진행 중 | `syscall`/`iret`/`intervec`/`interpri`/`ldexp`/`stexp`, `ROB-INT.dig` 배선 중 |
@@ -46,7 +46,7 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
     - [ ] 머리 주석의 `org 0x3FFFFF` 정리
 
 ### 4. ISA ↔ 툴 맞추기 (`ISA.md` 6절)
-- [ ] 어셈블러에 확장 레지스터 `int-level`(ex-4), `p-base`(ex-5), `p-limit`(ex-6) 추가 — 지금은 `cpuid`/`panicvec`/`istack`만 받음
+- [x] 어셈블러에 확장 레지스터 `int-level`(ex-4) / `p-base`(ex-5) / `p-limit`(ex-6) — `intlevel` / `pagebase`(`pbase`) / `plimit`(`pagelimit`), id 3 / 4 / 5 (2026-10-18)
 - [ ] `rol`/`ror` 회로 동작 확인 (시트: `rol` = rollleft, `ror` = rollright), 에뮬레이터에 추가
 - [ ] floatingpoint 테스트(`fp_test.py`)는 에뮬레이터 전용 — 회로에서 돌릴 방법 검토 (calc로 간접 확인만 됨)
 
@@ -55,7 +55,7 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 ## 부속별 정리
 
 ### 1. 어셈블러 / 링커
-- [~] 어셈블러 마무리 (원문: "partially finished?")
+
 - [ ] 복잡한 수식 사용 시 warning 출력?
 
 선택 사항 (처음부터 구현하지 않기로 함):
@@ -65,7 +65,8 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 ### 2. CPU
 
 #### ISA 정리
-- [~] ISA 재배치
+- [x] ISA 재배치
+- [ ]   reg ext 및 flag 정리 
 
 #### 인터럽트
 
@@ -73,7 +74,9 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 - [~] `iret`
 - [~] `syscall` — IPU가 해당 인터럽트를 가져갈 때까지 다른 인터럽트를 모두 마스크
 - [ ] 외부 IPU 연결 (CPU에 인터럽트 구현하려면 필요)
-
+- [ ] CLR priority 정리
+- JPU / MEM-FL > ERR(TRAP) > INT
+   
 ##### 문제: 인터럽트 수락과 trap이 동시에 발생
 - 둘은 동시에 실행될 수 없음 → 수락을 되돌리거나 trap을 취소해야 함
 - 그런데 trap은 이미 commit됨 → 수락을 되돌려야 하는데, 수락 되돌리기는 불가능
