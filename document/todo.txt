@@ -55,8 +55,6 @@ interrupt problems:
 -> can check before executing since it checks if anything else is committed
 -> so we can check whether we are in the window of interrupt nonmask and trap committed by some latch
 
-
-
 ## syscall
 -> mask int
 -> run trap
@@ -92,6 +90,29 @@ interrupt problems:
 - memory process
 -> push to ISC
 -> set inst to valid (store-buff does it)
+
+## flush
+priority eclr > int > JPU/MEM
+
+struct:
+=== dispatch zone ===
+issue
+disp
+=== process zone ====
+JPU : (disp-commit)
+MEM : (disp-commit)
+=== commit zone =====
+int : com2
+eclr: com1-com2
+
+ids:
+=== new ====
+issue
+disp
+processing
+com2
+com1
+=== old ====
 
 
 <IPU>

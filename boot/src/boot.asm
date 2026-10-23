@@ -1,6 +1,6 @@
 ; ========================================
 ; boot loader program
-; org 0x3FFFFF
+; org 0xFFFFFF00
 ;
 ; ram       0x00000000 ~ 0x03FFFFFF 
 ; key/term  0x04000000 ~ 0x04000003 (Data, Valid, Pop, Term)
