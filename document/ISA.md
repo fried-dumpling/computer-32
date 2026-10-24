@@ -23,13 +23,17 @@
 
 ## 2. 레지스터
 
-| id | 이름 | 분류 | ABI |
+| id | 이름 | 분류 | ABI / 별칭 |
 |---|---|---|---|
 | 00 | `gen[0]` | GEN | return (반환값) |
-| 01–04 | `gen[1]`–`gen[4]` | GEN | arg (인자) |
+| 01 | `gen[1]` | GEN | arg (인자), ret2 (두 번째 반환값) |
+| 02–04 | `gen[2]`–`gen[4]` | GEN | arg (인자) |
 | 05–0C | `gen[5]`–`gen[12]` | GEN | callee-saved |
 | 0D–14 | `gen[13]`–`gen[20]` | GEN | caller-saved |
-| 15–18 | `gen[21]`–`gen[24]` | GEN | addr (base) |
+| 15 | `gen[21]` | GEN | at0 |
+| 16 | `gen[22]` | GEN | at1 |
+| 17 | `gen[23]` | GEN | kt |
+| 18 | `gen[24]` | GEN | addr (base) |
 | 19 | `sbp` | GEN | sbp |
 | 1A | `zero` | CONST | 상수 0 |
 | 1B | `one` | CONST | 상수 1 |
@@ -37,6 +41,80 @@
 | 1D | `pc` | CPU | special |
 | 1E | `stack` | GEN, CPU | special |
 | 1F | `flag` | GEN, CPU | special |
+
+- 별칭은 시트의 ABI 이름이고 어셈블러는 아직 `gen[n]`만 받습니다(6절).
+
+### 호출 규약 (ABI)
+
+시트의 ABI 열을 풀어 쓴 규칙입니다(2026-10-24).
+
+#### 보존
+
+| 레지스터 | 호출 뒤 |
+|---|---|
+| `gen[0]`–`gen[4]` | 깨짐 |
+| `gen[5]`–`gen[12]` | 보존 (callee가 저장) |
+| `gen[13]`–`gen[20]` | 깨짐 |
+| `at0`, `at1` | 깨짐 (사용자 코드는 쓰지 않음) |
+| `kt` | 사용자 코드는 쓰지 않음 |
+| `addr` | 보존 |
+| `sbp` | 보존 |
+| `stack` | 보존 (호출 전과 같은 값) |
+| `flag` | 깨짐 |
+
+#### 인자와 반환값
+
+- 인자 1–4: `gen[1]`–`gen[4]`. 5번째부터는 caller가 마지막 인자부터 push하고, 돌아온 뒤 caller가 `addi stack`으로 정리합니다. `call`이 복귀 주소를 push하므로 callee에서 5번째 인자는 `[stack + 4]`입니다.
+- 반환: 4바이트 이하는 `gen[0]`, 8바이트 이하는 `gen[0]`(하위 / 첫 word) + `gen[1]`(상위 / 둘째 word)입니다. 몫과 나머지, 값과 끝 포인터(`fp_str2f`), 값과 오류 코드처럼 두 값을 돌려줄 때 씁니다.
+- 8바이트보다 큰 값: caller가 결과 버퍼 주소를 `gen[1]`에 넘기고, 인자는 `gen[2]`부터 씁니다.
+
+#### 스택
+
+- `stack`은 아래로 자라고 4바이트 정렬을 유지합니다. `push`는 `stack -= 4; mem[stack] = v`입니다.
+- red zone은 없습니다. `stack` 아래 메모리는 언제든 덮어써질 수 있습니다.
+- `sbp`는 frame pointer입니다. 쓰지 않는 함수는 보존만 하면 됩니다.
+
+#### 특수 용도 레지스터
+
+- **`at0` / `at1`** (`gen[21]`, `gen[22]`): 어셈블러와 링커가 쓰는 임시 레지스터입니다. `at0`은 pseudo-instruction과 표준 macro(32비트 상수, 0x8000 이상 주소의 `ld`/`st`/`call`)가 쓰고, `at1`은 링커 veneer(먼 `call` 교체)가 씁니다. 사용자 코드는 쓰지 않습니다. 명령 하나나 macro 하나가 끝나면 값이 정해지지 않으며, `call`을 지나면 둘 다 깨집니다. 지금은 pseudo-instruction도 veneer도 없어서 예약만 되어 있습니다.
+- **`kt`** (`gen[23]`): 커널 임시 레지스터입니다. 사용자 레지스터를 저장하기 전에 커널이 덮어쓸 수 있는 유일한 레지스터입니다. 다음 경우에 씁니다.
+  - ISR 진입 때 스택을 전환하면서 사용자 `stack` 값을 잠시 보관할 때
+  - `stack`이 망가진 fault나 panic을 처리할 때
+  - 문맥 교환에서 TCB base로 쓸 때
+  - 짧은 ISR을 push/pop 없이 처리할 때
+  - syscall 핸들러 주소를 읽어 분배할 때
+
+  사용자 코드에서는 늘 쓰레기 값입니다. 커널은 사용자 모드로 돌아가기 전에 `kt`를 0으로 지우고, 인터럽트를 다시 허용하기 전에 `kt`를 다 쓰거나 저장합니다. 하드웨어가 진입 때 PC를 `istack`에 push한다면 1개로 충분합니다. 진입 동작은 아직 정하지 않았습니다.
+- **`addr`** (`gen[24]`): 주소 base 전용 레지스터이며 보존됩니다. base는 아무 레지스터나 될 수 있고(`ld`/`st` opcode 하위 5비트), base 하나로는 64KB 창 하나에만 닿습니다. IO(`0x04000000`)나 디스플레이(`0x08000000`) base는 함수 안에서 만들어 쓰면 됩니다(`IO_LDBASE`, 2명령).
+- **`zero` / `one` / `full`**: 0, 1, `0xFFFFFFFF`는 레지스터에 담지 말고 이 상수 레지스터를 씁니다.
+
+#### syscall과 인터럽트
+
+- syscall: 번호는 `gen[0]`, 인자는 `gen[1]`–`gen[4]`, 반환은 `gen[0]`(필요하면 `gen[1]`)입니다. 커널은 `gen[0]`, `gen[1]`을 뺀 모든 레지스터와 `flag`를 보존합니다.
+- ISR: 모든 레지스터와 `flag`를 보존합니다. `iret`은 PC만 pop하므로, `flag`는 ISR이 직접 저장해야 합니다(`cmp`와 `jmp` 사이에 인터럽트가 들어올 수 있음). pseudo-instruction 중간에 인터럽트가 들어올 수 있으므로 `at0`/`at1`도 저장합니다.
+
+#### 레지스터 역할 (권장)
+
+직접 어셈블리를 짤 때의 권장 배치입니다. 의무는 아니고, 역할이 다르면 함수 머리 주석에 적습니다(`; s0 = buf, s1 = i`). `s`/`t` 이름은 설명용이며 시트의 별칭이 아닙니다.
+
+- callee-saved는 `gen[5]`부터 연속으로 씁니다. 그래야 k개를 쓰는 함수가 `gen[5]`–`gen[4+k]`만 push/pop하면 됩니다.
+- caller-saved와 callee-saved의 같은 칸은 같은 역할입니다(`t2` ↔ `s2`, 번호 차이 8). leaf 함수를 non-leaf로 바꿀 때 번호만 옮기면 됩니다.
+
+| caller-saved | 역할 | callee-saved | 역할 |
+|---|---|---|---|
+| `gen[13]` t0 | base (IO, 디스플레이, 먼 주소) | `gen[5]` s0 | 주 데이터 포인터 (버퍼, 객체) |
+| `gen[14]` t1 | scratch (바이트 load, 중간값) | `gen[6]` s1 | 루프 카운터 / 인덱스 |
+| `gen[15]` t2 | 루프 카운터 / 인덱스 | `gen[7]` s2 | 누적값 |
+| `gen[16]` t3 | 누적값 / 상태 | `gen[8]` s3 | 루프 끝 / 길이 / end pointer |
+| `gen[17]` t4 | src 포인터, 테이블 값 | `gen[9]` s4 | 두 번째 포인터 (dst) |
+| `gen[18]` t5 | dst 포인터 / end pointer | `gen[10]` s5 | 두 번째 누적값 / 상위 word |
+| `gen[19]` t6 | 상수 / 루프 끝 (마스크, 10) | `gen[11]` s6 | 상수 / base (루프 내내 쓰는 IO base) |
+| `gen[20]` t7 | 안쪽 루프 카운터 / 예비 | `gen[12]` s7 | 함수 전체 상태 (calc의 cursor) |
+
+- t 레지스터: leaf 함수, 또는 `call`을 넘지 않는 값에 씁니다. `t0`/`t1` 배치는 io와 fp 라이브러리가 이미 쓰는 방식입니다(`IO_LDBASE(gen[13])`, `IO_LDB(gen[14], ...)`).
+- s 레지스터: `call`을 넘어 살아 있어야 하는 값에 씁니다. `call` 뒤에도 쓸 인자는 함수 첫머리에서 s 레지스터로 옮깁니다. 그 외의 인자는 `gen[1]`–`gen[4]`를 그대로 작업 레지스터로 써도 됩니다.
+- 결과는 처음부터 `gen[0]`에 누적하면 마지막 `mov`가 필요 없습니다.
+- `cmp`/`test`가 아닌 ALU 명령은 flag를 깨뜨립니다. 그래서 `subi`로 카운터를 줄여도 0인지 판단하려면 `cmpi`가 필요합니다. 루프 끝이 상수면 `cmpi cnt, N`, 상수가 아니면 끝값 레지스터와 `cmp`를 씁니다.
 
 ### 확장 레지스터 (EXT, `ldexp`/`stexp` 전용)
 
@@ -198,3 +276,5 @@
 | 이름 | `jp` / `jpi` / `break` | `jmp` / `ijmp` / `brk` (기존 소스 호환을 위해 유지) |
 | 확장 레지스터 이름 | `cpu-id` / `panic-vec` / `int-level` / `p-base` / `p-limit` | `cpuid` / `panicvec` / `intlevel` / `pagebase`(`pbase`) / `plimit`(`pagelimit`). `-`는 빼기 연산자라 이름에 못 씀. id는 ex-n → n-1(0~5)로 같음 |
 | `rol` / `ror` | *rollleft* / *rollright* | opcode만 시트와 같음(0C–0F). 회로와 에뮬레이터에서 아직 확인 안 함 |
+| ABI 별칭 | `at0` / `at1` / `kt` / `addr` (`gen[21]`–`gen[24]`) | 없음. `gen[21]`–`gen[24]`로 써야 함 |
+| pseudo-instruction, 링커 veneer | `at0` / `at1` 예약 | 없음. 링커는 정해진 필드에 재배치 값만 패치함 |
