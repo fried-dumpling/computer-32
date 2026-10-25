@@ -8,6 +8,7 @@
 //   dip=x,y;x,y    DipSwitches turned on before the model is built
 //                  (default -580,-1640 = clock mux select -> Clock)
 //   set=E=1,run=1  top-level inputs
+//   at=H:k=v,...;H:k=v  change top-level inputs at half cycle H (e.g. at=0:E=0,boot=1;10:E=1,boot=0)
 //   csv=file       dump every model signal (probes, In/Out) each half cycle
 //   csvFrom=N      start the dump at half cycle N (default 0)
 //   csvKey=N       or start the dump when the N-th key (1-based) is fed
@@ -16,6 +17,10 @@
 //   patch=name     in-memory circuit patch from Patch.java (e.g. scsfd)
 //   probe=f.dig@x,y=name;...  extra Probe on an unnamed net point (f = top or a subcircuit file)
 //   cols=a,b,...   with csv : dump only these signals
+//   zseed=N|zero   floating (high-Z) bits normally read as fresh random bits on every read (new Random() per
+//                  value, so every run differs). N : seeded per value in node order, zero : always 0
+//   delta=file     like csv but only changes: header "names...", then "half col value" per changed signal
+//   hash=file      write one hash of all signals per half cycle ("half hash"), to find where two runs diverge
 //   lines=1       keys is a '|' separated list of lines; one whole line + \n is fed per prompt
 import de.neemann.digital.cli.CircuitLoader;
 import de.neemann.digital.core.*;
@@ -123,6 +128,8 @@ public class Sim {
                 public void deleteFirstChar() { if (kb.length() > 0) kb.deleteCharAt(0); }
             });
 
+        String zseed = System.getProperty("zseed");
+        if (zseed != null) System.err.println("zseed: " + seedHighZ(m, zseed) + " values");
         m.init();
         for (String kv : System.getProperty("set", "E=1,run=1").split(",")) {
             String[] p = kv.split("=");
@@ -148,6 +155,16 @@ public class Sim {
             csv.println(h);
         }
         boolean dumping = csvName != null && csvKey == 0;
+        PrintWriter delta = null;
+        String[] last = new String[sigs.size()];
+        if (System.getProperty("delta") != null) {
+            delta = new PrintWriter(new BufferedWriter(new FileWriter(System.getProperty("delta"))));
+            StringBuilder hd = new StringBuilder();
+            for (Signal s : sigs) hd.append(s.getName()).append(' ');
+            delta.println(hd.toString().trim());
+        }
+        PrintWriter hash = System.getProperty("hash") == null ? null
+                : new PrintWriter(new BufferedWriter(new FileWriter(System.getProperty("hash"))));
 
         String banner = System.getProperty("banner", "m8 ");
         boolean stopRestart = !System.getProperty("stopRestart", "1").equals("0");
@@ -155,13 +172,38 @@ public class Sim {
         long t0 = System.currentTimeMillis();
         int ki = 0, prompts = 0;
         long restartAt = -1, h;
+        TreeMap<Long, String> at = new TreeMap<>();
+        if (System.getProperty("at") != null)
+            for (String e : System.getProperty("at").split(";")) {
+                String[] p = e.split(":", 2);
+                at.put(Long.parseLong(p[0]), p[1]);
+            }
         for (h = 0; h < maxHalf; h++) {
+            if (at.containsKey(h))
+                for (String kv : at.get(h).split(",")) {
+                    String[] p = kv.split("=");
+                    m.getInput(p[0]).setValue(Long.parseLong(p[1]));
+                }
             c.setBool(!c.getBool());
             m.doStep();
             if (dumping && h >= csvFrom) {
                 StringBuilder r = new StringBuilder().append(h);
                 for (Signal s : sigs) r.append(',').append(fmt(s.getValue()));
                 csv.println(r);
+            }
+            if (delta != null)
+                for (int i = 0; i < last.length; i++) {
+                    String v = fmt(sigs.get(i).getValue());
+                    if (!v.equals(last[i])) { delta.println(h + " " + i + " " + v); last[i] = v; }
+                }
+            if (hash != null) {   // FNV-1a over value and high-Z of every signal
+                long x = 0xcbf29ce484222325L;
+                for (Signal s : sigs) {
+                    ObservableValue v = s.getValue();
+                    x = (x ^ v.getValueHighZIsZero()) * 0x100000001b3L;   // does not draw random bits
+                    x = (x ^ v.getHighZ()) * 0x100000001b3L;
+                }
+                hash.println(h + " " + Long.toHexString(x));
             }
             String o = out.toString();
             if (o.endsWith("> ") && countOf(o, "> ") > prompts) {
@@ -180,12 +222,16 @@ public class Sim {
             if (stopRestart && restartAt >= 0 && h > restartAt + 200) break;
         }
         if (csv != null) csv.close();
+        if (hash != null) hash.close();
+        if (delta != null) delta.close();
         System.out.println("\n[half=" + h + " keysFed=" + ki + " ms=" + (System.currentTimeMillis() - t0)
                 + (restartAt >= 0 ? " RESTART@" + restartAt : "") + "]");
     }
 
     static String fmt(ObservableValue v) {
         if (v.isHighZ()) return "Z";
+        if (v.getHighZ() != 0)      // partly floating: value bits + z mask (getValue would draw random bits)
+            return Long.toHexString(v.getValueHighZIsZero()) + "z" + Long.toHexString(v.getHighZ());
         return Long.toHexString(v.getValue());
     }
 
@@ -193,5 +239,34 @@ public class Sim {
         int n = 0, i = 0;
         while ((i = s.indexOf(sub, i)) >= 0) { n++; i += sub.length(); }
         return n;
+    }
+
+    // Replace ObservableValue.random of every value reachable from the model nodes.
+    static int seedHighZ(Model m, String mode) throws Exception {
+        java.lang.reflect.Field rf = ObservableValue.class.getDeclaredField("random");
+        rf.setAccessible(true);
+        long base = mode.equals("zero") ? 0 : Long.parseLong(mode);
+        Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        int[] n = {0};
+        for (Object node : m.getNodes()) walk(node, 0, seen, rf, mode.equals("zero"), base, n);
+        return n[0];
+    }
+
+    static void walk(Object o, int depth, Set<Object> seen, java.lang.reflect.Field rf, boolean zero, long base, int[] n) throws Exception {
+        if (o == null || depth > 4 || !seen.add(o)) return;
+        if (o instanceof ObservableValue) {
+            rf.set(o, zero ? new Random() { protected int next(int bits) { return 0; } } : new Random(base * 1000003 + n[0]));
+            n[0]++;
+            return;
+        }
+        if (o instanceof Object[]) { for (Object e : (Object[]) o) walk(e, depth + 1, seen, rf, zero, base, n); return; }
+        if (o instanceof Iterable) { for (Object e : (Iterable<?>) o) walk(e, depth + 1, seen, rf, zero, base, n); return; }
+        if (!o.getClass().getName().startsWith("de.neemann.digital.core")) return;
+        for (Class<?> c = o.getClass(); c != null && c != Object.class; c = c.getSuperclass())
+            for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
+                f.setAccessible(true);
+                walk(f.get(o), depth + 1, seen, rf, zero, base, n);
+            }
     }
 }
