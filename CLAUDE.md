@@ -51,7 +51,7 @@ Strict by default:
 
 ### Headless circuit simulator (dsim)
 
-`tools/dsim/` runs `components/cpu-32 test.dig` without the GUI using `Digital.jar` (key input, terminal output, probe/tunnel CSV dumps, net queries). See `tools/dsim/README.md`. Pass `-` as the program to let the ROMs load their own files (`boot/boot.bin`, `boot/rom.bin`), which is what the current circuit needs (it has no ROM flagged as program memory).
+`tools/dsim/` runs `components/cpu-test.dig` without the GUI using `Digital.jar` (key input, terminal output, probe/tunnel CSV dumps, net queries). See `tools/dsim/README.md`. Pass `-` as the program to let the ROMs load their own files (`boot/boot.bin`, `boot/rom.bin`), which is what the current circuit needs (it has no ROM flagged as program memory).
 
 ### Rebuilding Tools
 
@@ -150,7 +150,8 @@ Opcode table is in `tools/assembler/assembler.hpp` (`instructionBase` map).
 ## CPU Microarchitecture (Digital circuits in `components/`)
 
 - **`computer-32.dig`** — top-level system (CPU + memory + IO)
-- **`cpu-32.dig`** / **`cpu-32 test.dig`** — main CPU: fetch, decode, dispatch, execute, commit pipeline (test variant has extra probes)
+  - Structure snapshot of `cpu-32.dig` (pins, start sequence, regions, module tree, unfinished nets, cleanup list): `document/cpu-32.md`.
+- **`cpu-32.dig`** / **`cpu-test.dig`** — main CPU: fetch, decode, dispatch, execute, commit pipeline (test variant has extra probes)
 - **`res-station.dig`** (+ `res-station 2.dig`, `res-station-debug.dig`) — reservation station (instruction window size 16)
 - **`ROB-gen.dig`** (+ `ROB-gen 2.dig`) — reorder buffer for in-order commit; **`ROB-FL.dig`**, **`ROB-PC.dig`**, **`ROB-SC.dig`** — per-field ROB submodules (flags, PC, side-channel data); **`ROB-INT.dig`** — separate, smaller ROB dedicated to interrupt/trap entries
 - **`regFile.dig`..`regFile4.dig`** — speculative register file with renaming (iterated versions)
@@ -206,7 +207,7 @@ Instruction semantics, flags and ABI: `document/ISA.md`. Assembler syntax: `docu
 
 ### Running on the circuit
 
-`components/cpu-32 test.dig` starts in the boot ROM (`boot/boot.bin`, source `boot/src/boot.asm`). The boot loader reads the image in `boot/rom.bin` (loaded by `rom-test.dig`, autoReload) at ROM `0xFC000000`: word 0 = start address, word 1 = length in bytes, then the program. It copies the program to RAM at 0 and jumps to the start address. So link with the default header straight into the ROM file:
+`components/cpu-test.dig` starts in the boot ROM (`boot/boot.bin`, source `boot/src/boot.asm`). The boot loader reads the image in `boot/rom.bin` (loaded by `rom-test.dig`, autoReload) at ROM `0xFC000000`: word 0 = start address, word 1 = length in bytes, then the program. It copies the program to RAM at 0 and jumps to the start address. So link with the default header straight into the ROM file:
 
 ```
 dlnk main.o lib.o -o ../boot/rom.bin      ; from program/

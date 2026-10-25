@@ -25,10 +25,10 @@ dlnk calc.o float.o io.o -o calc/calc.bin        ; 회로에 올릴 때는 -o ..
 ## 실행
 
 - 에뮬레이터: `python ../tools/emu/isa32emu.py calc/calc.bin "1+2*3\nq\n"`
-- Digital 회로: `boot/rom.bin`으로 링크하고 `components/cpu-32 test.dig`를 실행합니다(루트 `CLAUDE.md`의 "Running on the circuit").
+- Digital 회로: `boot/rom.bin`으로 링크하고 `components/cpu-test.dig`를 실행합니다(루트 `CLAUDE.md`의 "Running on the circuit").
 - 헤드리스 회로 시뮬레이션(dsim, `tools/dsim/`에서):
   ```
-  java -Dlines=1 -Dbanner=zzzz -cp "$J;build" Sim "../../components/cpu-32 test.dig" - "1+2|q" 3000000
+  java -Dlines=1 -Dbanner=zzzz -cp "$J;build" Sim "../../components/cpu-test.dig" - "1+2|q" 3000000
   ```
 
 ## 사용법

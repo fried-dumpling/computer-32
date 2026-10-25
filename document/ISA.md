@@ -20,6 +20,7 @@
 ### 권한 수준
 - **user**: `add` ~ `wait` (00–74)
 - **kernel**: `halt` 이후 (75–FF)
+- 재분류 검토 중: `syscall`은 user가 kernel로 들어가는 유일한 진입로라서 user에서 실행할 수 있어야 합니다. `cache`와 `atom`을 user로 옮길지는 보류입니다. 정해지면 opcode 배치도 다시 봐야 합니다(2.2절 "미정").
 
 ## 2. 레지스터
 
@@ -30,9 +31,8 @@
 | 02–04 | `gen[2]`–`gen[4]` | GEN | arg (인자) |
 | 05–0C | `gen[5]`–`gen[12]` | GEN | callee-saved |
 | 0D–14 | `gen[13]`–`gen[20]` | GEN | caller-saved |
-| 15 | `gen[21]` | GEN | at0 |
-| 16 | `gen[22]` | GEN | at1 |
-| 17 | `gen[23]` | GEN | kt |
+| 15 | `gen[21]` | GEN | at |
+| 16–17 | `gen[22]`–`gen[23]` | GEN | kt (kt0, kt1) |
 | 18 | `gen[24]` | GEN | addr (base) |
 | 19 | `sbp` | GEN | sbp |
 | 1A | `zero` | CONST | 상수 0 |
@@ -55,8 +55,8 @@
 | `gen[0]`–`gen[4]` | 깨짐 |
 | `gen[5]`–`gen[12]` | 보존 (callee가 저장) |
 | `gen[13]`–`gen[20]` | 깨짐 |
-| `at0`, `at1` | 깨짐 (사용자 코드는 쓰지 않음) |
-| `kt` | 사용자 코드는 쓰지 않음 |
+| `at` | 깨짐 (사용자 코드는 쓰지 않음) |
+| `kt0`, `kt1` | 사용자 코드는 쓰지 않음 |
 | `addr` | 보존 |
 | `sbp` | 보존 |
 | `stack` | 보존 (호출 전과 같은 값) |
@@ -71,27 +71,30 @@
 #### 스택
 
 - `stack`은 아래로 자라고 4바이트 정렬을 유지합니다. `push`는 `stack -= 4; mem[stack] = v`입니다.
-- red zone은 없습니다. `stack` 아래 메모리는 언제든 덮어써질 수 있습니다.
+- red zone은 없습니다. ISR은 `istack`을 쓰므로 인터럽트가 사용자 `stack` 아래를 덮어쓰지는 않습니다. 그래도 지금은 `stack` 아래 메모리에 값을 두지 않는 것을 규칙으로 합니다.
 - `sbp`는 frame pointer입니다. 쓰지 않는 함수는 보존만 하면 됩니다.
 
 #### 특수 용도 레지스터
 
-- **`at0` / `at1`** (`gen[21]`, `gen[22]`): 어셈블러와 링커가 쓰는 임시 레지스터입니다. `at0`은 pseudo-instruction과 표준 macro(32비트 상수, 0x8000 이상 주소의 `ld`/`st`/`call`)가 쓰고, `at1`은 링커 veneer(먼 `call` 교체)가 씁니다. 사용자 코드는 쓰지 않습니다. 명령 하나나 macro 하나가 끝나면 값이 정해지지 않으며, `call`을 지나면 둘 다 깨집니다. 지금은 pseudo-instruction도 veneer도 없어서 예약만 되어 있습니다.
-- **`kt`** (`gen[23]`): 커널 임시 레지스터입니다. 사용자 레지스터를 저장하기 전에 커널이 덮어쓸 수 있는 유일한 레지스터입니다. 다음 경우에 씁니다.
-  - ISR 진입 때 스택을 전환하면서 사용자 `stack` 값을 잠시 보관할 때
-  - `stack`이 망가진 fault나 panic을 처리할 때
-  - 문맥 교환에서 TCB base로 쓸 때
-  - 짧은 ISR을 push/pop 없이 처리할 때
-  - syscall 핸들러 주소를 읽어 분배할 때
-
-  사용자 코드에서는 늘 쓰레기 값입니다. 커널은 사용자 모드로 돌아가기 전에 `kt`를 0으로 지우고, 인터럽트를 다시 허용하기 전에 `kt`를 다 쓰거나 저장합니다. 하드웨어가 진입 때 PC를 `istack`에 push한다면 1개로 충분합니다. 진입 동작은 아직 정하지 않았습니다.
+- **`at`** (`gen[21]`): 어셈블러와 링커가 쓰는 임시 레지스터입니다.
+  - 쓰는 곳: pseudo-instruction, 표준 macro(32비트 상수, 0x8000 이상 주소의 `ld`/`st`/`call`), 링커 veneer(먼 `call`을 대신하는 짧은 코드)
+  - veneer도 같은 `at`를 씁니다. `at`는 `call`을 지나면 깨지는 레지스터라 `call` 시점에는 살아 있는 값이 없기 때문입니다.
+  - 사용자 코드는 쓰지 않습니다. 명령 하나나 macro 하나가 끝나면 값이 정해지지 않습니다.
+  - 임시값이 둘 필요한 pseudo-op(예: 32비트 상수를 먼 주소에 store)은 만들지 않습니다. 그런 경우는 t 레지스터로 직접 풀어 씁니다.
+  - 지금은 pseudo-instruction도 veneer도 없어서 예약만 되어 있습니다.
+- **`kt0` / `kt1`** (`gen[22]`, `gen[23]`): 커널 임시 레지스터입니다. 사용자 레지스터를 저장하기 전에 커널이 덮어쓸 수 있는 레지스터는 이 둘뿐입니다.
+  - `kt0`: ISR 진입 때 이전 `stack`을 보관합니다(2.2절). 프로토콜은 `kt0` 하나로 끝납니다.
+  - `kt1`: `kt0`이 `stack`을 들고 있는 동안 쓰는 두 번째 임시 레지스터입니다. 문맥 교환의 TCB base, syscall 핸들러 주소를 읽어 분배할 때, push/pop 없는 짧은 ISR에 씁니다.
+  - 사용자 코드에서는 늘 쓰레기 값입니다.
+  - 커널은 사용자 모드로 돌아가기 전에 `kt1`을 0으로 지웁니다(커널 값 유출 방지). `kt0`에는 사용자 자신의 `stack`이 들어 있으므로 지우지 않아도 됩니다.
+  - 인터럽트를 다시 허용(mask = 0)하기 전에 `kt0`/`kt1`을 다 쓰거나 저장합니다.
 - **`addr`** (`gen[24]`): 주소 base 전용 레지스터이며 보존됩니다. base는 아무 레지스터나 될 수 있고(`ld`/`st` opcode 하위 5비트), base 하나로는 64KB 창 하나에만 닿습니다. IO(`0x04000000`)나 디스플레이(`0x08000000`) base는 함수 안에서 만들어 쓰면 됩니다(`IO_LDBASE`, 2명령).
 - **`zero` / `one` / `full`**: 0, 1, `0xFFFFFFFF`는 레지스터에 담지 말고 이 상수 레지스터를 씁니다.
 
 #### syscall과 인터럽트
 
 - syscall: 번호는 `gen[0]`, 인자는 `gen[1]`–`gen[4]`, 반환은 `gen[0]`(필요하면 `gen[1]`)입니다. 커널은 `gen[0]`, `gen[1]`을 뺀 모든 레지스터와 `flag`를 보존합니다.
-- ISR: 모든 레지스터와 `flag`를 보존합니다. `iret`은 PC만 pop하므로, `flag`는 ISR이 직접 저장해야 합니다(`cmp`와 `jmp` 사이에 인터럽트가 들어올 수 있음). pseudo-instruction 중간에 인터럽트가 들어올 수 있으므로 `at0`/`at1`도 저장합니다.
+- ISR: 모든 레지스터, `flag`, `at`를 보존합니다. 진입 순서와 복귀 순서는 2.2절입니다.
 
 #### 레지스터 역할 (권장)
 
@@ -120,13 +123,97 @@
 
 | id | 이름 |
 |---|---|
-| ex-1 | `cpu-id` |
-| ex-2 | `panic-vec` |
-| ex-3 | `istack` |
-| ex-4 | `int-level` |
-| ex-5 | `p-base` |
-| ex-6 | `p-limit` |
-| ex-7 – ex-12 | 예약 |
+| ex-0 | `cpu-id` |
+| ex-1 | `panic-vec` |
+| ex-2 | `istack` |
+| ex-3 | `int-level` |
+| ex-4 | `p-base` |
+| ex-5 | `p-limit` |
+| ex-6 – ex-11 | 예약 |
+
+- 시트가 2026-10-25에 ex-0부터로 번호를 바꿨습니다. 어셈블러 id(0~5)와 같습니다.
+- `int-level`은 5비트 `{mask, level[3:0]}`입니다(2.2절). 실제 값은 IPU에 있고, `ldexp`/`stexp`는 IPU로 가는 요청입니다.
+
+## 2.2 인터럽트 프로토콜
+
+2026-10-25 결정. `todo.txt`의 "interrupt interface"와 `todo.md`의 "인터럽트 처리 흐름"을 정리한 것입니다.
+
+### 기본 구조
+
+- user와 kernel은 일반 레지스터(`stack` 포함)를 함께 씁니다. 다른 것은 권한(mode)뿐입니다. 모든 인터럽트 핸들러는 kernel에서 돕니다.
+- `istack`은 인터럽트가 값을 push하는 임시 스택입니다. kernel 스택과 다르며, 문맥 교환의 임시 스택으로도 씁니다.
+- `syscall`도 인터럽트와 같은 경로로 처리합니다.
+- 커널이 사용자 레지스터를 저장하기 전에 쓸 수 있는 레지스터는 `kt0`/`kt1`뿐입니다. 핵심 규칙입니다.
+
+### `int-level`과 마스킹
+
+- `int-level` = `{mask (bit 4), level (bit 3:0)}`, 16단계입니다.
+- 수락 조건: `{0, 요청 level} > {mask, 현재 level}`. 비교 하나로 마스킹이 됩니다.
+  - mask = 1이면 현재 값이 16 이상이므로 모든 요청이 막힙니다.
+  - mask = 0이면 현재보다 높은 레벨만 들어옵니다. 같은 레벨끼리는 중첩되지 않습니다.
+  - level 0은 일반 실행 레벨입니다. 수락될 수 있는 인터럽트 레벨은 1–15입니다.
+- 진입하면 하드웨어가 mask = 1로 만듭니다. 그래서 ISR이 `kt0`에 `stack`을 저장하기 전에는 중첩되지 않습니다. 중첩을 허용하려면 ISR이 `stexp stack, istack`을 한 뒤 mask를 0으로 내립니다.
+
+### 복귀 level과 mode는 IPU가 관리
+
+- IPU가 수락할 때마다 `{이전 level, 이전 mode}`를 IPU 내부 스택에 push합니다.
+- 중첩은 레벨이 엄격히 올라갈 때만 일어나므로 깊이는 최대 15입니다. 16칸이면 넘치지 않습니다.
+- 인터럽트는 mask = 0일 때만 수락되므로, 복귀할 때 mask는 항상 0으로 돌아갑니다. mask 값은 IPU 스택에 저장하지 않습니다.
+- `iret`은 IPU에 pop 요청을 보내고, IPU가 돌려준 `{level, mode}`로 복원합니다.
+- CPU도 현재 mode 사본을 갖습니다. 디코드 단계의 권한 검사에 씁니다. 진입하면 kernel이 되고, `iret`하면 IPU 응답의 mode가 됩니다.
+
+### 진입 (하드웨어, commit 경계)
+
+```
+IPU: push {level, mode}; level = 요청 level; mask = 1
+CPU: istack -= 4; mem[istack] = 복귀 PC; mode = kernel; PC = int_vec[n]
+```
+
+- 하드웨어가 메모리에 쓰는 것은 PC 1 word뿐입니다(store queue에 1회 적재).
+- 복귀 PC는 외부 인터럽트라면 아직 commit되지 않은 첫 명령, `syscall`이라면 다음 명령입니다.
+
+### ISR 소프트웨어
+
+```asm
+    mov   kt0, stack           ; 이전 stack (user 또는 바깥 ISR)
+    ldexp stack, istack        ; stack = istack (PC 저장 칸)
+    push  kt0
+    push  flag
+    push  ...                  ; 쓸 레지스터 (at 포함)
+    stexp stack, istack        ; 중첩 전 필수: istack을 현재 위치로
+    ; (필요하면 mask = 0으로 중첩 허용)
+    ; ... 처리 ...
+    ; (mask = 1)
+    pop   ...
+    pop   flag
+    pop   kt0
+    stexp stack, istack        ; istack = PC 저장 칸
+    mov   stack, kt0           ; 이전 stack 복원
+    set   kt1.32B, 0           ; user로 돌아갈 때
+    iret
+```
+
+- `mov`, `ldexp`/`stexp`, `push`/`pop`은 flag를 바꾸지 않습니다. 그래서 첫 `cmp`나 ALU 명령보다 앞이면 `push flag`의 위치는 어디든 됩니다.
+- `stexp stack, istack`은 중첩을 허용하기 전에 반드시 합니다. 소프트웨어 push는 `stack`만 줄이고 `istack`은 그대로 둡니다. 그 상태에서 중첩이 일어나면 하드웨어가 `istack - 4`에 PC를 써서 바깥 ISR이 저장한 값을 덮어씁니다.
+- 중첩된 ISR도 같은 순서를 씁니다. 그때 `kt0`은 바깥 ISR의 stack이고, `stack`은 `istack`이 되어 결과적으로 아무 영향이 없습니다.
+
+### `iret` (직렬화 명령)
+
+```
+PC = mem[istack]; istack += 4
+IPU pop → level, mode 복원 (mask = 0)
+```
+
+- 권한을 바꾸므로 commit에 도달할 때까지 기다립니다. IPU 요청은 추측 실행으로 보내지 않습니다.
+- IPU 응답을 기다리는 동안 fetch를 멈춥니다(req/ack). 응답이 오면 새 PC에서 fetch를 다시 시작합니다. 동작은 오분기 flush와 같습니다.
+
+### 미정
+
+- `syscall`을 user 명령으로 옮기는 것(1절 권한 수준). `syscall`의 level과 벡터 번호(`intervec` d 0~63 중 하나)
+- `cache`와 `atom`을 user로 옮길지(보류)
+- 동기 예외(fault, `syscall`)는 미룰 수 없습니다. 그래서 mask와 상관없이 처리하는 규칙이 필요합니다. 제안: mask = 1인 상태에서 생기면 `panic-vec`(double fault)
+- `int-prev`(IPU 스택 맨 위의 이전 mode/level, 읽기 전용 EXT) 추가 여부. syscall 핸들러가 호출한 쪽이 user였는지 알아야 할 때 필요합니다.
+- 문맥 교환은 가장 바깥 레벨에서 user 태스크끼리만 합니다. IPU 스택 맨 위의 mode가 그대로 맞기 때문입니다. kernel 스레드까지 바꾸려면 맨 위 항목을 쓸 수 있어야 합니다.
 
 ## 3. 레지스터 모드
 
@@ -238,7 +325,7 @@
 |---|---|---|---|---|---|
 | 75 | `halt` | u.u | | | CPU 정지 |
 | 76 | `syscall` | u.u | | | 시스템 콜 트랩 |
-| 77 | `iret` | u.u | | | PC = stack.pop(), 인터럽트 종료 |
+| 77 | `iret` | u.u | | | PC = mem[istack], istack += 4. IPU가 level과 mode를 복원(2.2절) |
 | 78 | `intervec` | base | m (0~255) | d (0~63) | int_vec[d] = base + m |
 | 79 | `interpri` | u.u | m (0~15) | d (0~63) | int_pri[d] = m |
 | 7A | `ldexp` | dest | u.u | id (EXT) | dest = ext[id] |
@@ -274,7 +361,8 @@
 | 항목 | 시트 | 어셈블러 |
 |---|---|---|
 | 이름 | `jp` / `jpi` / `break` | `jmp` / `ijmp` / `brk` (기존 소스 호환을 위해 유지) |
-| 확장 레지스터 이름 | `cpu-id` / `panic-vec` / `int-level` / `p-base` / `p-limit` | `cpuid` / `panicvec` / `intlevel` / `pagebase`(`pbase`) / `plimit`(`pagelimit`). `-`는 빼기 연산자라 이름에 못 씀. id는 ex-n → n-1(0~5)로 같음 |
+| 확장 레지스터 이름 | `cpu-id` / `panic-vec` / `int-level` / `p-base` / `p-limit` | `cpuid` / `panicvec` / `intlevel` / `pagebase`(`pbase`) / `plimit`(`pagelimit`). `-`는 빼기 연산자라 이름에 못 씀. id는 ex-n = n(0~5)으로 같음 |
 | `rol` / `ror` | *rollleft* / *rollright* | opcode만 시트와 같음(0C–0F). 회로와 에뮬레이터에서 아직 확인 안 함 |
-| ABI 별칭 | `at0` / `at1` / `kt` / `addr` (`gen[21]`–`gen[24]`) | 없음. `gen[21]`–`gen[24]`로 써야 함 |
-| pseudo-instruction, 링커 veneer | `at0` / `at1` 예약 | 없음. 링커는 정해진 필드에 재배치 값만 패치함 |
+| ABI 별칭 | `at` / `kt0` / `kt1` / `addr` (`gen[21]`–`gen[24]`) | 없음. `gen[21]`–`gen[24]`로 써야 함 |
+| pseudo-instruction, 링커 veneer | `at` 예약 | 없음. 링커는 정해진 필드에 재배치 값만 패치함 |
+| `iret` | `istack` 기준 (2.2절) | 인코딩만 있음(77). 에뮬레이터는 인터럽트 명령을 지원하지 않음 |

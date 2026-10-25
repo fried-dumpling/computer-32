@@ -1,6 +1,6 @@
 # test — 회로 검증용 프로그램
 
-`program/test/`. Digital 회로(`components/cpu-32 test.dig`)의 버그를 좁히려고 만든 작은 프로그램들입니다. 에뮬레이터용 테스트가 아니라 회로에서 돌려 보는 용도입니다. 각 파일 맨 위 주석에 테스트 내용, 키 입력, 예상 값, 당시 결과가 자세히 있습니다.
+`program/test/`. Digital 회로(`components/cpu-test.dig`)의 버그를 좁히려고 만든 작은 프로그램들입니다. 에뮬레이터용 테스트가 아니라 회로에서 돌려 보는 용도입니다. 각 파일 맨 위 주석에 테스트 내용, 키 입력, 예상 값, 당시 결과가 자세히 있습니다.
 
 ## 빌드 / 실행
 
@@ -11,7 +11,7 @@ dlnk fill.o -o ../boot/rom.bin
 ```
 
 - `fp_str2f` 등을 쓰는 테스트(`memtest8`, `selftest`)는 `dasm floatingpoint/float.asm -o float.o`를 만들어 함께 링크합니다(테스트 오브젝트를 먼저).
-- 파일 주석에는 `-o run.txt`로 되어 있습니다. 예전에 `cpu-32 test.dig`의 preload program file로 바로 넣던 방식입니다. 지금 회로는 boot ROM이 `boot/rom.bin`을 RAM으로 복사해서 실행하므로, `boot/rom.bin`으로 링크합니다(루트 `CLAUDE.md`의 "Running on the circuit").
+- 파일 주석에는 `-o run.txt`로 되어 있습니다. 예전에 `cpu-32 test.dig`(지금 `cpu-test.dig`)의 preload program file로 바로 넣던 방식입니다. 지금 회로는 boot ROM이 `boot/rom.bin`을 RAM으로 복사해서 실행하므로, `boot/rom.bin`으로 링크합니다(루트 `CLAUDE.md`의 "Running on the circuit").
 - 헤드리스로 돌리려면 `tools/dsim`의 `Sim`을 씁니다(`tools/dsim/README.md`). 프로그램 인자에 `-`를 주면 ROM 파일을 그대로 씁니다.
 - 대부분 결과를 터미널에 `<글자> <값>` 형식으로 출력합니다. 글자를 테스트 **전에** 출력하므로, 멈추거나 재시작하면 마지막 글자가 문제의 테스트입니다.
 

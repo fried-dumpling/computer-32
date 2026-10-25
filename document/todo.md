@@ -119,8 +119,20 @@ CPU 쪽:
 2. trap 실행
 3. commit 시 인터럽트 언마스크
 
-##### `iret` 동작
-- (미정)
+##### `iret` 동작 (2026-10-25 결정, `ISA.md` 2.2절)
+- `PC = mem[istack]; istack += 4`
+- IPU에 pop 요청 → IPU가 `{이전 level, 이전 mode}` 복원, mask = 0
+- 직렬화: commit에 도달한 뒤 실행하고, IPU 응답(req/ack)까지 fetch를 멈춤. 그다음 새 PC에서 다시 시작(오분기 flush와 같음)
+
+##### 결정 사항 (2026-10-25)
+- `int-level` = 5비트 `{mask, level[3:0]}`, 수락 조건은 `{0, 요청 level} > {mask, 현재 level}` 비교 하나. 실제 레지스터는 IPU에 있음
+- 진입 시 mask = 1 (ISR이 `kt0`에 `stack`을 저장하고 `stexp stack, istack` 할 때까지 중첩 금지). 해제는 소프트웨어가 함
+- 복귀 level/mode는 IPU 내부 스택(16칸)이 저장. 하드웨어가 메모리에 push하는 것은 PC 1 word(istack)뿐
+- flag는 하드웨어가 저장하지 않음. `mov`/`ldexp`/`stexp`/`push`/`pop`이 flag를 바꾸지 않으므로 ISR이 `push flag` 하면 충분
+- ABI: `at` = `gen[21]`(1개), `kt0`/`kt1` = `gen[22]`/`gen[23]`
+- [ ] IPU: level/mask 레지스터, `{level, mode}` 16칸 스택, `iret` pop req/ack, `ldexp`/`stexp int-level` 경로
+- [ ] CPU: mode 사본(디코드 권한 검사), `iret` 직렬화, 진입 시 istack push
+- [ ] 미정: `syscall` user 분류와 level/벡터, `cache`/`atom` user 여부(보류), mask = 1일 때 동기 예외 → `panic-vec`, `int-prev` EXT
 
 ##### 인터럽트 처리 흐름
 1. **인터럽트 신호**
@@ -138,7 +150,7 @@ CPU 쪽:
    - store queue에 적재
    - 벡터로 점프
    - FDI 정지 해제
-   - 인터럽트 마스크 해제
+   - (2026-10-25) 마스크는 여기서 풀지 않음. mask = 1인 채로 벡터에 들어가고, ISR이 `stexp stack, istack` 뒤에 품
 4. **메모리 처리**
    - ISC에 push
    - 명령을 valid로 설정 (store-buffer가 처리)

@@ -64,7 +64,7 @@ The assembler keeps `jmp` / `ijmp` / `brk` for the sheet's `jp` / `jpi` / `break
 
 | path | contents |
 |---|---|
-| `components/` | Digital circuits. `cpu-32 test.dig` is the CPU used for testing |
+| `components/` | Digital circuits. `cpu-test.dig` is the CPU used for testing |
 | `boot/` | boot ROM program (`boot/src/boot.asm`) and the external ROM image `boot/rom.bin` |
 | `program/` | programs and libraries: floating point, keyboard/terminal io, calculator, pi digits, circuit tests |
 | `tools/` | assembler, linker and hexdump sources (C++), ISA-32 emulator (`tools/emu`), headless circuit runner (`tools/dsim`) |
@@ -78,6 +78,6 @@ cd program
 ../bin/dasm.exe io/io.asm -o io.o
 ../bin/dlnk.exe pi.o io.o -o ../boot/rom.bin
 ```
-Open `components/cpu-32 test.dig` in Digital and run: the boot ROM copies `boot/rom.bin` into RAM and jumps to `_start`.
+Open `components/cpu-test.dig` in Digital and run: the boot ROM copies `boot/rom.bin` into RAM and jumps to `_start`.
 `python tools/emu/isa32emu.py <program.bin>` runs the same image in the instruction-level emulator.
 See `program/document/<name>.md` for each program's build steps.

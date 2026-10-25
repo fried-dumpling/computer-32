@@ -28,6 +28,33 @@ work on
 
 ============= computer ====================
 
+< interrupt interface >
+>> istack & ktmp <<
+-> stack temporary used for pushing interrupt values
+-> != kernel stack
+
+user - syscall -> kernel
+kernel - iret -> user
+
+general purpose -> kernel = user (including stack)
+privilaged -> kernel only
+
+-> syscall = interrupt
+## interrupt 
+- has user data in every general purpose?
+-> no kernel has one free register... from ABI (kt) << key rule
+-> every interrupt handler is in kernel
+
+- istack work as temporary stack for context switch...
+
+== sequence ==
+- hardward pc push on istack
+-> software
+-> mov kt stack
+-> ldexp stack istack
+-> stack = istack
+-> now push!!!
+
 <ISA>
 remove NMI
 remove trap-flag
