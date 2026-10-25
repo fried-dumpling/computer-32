@@ -79,7 +79,7 @@
         </entry>
         <entry>
           <string>Output Splitting</string>
-          <string>2-21,0-0,1-1,0-1</string>
+          <string>2-19,0-0,1-1,0-1</string>
         </entry>
         <entry>
           <string>generic</string>
@@ -114,7 +114,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>20</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
@@ -213,7 +213,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
         </entry>
         <entry>
           <string>Bits</string>
-          <int>20</int>
+          <int>18</int>
         </entry>
       </elementAttributes>
       <pos x="540" y="580"/>
@@ -782,7 +782,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>AddrBits</string>
-          <int>20</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>Label</string>
@@ -794,7 +794,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
         </entry>
         <entry>
           <string>lastDataFile</string>
-          <file>D:\Users\taeh5\Homemade Computer\computer 32 (new)\digital computer 32\boot\rom.bin</file>
+          <file>D:\Users\taeh5\Homemade Computer\computer 32 (new)\computer-32\boot\rom.bin</file>
         </entry>
         <entry>
           <string>autoReload</string>
@@ -1062,7 +1062,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>AddrBits</string>
-          <int>20</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>Label</string>
@@ -1074,7 +1074,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
         </entry>
         <entry>
           <string>lastDataFile</string>
-          <file>D:\Users\taeh5\Homemade Computer\computer 32 (new)\digital computer 32\boot\rom.bin</file>
+          <file>D:\Users\taeh5\Homemade Computer\computer 32 (new)\computer-32\boot\rom.bin</file>
         </entry>
         <entry>
           <string>autoReload</string>
@@ -1088,7 +1088,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>AddrBits</string>
-          <int>20</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>Label</string>
@@ -1100,7 +1100,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
         </entry>
         <entry>
           <string>lastDataFile</string>
-          <file>D:\Users\taeh5\Homemade Computer\computer 32 (new)\digital computer 32\boot\rom.bin</file>
+          <file>D:\Users\taeh5\Homemade Computer\computer 32 (new)\computer-32\boot\rom.bin</file>
         </entry>
         <entry>
           <string>autoReload</string>
@@ -1114,7 +1114,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>AddrBits</string>
-          <int>20</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>Label</string>
@@ -1126,7 +1126,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
         </entry>
         <entry>
           <string>lastDataFile</string>
-          <file>D:\Users\taeh5\Homemade Computer\computer 32 (new)\digital computer 32\boot\rom.bin</file>
+          <file>D:\Users\taeh5\Homemade Computer\computer 32 (new)\computer-32\boot\rom.bin</file>
         </entry>
         <entry>
           <string>autoReload</string>

@@ -75,7 +75,7 @@
       <elementAttributes>
         <entry>
           <string>AddrBits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>Label</string>
@@ -93,7 +93,7 @@
       <elementAttributes>
         <entry>
           <string>AddrBits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>Label</string>
@@ -111,7 +111,7 @@
       <elementAttributes>
         <entry>
           <string>AddrBits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>Label</string>
@@ -129,7 +129,7 @@
       <elementAttributes>
         <entry>
           <string>AddrBits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>Label</string>
@@ -147,7 +147,7 @@
       <elementAttributes>
         <entry>
           <string>AddrBits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>Label</string>
@@ -165,7 +165,7 @@
       <elementAttributes>
         <entry>
           <string>AddrBits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>Label</string>
@@ -183,7 +183,7 @@
       <elementAttributes>
         <entry>
           <string>AddrBits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>Label</string>
@@ -201,7 +201,7 @@
       <elementAttributes>
         <entry>
           <string>AddrBits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>Label</string>
@@ -559,7 +559,7 @@
         </entry>
         <entry>
           <string>Output Splitting</string>
-          <string>2-25,0-0,1-1,0-1</string>
+          <string>2-19,0-0,1-1,0-1</string>
         </entry>
         <entry>
           <string>generic</string>
@@ -594,7 +594,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
@@ -652,7 +652,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
@@ -694,7 +694,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
@@ -736,7 +736,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
@@ -1199,7 +1199,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
         </entry>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
       </elementAttributes>
       <pos x="60" y="420"/>
@@ -2110,7 +2110,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
@@ -2124,7 +2124,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
@@ -2138,7 +2138,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
@@ -2152,7 +2152,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
@@ -2170,7 +2170,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
         </entry>
         <entry>
           <string>Output Splitting</string>
-          <string>2-25,0-0,1-1,0-1</string>
+          <string>2-19,0-0,1-1,0-1</string>
         </entry>
         <entry>
           <string>generic</string>
@@ -2205,7 +2205,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
@@ -2267,7 +2267,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
         </entry>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
       </elementAttributes>
       <pos x="60" y="620"/>
@@ -2301,7 +2301,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
@@ -2343,7 +2343,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
@@ -2385,7 +2385,7 @@ this.&apos;Output Splitting&apos;=&quot;2-&quot;+(args.addrBits-1)+&quot;,0-0,1-
       <elementAttributes>
         <entry>
           <string>Bits</string>
-          <int>24</int>
+          <int>18</int>
         </entry>
         <entry>
           <string>generic</string>
