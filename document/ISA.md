@@ -209,7 +209,7 @@ IPU pop → level, mode 복원 (mask = 0)
 
 ### 미정
 
-- `syscall`을 user 명령으로 옮기는 것(1절 권한 수준). `syscall`의 level과 벡터 번호(`intervec` d 0~63 중 하나)
+- `syscall`을 user 명령으로 옮기는 것(1절 권한 수준). `syscall`의 level과 벡터 번호(`interst` id 0~63 중 하나). atomic abort 등 동기 예외용 고정 id 대역
 - `cache`와 `atom`을 user로 옮길지(보류)
 - 동기 예외(fault, `syscall`)는 미룰 수 없습니다. 그래서 mask와 상관없이 처리하는 규칙이 필요합니다. 제안: mask = 1인 상태에서 생기면 `panic-vec`(double fault)
 - `int-prev`(IPU 스택 맨 위의 이전 mode/level, 읽기 전용 EXT) 추가 여부. syscall 핸들러가 호출한 쪽이 user였는지 알아야 할 때 필요합니다.
@@ -326,8 +326,8 @@ IPU pop → level, mode 복원 (mask = 0)
 | 75 | `halt` | u.u | | | CPU 정지 |
 | 76 | `syscall` | u.u | | | 시스템 콜 트랩 |
 | 77 | `iret` | u.u | | | PC = mem[istack], istack += 4. IPU가 level과 mode를 복원(2.2절) |
-| 78 | `intervec` | base | m (0~255) | d (0~63) | int_vec[d] = base + m |
-| 79 | `interpri` | u.u | m (0~15) | d (0~63) | int_pri[d] = m |
+| 78 | `interst` | base | imm (0~255) | md\|id | md=0: int_vec[id] = base + imm, md=1: int_pri[id] = base + imm |
+| 79 | `interld` | dest | u.u | md\|id | md=0: dest = int_vec[id], md=1: dest = int_pri[id] |
 | 7A | `ldexp` | dest | u.u | id (EXT) | dest = ext[id] |
 | 7B | `stexp` | src | u.u | id (EXT) | ext[id] = src |
 | 7C | `pctl` | u.u | | en/dis | 페이징 켜기/끄기 |
@@ -335,6 +335,30 @@ IPU pop → level, mode 복원 (mask = 0)
 | 7E | `cache` | base | m (부호 있는 8비트) | id | cache[base + m] flush 또는 inval |
 | 7F | `atom` | u.u | | len | 뒤따르는 len개 명령어를 원자적으로 실행 |
 | 80–FF | `nop` | u.u | | | ISA 확장용 예약 |
+
+### `interst` / `interld` (2026-10-26)
+
+인터럽트 테이블(`int_vec`/`int_pri`)에 쓰고(78) 읽습니다(79).
+
+byte 3:
+
+| bit | 7 | 6 | 5–0 |
+|---|---|---|---|
+| 필드 | md | 예약 (0) | id (0~63) |
+
+- md: `vec` = 0, `pri` = 1
+- id는 6비트(64개)입니다.
+- 두 모드 모두 값은 `R[base] + imm`입니다. 데이터패스를 공유하고, 레지스터로 우선순위를 동적으로 정할 수 있습니다. 상수 우선순위는 `interst zero.32B, m, pri | id`로 씁니다.
+- `int_pri`는 4비트(0~15)입니다.
+  - 2.2절 수락 조건상 **pri = 0인 id는 수락되지 않습니다**. 그래서 id별 disable에 별도 모드가 필요 없습니다.
+  - `R[base] + imm`이 15를 넘을 때 하위 4비트를 쓸지, trap으로 처리할지는 미정입니다.
+- 두 명령 모두 kernel 전용이라 user에서 실행하면 trap입니다.
+- 실행 시점:
+  - `interst`는 retire 시점에 실행합니다. 예외와 인터럽트를 retire에서 인식하는 방침과 같습니다.
+  - `interld`는 앞선 `interst`보다 먼저 추측 실행하면 안 됩니다. 레지스터가 아닌 대상에 대한 RAW라서, `ldexp`/`stexp`처럼 직렬화합니다.
+- `int_vec`/`int_pri`는 level과 mask처럼 IPU에 둡니다. 그래서 두 명령은 IPU로 가는 요청입니다.
+- 어셈블러 문법: `interst R, m, vec | id`, `interld R, pri | id`. `cache`의 `L1I | L1D`처럼 `|`를 쓰고, md를 먼저 씁니다(`SYNTAX.md`). pseudo-mnemonic은 없습니다.
+- 고정 id 배정(`syscall`, atomic abort 등)은 미정입니다(2.2절 "미정").
 
 ### `cache` 명령의 id 바이트
 
@@ -350,7 +374,7 @@ IPU pop → level, mode 복원 (mask = 0)
 
 ## 6. 현재 어셈블러(`dasm`)와 다른 점
 
-2026-10-17에 어셈블러를 시트에 맞춤: `pctl` 7C + byte 3 en(1)/dis(0), `getabs` 7D, `flush`/`inval`은 `cache` 7E 하나(id의 md 비트 0x80: flush=1, inval=0), 캐시 id `all` 0x40, `atom` 7F 추가(`atom len`), `intervec` byte 1은 base 레지스터(`intervec R, m, d`).
+2026-10-17에 어셈블러를 시트에 맞춤: `pctl` 7C + byte 3 en(1)/dis(0), `getabs` 7D, `flush`/`inval`은 `cache` 7E 하나(id의 md 비트 0x80: flush=1, inval=0), 캐시 id `all` 0x40, `atom` 7F 추가(`atom len`).
 
 2026-10-18 어셈블러에 확장 레지스터 `p-limit`(id 5, `plimit`)과 `p-base` 별칭 `pbase`를 추가하고, 캐시 id를 `L1I | L1D`처럼 비트 조합으로 받게 했습니다.
 
@@ -366,3 +390,4 @@ IPU pop → level, mode 복원 (mask = 0)
 | ABI 별칭 | `at` / `kt0` / `kt1` / `addr` (`gen[21]`–`gen[24]`) | 없음. `gen[21]`–`gen[24]`로 써야 함 |
 | pseudo-instruction, 링커 veneer | `at` 예약 | 없음. 링커는 정해진 필드에 재배치 값만 패치함 |
 | `iret` | `istack` 기준 (2.2절) | 인코딩만 있음(77). 에뮬레이터는 인터럽트 명령을 지원하지 않음 |
+| `interst` / `interld` (2026-10-26) | 78 / 79, byte 3 = md(b7)\|id(b5:0) | `tools` 브랜치에 구현(2026-10-26, 미커밋, parser 버전 416): `interst R, m, vec\|pri \| id`, `interld R, vec\|pri \| id`. `bin/dasm.exe`는 아직 옛 빌드 |

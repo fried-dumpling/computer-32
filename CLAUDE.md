@@ -102,8 +102,8 @@ pop <reg>
 ```
 syscall                              ; software interrupt
 iret                                 ; return from interrupt
-intervec <reg>, <imm8>, <imm8>       ; set interrupt vector entry
-interpri <imm8>, <imm8>              ; set interrupt priority
+interst <reg>, <imm8>, vec|pri | <id> ; int_vec/int_pri[id] = reg + imm8
+interld <reg>, vec|pri | <id>        ; reg = int_vec/int_pri[id]
 ldexp <reg>, <reg_ex>                ; load from an extended/special register
 stexp <reg>, <reg_ex>                ; store to an extended/special register
 ```
@@ -170,7 +170,7 @@ Opcode table is in `tools/assembler/assembler.hpp` (`instructionBase` map).
 
 - Replacing the queue-based ordering system with an **age matrix** for **load/store buffer** ordering only. Age matrix encodes relative instruction age: bit = 1 means current entry is older than indexed entry. (This is unrelated to the store-arbiter family above.)
 - Shrinking the store-arbiter (`store-controller*.dig`) from its original 8-entry design to a 4-entry `-half.dig`, since most consumers (interrupt/trap ROB, flag-store arbiter) don't need the full 8 slots.
-- ISA cleanup in progress (see `document/todo.md`): removing NMI, removing the trap-flag, rearranging the ISA. Interrupt/exception support (`syscall`, `iret`, `intervec`, `interpri`, `ldexp`/`stexp` + extended registers, `ROB-INT.dig`) and `call`-with-base, `block`/`halt` were added recently and are still being wired up.
+- ISA cleanup in progress (see `document/todo.md`): removing NMI, removing the trap-flag, rearranging the ISA. Interrupt/exception support (`syscall`, `iret`, `interst`, `interld`, `ldexp`/`stexp` + extended registers, `ROB-INT.dig`) and `call`-with-base, `block`/`halt` were added recently and are still being wired up.
 
 ## Programs (`program/`)
 
