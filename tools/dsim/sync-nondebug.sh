@@ -1,15 +1,22 @@
 #!/bin/sh
 # Regenerate the non-debug modules and cpu-32.dig from the debug modules and cpu-test.dig,
 # then check that every remaining pin is on the same net as in the source.
-#   sh sync-nondebug.sh            (from tools/dsim, after building)
-# Writes components/{id-manager,res-station,load-buffer,store-buffer,cpu-32,computer-32}.dig in place.
+#   sh sync-nondebug.sh [components dir]   (from tools/dsim, after building)
+# Writes <dir>/{id-manager,res-station,load-buffer,store-buffer,cpu-32,computer-32}.dig in place.
+# dir defaults to the computer-32 worktree (../../../computer-32/components) when it exists, since circuits
+# are edited there, and to this checkout's ../../components otherwise.
 set -e
 J="${J:-D:/Users/taeh5/Digital/Digital 0.31/Digital.jar}"
 HERE="$(pwd)"
 # java on Windows needs a D:/... path (pwd -W in git bash)
 CP="$J;$(pwd -W 2>/dev/null || pwd)/build"
+C="${1:-}"
+if [ -z "$C" ]; then
+    if [ -d ../../../computer-32/components ]; then C=../../../computer-32/components; else C=../../components; fi
+fi
+cd "$C"
+echo "components: $(pwd)"
 T="$(mktemp -d)"
-cd ../../components
 
 for m in res-station load-buffer store-buffer id-manager; do
     extra=""
@@ -26,9 +33,9 @@ grep -v '^[EW] ' "$T/cpu.list" || true
 python "$HERE/strip_apply.py" cpu-test.dig "$T/cpu.list" cpu-32.dig \
     id-manager-debug.dig=id-manager.dig res-station-debug.dig=res-station.dig \
     load-buffer-debug.dig=load-buffer.dig store-buffer-debug.dig=store-buffer.dig
-# DipSwitches in an embedded circuit cannot be clicked: turn on the clock mux select (-580,-1640, Sim's
+# DipSwitches in an embedded circuit cannot be clicked: turn on the clock mux select (-560,-1640, Sim's
 # default dip) so cpu-32 runs from its C input
-python "$HERE/set_dip.py" cpu-32.dig -580,-1640
+python "$HERE/set_dip.py" cpu-32.dig -560,-1640
 
 # computer-32 = the memory/IO harness of cpu-test (x < -1200) + a cpu-32 instance, joined by tunnels
 java -Dnocascade=true -cp "$CP" Strip cpu-test.dig type:Probe right:-1200 2>/dev/null > "$T/harness.list"
@@ -42,6 +49,9 @@ for p in res-station-debug:res-station load-buffer-debug:load-buffer store-buffe
     java -cp "$CP" NetSig $a.dig 2>/dev/null > "$T/a.sig"
     java -cp "$CP" NetSig $b.dig 2>/dev/null > "$T/b.sig"
     echo "## $a -> $b"
-    python "$HERE/netcmp.py" "$T/a.sig" "$T/b.sig"
+    # nets joined only by a wire in the stripped harness (Strip ALIAS-REMOVED) split in cpu-32 on purpose
+    split=""
+    [ $b = cpu-32 ] && split="$(sed -n 's/^ALIAS-REMOVED /-split /p' "$T/cpu.list" | tr '\n' ' ')"
+    python "$HERE/netcmp.py" "$T/a.sig" "$T/b.sig" $split
 done
 rm -rf "$T"

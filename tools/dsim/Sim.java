@@ -6,14 +6,17 @@
 // keys     : one key is fed each time the program prints "> " (\n allowed)
 // options (-Dname=value, before Sim) :
 //   dip=x,y;x,y    DipSwitches turned on before the model is built
-//                  (default -580,-1640 = clock mux select -> Clock)
+//                  (default -560,-1640 = clock mux select -> Clock; "dip=" turns none on).
+//                  A position without a DipSwitch is an error.
 //   set=E=1,run=1  top-level inputs
 //   at=H:k=v,...;H:k=v  change top-level inputs at half cycle H (e.g. at=0:E=0,boot=1;10:E=1,boot=0)
 //   csv=file       dump every model signal (probes, In/Out) each half cycle
 //   csvFrom=N      start the dump at half cycle N (default 0)
 //   csvKey=N       or start the dump when the N-th key (1-based) is fed
-//   banner=text    text printed once at reset; seeing it again = restart (default "m8 ")
+//   banner=text    text printed once at reset; seeing it again = restart (default none = no restart check)
 //   stopRestart=1  stop shortly after a restart is detected (default 1)
+//   stall=N        stop when PC, com1 and com2 (stallCols=a,b,...) keep their value N halves (default 2000, 0 = off)
+//   idle=N         stop after N halves without terminal output (default 0 = off)
 //   patch=name     in-memory circuit patch from Patch.java (e.g. scsfd)
 //   probe=f.dig@x,y=name;...  extra Probe on an unnamed net point (f = top or a subcircuit file)
 //   cols=a,b,...   with csv : dump only these signals
@@ -37,14 +40,17 @@ public class Sim {
     public static void main(String[] a) throws Exception {
         String dig = a[0], prog = a[1], keys = a[2].replace("\\n", "\n");
         boolean lines = System.getProperty("lines") != null;
-        String[] items = lines ? keys.split("\\|") : keys.split("");
+        String[] items = keys.isEmpty() ? new String[0] : lines ? keys.split("\\|") : keys.split("");
         long maxHalf = a.length > 3 ? Long.parseLong(a[3]) : 2_000_000;
 
         CircuitLoader cl = new CircuitLoader(new File(dig));
-        Set<String> dips = new HashSet<>(Arrays.asList(System.getProperty("dip", "-580,-1640").split(";")));
+        Set<String> dips = new HashSet<>(Arrays.asList(System.getProperty("dip", "-560,-1640").split(";")));
+        dips.remove("");
         for (VisualElement ve : cl.getCircuit().getElements())
-            if (ve.getElementName().equals("DipSwitch") && dips.contains(ve.getPos().x + "," + ve.getPos().y))
+            if (ve.getElementName().equals("DipSwitch") && dips.remove(ve.getPos().x + "," + ve.getPos().y))
                 ve.getElementAttributes().set(Keys.DIP_DEFAULT, true);
+        // a moved DipSwitch would leave the clock unconnected and the run would silently do nothing
+        if (!dips.isEmpty()) throw new IllegalArgumentException("no DipSwitch at " + dips + " (-Ddip=x,y;...)");
 
         if (System.getProperty("patch") != null) Patch.apply(cl, System.getProperty("patch"));
 
@@ -114,10 +120,17 @@ public class Sim {
         if (!prog.equals("-"))      // "-" : ROMs load their own files (autoReload)
             new ProgramMemoryLoader(new File(prog), true).preInit(m);
 
+        // prompts and banners are counted as the characters arrive, so a long output is not rescanned every half
+        String banner = System.getProperty("banner", "");
         StringBuilder out = new StringBuilder();
+        int[] seen = {0, 0};    // prompts ("> "), banners
         for (Terminal t : m.findNode(Terminal.class))
             t.setTerminalInterface(new TerminalInterface() {
-                public void addChar(char c) { out.append(c); System.out.print(c); System.out.flush(); }
+                public void addChar(char c) {
+                    out.append(c); System.out.print(c); System.out.flush();
+                    if (endsWith(out, "> ")) seen[0]++;
+                    if (!banner.isEmpty() && endsWith(out, banner)) seen[1]++;
+                }
                 public String getText() { return out.toString(); }
             });
         StringBuilder kb = new StringBuilder();
@@ -166,8 +179,20 @@ public class Sim {
         PrintWriter hash = System.getProperty("hash") == null ? null
                 : new PrintWriter(new BufferedWriter(new FileWriter(System.getProperty("hash"))));
 
-        String banner = System.getProperty("banner", "m8 ");
         boolean stopRestart = !System.getProperty("stopRestart", "1").equals("0");
+        // stall : stop when the watched signals (PC and the commit flags) keep their value this many halves
+        // (halt, deadlock); idle : stop after this many halves without terminal output (e.g. jmp $ at the end)
+        long stall = Long.parseLong(System.getProperty("stall", "2000"));
+        long idle = Long.parseLong(System.getProperty("idle", "0"));
+        List<ObservableValue> watch = new ArrayList<>();
+        Set<String> watchNames = new LinkedHashSet<>(Arrays.asList(System.getProperty("stallCols", "PC,com1,com2").split(",")));
+        for (Signal s : m.getSignals()) if (watchNames.contains(s.getName())) watch.add(s.getValue());
+        if (stall > 0 && watch.isEmpty()) System.err.println("stall: none of " + watchNames + " found, stall check off");
+        ObservableValue pcSig = null;
+        for (Signal s : m.getSignals()) if (s.getName().equals("PC")) pcSig = s.getValue();
+        long watchHash = 0, lastChange = 0, lastOut = 0;
+        int outLen = 0;
+        String stop = "";
         ObservableValue c = m.getClocks().get(0).getClockOutput();
         long t0 = System.currentTimeMillis();
         int ki = 0, prompts = 0;
@@ -205,27 +230,41 @@ public class Sim {
                 }
                 hash.println(h + " " + Long.toHexString(x));
             }
-            String o = out.toString();
-            if (o.endsWith("> ") && countOf(o, "> ") > prompts) {
-                prompts = countOf(o, "> ");
+            if (seen[0] > prompts && endsWith(out, "> ")) {
+                prompts = seen[0];
                 if (ki < items.length) {
                     kb.append(items[ki++]).append(lines ? "\n" : "");
                     for (Keyboard k : kbds) k.hasChanged();   // like KeyboardDialog: re-evaluate av
                     m.doStep();
                     if (csvName != null && ki == csvKey) dumping = true;
-                } else break;
+                } else { stop = " keys used up"; break; }
             }
-            if (restartAt < 0 && countOf(o, banner) > 1) {
+            if (restartAt < 0 && seen[1] > 1) {
                 restartAt = h;
                 System.out.print("\n[RESTART at half " + h + "]\n");
             }
-            if (stopRestart && restartAt >= 0 && h > restartAt + 200) break;
+            if (stopRestart && restartAt >= 0 && h > restartAt + 200) { stop = " restart"; break; }
+            if (out.length() != outLen) { outLen = out.length(); lastOut = h; }
+            if (idle > 0 && h - lastOut >= idle) { stop = " idle " + idle; break; }
+            if (stall > 0 && !watch.isEmpty()) {
+                long x = 0xcbf29ce484222325L;
+                for (ObservableValue v : watch)
+                    x = ((x ^ v.getValueHighZIsZero()) * 0x100000001b3L ^ v.getHighZ()) * 0x100000001b3L;
+                if (x != watchHash) { watchHash = x; lastChange = h; }
+                else if (h - lastChange >= stall) { stop = " stall " + stall; break; }
+            }
         }
         if (csv != null) csv.close();
         if (hash != null) hash.close();
         if (delta != null) delta.close();
         System.out.println("\n[half=" + h + " keysFed=" + ki + " ms=" + (System.currentTimeMillis() - t0)
-                + (restartAt >= 0 ? " RESTART@" + restartAt : "") + "]");
+                + (restartAt >= 0 ? " RESTART@" + restartAt : "")
+                + (pcSig != null ? " PC=" + fmt(pcSig) : "") + (stop.isEmpty() ? "" : " stop:" + stop) + "]");
+    }
+
+    static boolean endsWith(StringBuilder s, String suffix) {
+        int n = s.length() - suffix.length();
+        return n >= 0 && s.indexOf(suffix, n) == n;
     }
 
     static String fmt(ObservableValue v) {
@@ -233,12 +272,6 @@ public class Sim {
         if (v.getHighZ() != 0)      // partly floating: value bits + z mask (getValue would draw random bits)
             return Long.toHexString(v.getValueHighZIsZero()) + "z" + Long.toHexString(v.getHighZ());
         return Long.toHexString(v.getValue());
-    }
-
-    static int countOf(String s, String sub) {
-        int n = 0, i = 0;
-        while ((i = s.indexOf(sub, i)) >= 0) { n++; i += sub.length(); }
-        return n;
     }
 
     // Replace ObservableValue.random of every value reachable from the model nodes.

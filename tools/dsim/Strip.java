@@ -7,6 +7,7 @@
 //           right:<x>                   every element with pos.x >= x
 //   prints "E <name> <x> <y>" for each element and "W <x1> <y1> <x2> <y2>" for each wire to delete,
 //   then "KEEP-DRIVEN <net>" for nets that lost all drivers but still have consumers (boundary signals).
+//   "ALIAS-REMOVED a|b" (printed first) : a wire that joined tunnels a and b is gone, so that net splits.
 //
 // An element is dead when it is a root or when none of its output pins drives a live consumer
 // (tunnels are transparent: nets are merged by name). In/Out/Clock are never removed unless a root.
@@ -111,6 +112,15 @@ public class Strip {
                 }
             }
         }
+        // a local net that joined tunnels of different names and loses that join (its tunnels are removed, e.g.
+        // a loopback in the stripped harness): the merged net splits on purpose, netcmp -split accepts it
+        Map<Long, Set<String>> liveNames = new HashMap<>();
+        for (VisualElement ve : els)
+            if (ve.getElementName().equals("Tunnel") && !dead.contains(ve))
+                liveNames.computeIfAbsent(find(uf, key(ve.getPos())), k -> new HashSet<>()).add(ve.getElementAttributes().get(de.neemann.digital.core.element.Keys.NETNAME));
+        for (Map.Entry<Long, Set<String>> e : tunNames.entrySet())
+            if (e.getValue().size() > 1 && liveNames.getOrDefault(e.getKey(), Set.of()).size() < 2)
+                System.out.println("ALIAS-REMOVED " + String.join("|", new TreeSet<>(e.getValue())));
         for (VisualElement ve : els)
             if (dead.contains(ve)) System.out.println("E " + ve.getElementName() + " " + ve.getPos().x + " " + ve.getPos().y);
         for (Wire w : deadW) System.out.println("W " + w.p1.x + " " + w.p1.y + " " + w.p2.x + " " + w.p2.y);

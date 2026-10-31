@@ -15,16 +15,19 @@ javac -cp "$J" -d build Sim.java Patch.java NetQuery.java Strip.java NetSig.java
 java [옵션] -cp "$J;build" Sim <circuit.dig> <program.bin> <keys> [maxHalfCycles]
 ```
 
-- `keys`: 프로그램이 `> `를 출력할 때마다 한 글자씩 넣습니다. `-Dlines=1`이면 `|`로 나눈 한 줄씩 `\n`을 붙여 넣습니다(calc용).
+- `keys`: 프로그램이 `> `를 출력할 때마다 한 글자씩 넣습니다. `-Dlines=1`이면 `|`로 나눈 한 줄씩 `\n`을 붙여 넣습니다(calc용). 키를 다 쓴 뒤 다음 `> `가 나오면 끝냅니다(`""`이면 첫 `> `에서 끝).
+- 끝날 때 `[half=... keysFed=... PC=... stop: 이유]`를 출력합니다. 이유는 `keys used up`, `restart`, `stall N`, `idle N`이고, `maxHalfCycles`(기본 2000000)까지 돌았으면 비어 있습니다.
 - 옵션 (`-D이름=값`, `Sim` 앞에 씀)
 
 | 옵션 | 뜻 |
 |---|---|
-| `dip=x,y;...` | 켤 DipSwitch 위치. 기본 `-580,-1640`(클럭 mux를 Clock 쪽으로) |
+| `dip=x,y;...` | 켤 DipSwitch 위치. 기본 `-560,-1640`(클럭 mux를 Clock 쪽으로), `dip=`이면 하나도 켜지 않습니다. 그 위치에 DipSwitch가 없으면 에러로 멈춥니다(옮겨진 스위치 때문에 클럭 없이 아무 일도 안 하는 실행을 막음) |
 | `set=E=1,run=1` | top-level 입력 |
 | `at=H:k=v,...;H:k=v` | 반클럭 H에 top-level 입력을 바꿉니다. 예: computer-32 시작 순서 `-Dset=E=0,run=0,boot=1 -Dat="10:E=1,boot=0,run=1"` (`document/cpu-32.md` §4) |
-| `banner=text` | 리셋 때 한 번 출력되는 글자. 다시 보이면 재시작으로 판정합니다(기본 `m8 `) |
+| `banner=text` | 리셋 때 한 번 출력되는 글자. 다시 보이면 재시작으로 판정합니다(기본 없음 = 재시작 검사 안 함) |
 | `stopRestart=0` | 재시작해도 계속 실행 |
+| `stall=N` | `PC`, `com1`, `com2`가 N 반클럭 동안 그대로면 멈춘 것(halt, deadlock)으로 보고 끝냅니다. 기본 2000, `0`이면 끔. 볼 signal은 `stallCols=a,b,...` |
+| `idle=N` | N 반클럭 동안 터미널 출력이 없으면 끝냅니다(프로그램 끝의 `jmp $` 등). 기본 0 = 끔 |
 | `tap=top;ROB-SC.dig;...` | 해당 회로의 tunnel마다 probe 추가. 이름은 `T_<넷>`(top) 또는 `<파일>/<넷>` |
 | `csv=파일` | 모든 signal(probe, In/Out)을 반클럭마다 덤프. `csvFrom=N`이나 `csvKey=N`(N번째 키부터) |
 | `patch=scsfd` | `Patch.java`의 메모리 안 회로 수정 (파일은 그대로) |
@@ -33,10 +36,12 @@ java [옵션] -cp "$J;build" Sim <circuit.dig> <program.bin> <keys> [maxHalfCycl
 | `hash=파일` | 반클럭마다 모든 signal의 해시 한 줄. 두 실행이 처음 갈라지는 반클럭을 찾는 용도 |
 | `delta=파일` | `csv`처럼 덤프하되 바뀐 값만 `half 열번호 값`으로 씁니다(첫 줄은 이름 목록) |
 
-예 (memtest8 재현, 덤프):
+- `program.bin`에 `-`를 주면 ROM이 자기 파일(`boot/boot.bin`, `boot/rom.bin`)을 읽습니다. 지금 회로에는 program memory로 지정된 ROM이 없으므로 `-`를 씁니다.
+
+예 (tools worktree에서, computer-32 worktree의 회로를 실행하고 3번째 키부터 덤프):
 
 ```
-java -Dtap=top -Dcsv=t3.csv -DcsvKey=3 -cp "$J;build" Sim "../../components/cpu-test.dig" run.txt "123"
+java -Dtap=top -Dcsv=t3.csv -DcsvKey=3 -cp "$J;build" Sim "../../../computer-32/components/cpu-test.dig" - "123"
 ```
 
 ## NetQuery : 넷 조회
@@ -51,9 +56,10 @@ java -cp "$J;build" NetQuery <circuit.dig> sub ROB-SC.dig net D  # 하위 회로
 ## sync-nondebug.sh : debug 회로를 non-debug 회로로 반영
 
 ```
-sh sync-nondebug.sh
+sh sync-nondebug.sh [components 디렉터리]
 ```
 
+- 디렉터리를 주지 않으면 computer-32 worktree의 `../../../computer-32/components`가 있으면 그것을, 없으면 이 checkout의 `../../components`를 씁니다. 처음에 실제 대상 경로를 출력합니다.
 - `*-debug.dig`에서 non-debug 모듈을 다시 만듭니다(`id-manager`, `res-station`, `load-buffer`, `store-buffer`).
   - Probe와, probe에만 연결된 로직을 지웁니다.
   - id-manager에서는 디버그 Out `VV1`, `VV2`, `US`, `C16`도 지웁니다.
@@ -63,18 +69,19 @@ sh sync-nondebug.sh
 - `cpu-test.dig`의 메모리/IO 영역(x < -1200, probe 제외)에 `cpu-32` 인스턴스를 붙여 `computer-32.dig`를 만듭니다.
   - `cpu-32`의 핀마다 핀 이름의 터널을 달아 메모리/IO 쪽 터널과 이름으로 연결합니다.
   - 메모리/IO가 쓰지 않는 핀(`E`, `run`, `boot`, `INT_*`, `MMU_*` 등)에는 `cpu-test`와 같은 설정의 In/Out을, `C`에는 같은 Clock을 답니다.
-  - 하위 회로 안의 DipSwitch는 누를 수 없으므로, `cpu-32`의 클럭 선택 DipSwitch(-580,-1640)를 켠 상태로 저장합니다(`set_dip.py`).
+  - 하위 회로 안의 DipSwitch는 누를 수 없으므로, `cpu-32`의 클럭 선택 DipSwitch(-560,-1640)를 켠 상태로 저장합니다(`set_dip.py`).
 - 마지막에 원본과 결과의 넷리스트를 비교합니다. `mismatched 0`이면 남은 모든 핀이 원본과 같은 핀들에 연결되어 있습니다.
+  - harness 안의 wire로만 이어져 있던 터널(지금은 `MMU_req`→`MMU_acp` 루프백)은 cpu-32에서 일부러 갈라집니다. Strip이 `ALIAS-REMOVED MMU_acp|MMU_req`를 출력하고, 이 차이는 `mismatched`가 아니라 `expected split`으로 셉니다.
 - 결과 파일을 바로 덮어쓰므로, 손으로 고친 non-debug 파일이 있으면 먼저 커밋해 두세요.
 
 구성:
 
 | 파일 | 하는 일 |
 |---|---|
-| `Strip.java` | `Strip <circuit.dig> <root>...` 지울 소자(`E name x y`)와 wire(`W x1 y1 x2 y2`)를 출력합니다. root는 `type:Probe`, `label:Out:VV1`, `left:-1200`, `right:-1200`입니다. 쓸모없어진 터널과 wire도 함께 지웁니다. 이름이 다른 터널끼리 잇는 넷은 남깁니다. |
+| `Strip.java` | `Strip <circuit.dig> <root>...` 지울 소자(`E name x y`)와 wire(`W x1 y1 x2 y2`)를 출력합니다. root는 `type:Probe`, `label:Out:VV1`, `left:-1200`, `right:-1200`입니다. 쓸모없어진 터널과 wire도 함께 지웁니다. 이름이 다른 터널끼리 잇는 넷은 남기고, 그 연결이 지워지면 `ALIAS-REMOVED a\|b`를 출력합니다. |
 | `strip_apply.py` | `strip_apply.py <in.dig> <list> <out.dig> [a.dig=b.dig ...]` 목록대로 XML에서 지우고 하위 회로 이름을 바꿉니다. 지우기 전에 XStream의 `reference="../visualElement[N]/..."`를 실제 값으로 풀어 씁니다(순번이 밀려 파일이 깨지는 것을 막음). |
-| `NetSig.java` | `NetSig <circuit.dig>` 핀마다 넷 번호를 출력합니다. |
-| `netcmp.py` | `netcmp.py <a.sig> <b.sig>` 양쪽에 있는 핀끼리 넷 연결을 비교합니다. |
+| `NetSig.java` | `NetSig <circuit.dig>` 핀마다 넷 번호와 그 넷의 터널 이름(`a\|b`)을 출력합니다. |
+| `netcmp.py` | `netcmp.py <a.sig> <b.sig> [-split a\|b ...]` 양쪽에 있는 핀끼리 넷 연결을 비교합니다. `-split`: 원본에서 터널 a, b가 붙은 넷이 핀을 잃는 것은 `expected split`으로 셉니다. |
 | `make_computer.py` | `make_computer.py <harness.dig> <cpu-test.dig> <pins.txt> <out.dig>` 메모리/IO 회로에 `cpu-32` 인스턴스와 터널, In/Out을 붙입니다. |
 | `set_dip.py` | `set_dip.py <circuit.dig> x,y...` 그 위치의 DipSwitch 기본값을 켭니다. |
 | `Pins.java` | `Pins <아무 회로> <sub.dig>...` 하위 회로 shape의 핀 위치. 핀을 지운 뒤 다른 핀이 움직였는지 확인하는 용도입니다. |
@@ -91,7 +98,7 @@ sh sync-nondebug.sh
 ## emutrace.py : 에뮬레이터 trace
 
 ```
-python emutrace.py <program.bin> <keys> [시작주소hex]
+python emutrace.py <program.bin> <keys> [시작주소hex] [-raw]
 ```
 
-시작 주소부터 명령 140개를 주소, 워드, 역어셈블, SP와 함께 출력합니다.
+`program.bin`은 dlnk 기본 출력(8바이트 헤더: 시작 주소, 길이)이고, 헤더가 없는 이미지는 `-raw`를 붙입니다. opcode와 확장 레지스터 이름은 `tools/assembler/assembler.hpp`의 `instructionBase`, `regExBase`에서 읽습니다. 시작 주소부터 명령 140개를 주소, 워드, 역어셈블, SP와 함께 출력합니다.
