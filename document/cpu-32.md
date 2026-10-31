@@ -115,7 +115,7 @@ Rectangle 라벨 기준이고, 좌표는 cpu-32 회로 좌표입니다. 영역 �
 
 | 영역 | y | 내용 |
 |---|---|---|
-| decode circuit | -4180..-1980 | syscall, iret, intervec/pri 디코드 |
+| decode circuit | -4180..-1980 | syscall, iret, interst/interld 디코드 |
 | IO pins | -1940..-820 | 외부 In/Out 35개, Clock |
 | primeary signals | -780..-420 | 클럭 반전 `C_ct` 등 |
 | pipeline controller | -380..960 | FT/DC/ISS 단계 제어. inst id manager(-640..480, 220..920): `id-manager`, `flush-mux`, DipSwitch 2개 |
@@ -148,7 +148,7 @@ Rectangle 라벨 기준이고, 좌표는 cpu-32 회로 좌표입니다. 영역 �
 
 | 영역 | y | 내용 |
 |---|---|---|
-| issue circuit | -4180..-300 | 종류별 issue 조건: ALU, register, stack, RAM, block, jump, call, return, wait/halt, exld/st, syscall, iret, intervec/pri |
+| issue circuit | -4180..-300 | 종류별 issue 조건: ALU, register, stack, RAM, block, jump, call, return, wait/halt, exld/st, syscall, iret, interst/interld |
 
 ### x 3880..5840 (오른쪽 열)
 

@@ -11,7 +11,7 @@
 | 어셈블러 | 거의 완료 | `#include`, `#ifdef`, `#ifndef` 구현됨 (`document/SYNTAX.md` §include/ifdef). 확장 레지스터 ex-1 – ex-6 전부 지원 |
 | 링커 | 동작 | 다중 오브젝트 링크, 8바이트 헤더 / `-raw` / `-start`. jmp 축소 최적화는 미구현 (선택 사항) |
 | ISA 정리 | 완료 | `ISA.md`, `assembler.hpp`에 NMI / trap-flag 흔적 없음 |
-| 인터럽트 | 진행 중 | `syscall`/`iret`/`intervec`/`interpri`/`ldexp`/`stexp`, `ROB-INT.dig` 배선 중. TRAP 재구성 후 halt가 뒤 명령을 못 지움 (아래 "TRAP 재구성 후속") |
+| 인터럽트 | 진행 중 | `syscall`/`iret`/`interst`/`interld`/`ldexp`/`stexp`, `ROB-INT.dig` 배선 중. TRAP 재구성 후 halt가 뒤 명령을 못 지움 (아래 "TRAP 재구성 후속") |
 | 메모리 (ld/st buffer) | 대부분 해결 | queue → age matrix 전환 완료 (6b8b02b) |
 | 메모리 바이트 주소 / 리틀엔디안 | 동작 | ld/st 폭, `set` 모드 회로 확인 (2026-10-18) |
 | 외부 RAM / ROM, boot-sequence | 동작 | boot ROM → 외부 ROM의 프로그램을 RAM으로 복사 → 실행. add_terminal, io_harness, calc, picalc 회로에서 통과 (2026-10-18) |
@@ -38,7 +38,7 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 동작은 완료(아래 완료 탭). 남은 일:
 - [~] reset 시퀀스: reset PC = boot ROM은 동작. 파이프라인·ROB·RAS·BTB 초기화는 따로 확인 안 함
   - [~] 부트 코드 `boot/src/boot.asm` → `boot/boot.bin`
-    - [ ] stack / istack 설정, `intervec`·`panicvec` 설정
+    - [ ] stack / istack 설정, `interst`(vec/pri)·`panicvec` 설정
 
 ### 3. ISA ↔ 툴 맞추기 (`ISA.md` 6절)
 - [ ] `rol`/`ror` 회로 동작 확인 (시트: `rol` = rollleft, `ror` = rollright), 에뮬레이터에 추가
@@ -132,6 +132,7 @@ CPU 쪽:
 - ABI: `at` = `gen[21]`(1개), `kt0`/`kt1` = `gen[22]`/`gen[23]`
 - [ ] IPU: level/mask 레지스터, `{level, mode}` 16칸 스택, `iret` pop req/ack, `ldexp`/`stexp int-level` 경로
 - [ ] CPU: mode 사본(디코드 권한 검사), `iret` 직렬화, 진입 시 istack push
+- [ ] (2026-10-26) `interst`(78)/`interld`(79), byte 3 = md(b7: vec=0, pri=1)|id(b5:0), 값 = `R[base] + imm` (`ISA.md` 5절). 어셈블러: `tools` 브랜치에 구현(`interst R, m, vec | id`, `interld R, pri | id`, pseudo-mnemonic 없음, `SYNTAX.md` 갱신, 미커밋). `bin/dasm.exe` 교체와 커밋 남음. 회로: IPU의 vec/pri 쓰기·읽기 경로, `interld` 직렬화
 - [ ] 미정: `syscall` user 분류와 level/벡터, `cache`/`atom` user 여부(보류), mask = 1일 때 동기 예외 → `panic-vec`, `int-prev` EXT
 
 ##### 인터럽트 처리 흐름
