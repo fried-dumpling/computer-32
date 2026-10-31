@@ -71,7 +71,7 @@
           <int>2</int>
         </entry>
       </elementAttributes>
-      <pos x="1040" y="1080"/>
+      <pos x="1040" y="1140"/>
     </visualElement>
     <visualElement>
       <elementName>In</elementName>
@@ -85,7 +85,7 @@
           <int>32</int>
         </entry>
       </elementAttributes>
-      <pos x="1040" y="1020"/>
+      <pos x="1040" y="1080"/>
     </visualElement>
     <visualElement>
       <elementName>In</elementName>
@@ -203,7 +203,7 @@
           <string>virt_c</string>
         </entry>
       </elementAttributes>
-      <pos x="1060" y="1020"/>
+      <pos x="1060" y="1080"/>
     </visualElement>
     <visualElement>
       <elementName>Tunnel</elementName>
@@ -213,7 +213,7 @@
           <string>md_c</string>
         </entry>
       </elementAttributes>
-      <pos x="1060" y="1080"/>
+      <pos x="1060" y="1140"/>
     </visualElement>
     <visualElement>
       <elementName>Tunnel</elementName>
@@ -662,6 +662,82 @@
       </elementAttributes>
       <pos x="1340" y="520"/>
     </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>mid_c</string>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>6</int>
+        </entry>
+      </elementAttributes>
+      <pos x="1040" y="1020"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>NetName</string>
+          <string>mid_c</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1060" y="1020"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>mid_c</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1420" y="1080"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>NetName</string>
+          <string>mid</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1440" y="1080"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>mid</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1740" y="940"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Out</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>mid_o</string>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>6</int>
+        </entry>
+      </elementAttributes>
+      <pos x="1760" y="940"/>
+    </visualElement>
   </visualElements>
   <wires>
     <wire>
@@ -725,6 +801,10 @@
       <p2 x="1340" y="940"/>
     </wire>
     <wire>
+      <p1 x="1740" y="940"/>
+      <p2 x="1760" y="940"/>
+    </wire>
+    <wire>
       <p1 x="1480" y="620"/>
       <p2 x="1500" y="620"/>
     </wire>
@@ -769,6 +849,10 @@
       <p2 x="1760" y="820"/>
     </wire>
     <wire>
+      <p1 x="1040" y="1140"/>
+      <p2 x="1060" y="1140"/>
+    </wire>
+    <wire>
       <p1 x="1040" y="600"/>
       <p2 x="1060" y="600"/>
     </wire>
@@ -789,16 +873,20 @@
       <p2 x="1760" y="760"/>
     </wire>
     <wire>
-      <p1 x="1040" y="1080"/>
-      <p2 x="1060" y="1080"/>
-    </wire>
-    <wire>
       <p1 x="1440" y="920"/>
       <p2 x="1460" y="920"/>
     </wire>
     <wire>
       <p1 x="1320" y="920"/>
       <p2 x="1340" y="920"/>
+    </wire>
+    <wire>
+      <p1 x="1040" y="1080"/>
+      <p2 x="1060" y="1080"/>
+    </wire>
+    <wire>
+      <p1 x="1420" y="1080"/>
+      <p2 x="1440" y="1080"/>
     </wire>
     <wire>
       <p1 x="1440" y="540"/>

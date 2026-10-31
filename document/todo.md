@@ -89,7 +89,7 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
   - id 나이: issue > disp > processing > com2 > com1 (위가 새 것)
   - 작업 중 (미커밋): `flush-mux`에 `E_acp`, `id-manager-debug`에 `eclr` 출력, 새 `components/inst-sfcomp.dig`(A/B id·ep 비교 → `A_new`, `B_eq`)
 ##### TRAP 재구성 후속 (2026-10-23, forward-test에서 가져옴)
-forward-test의 TRAP 처리, exld/st 디코드(BLOCK·UMM 추가), `Fl_INT` → com1, `flush-mux`(trap 입력 제거, `clr_sel` 4비트), `id-manager-debug`, `regFile4`를 dev로 가져옴. 이전 회로는 `components/flush-mux-old.dig`, `components/trap-ref-old.dig`(dev 508f47c의 TRAP 블록).
+forward-test의 TRAP 처리, exld/st 디코드(BLOCK·UMM 추가), `Fl_INT` → com1, `flush-mux`(trap 입력 제거, `clr_sel` 4비트), `id-manager-debug`, `regFile4`를 dev로 가져옴. 이전 회로는 `components/legacy/flush-mux-old.dig`, `components/legacy/trap-ref-old.dig`(dev 508f47c의 TRAP 블록).
 - [ ] **trap/halt 뒤 명령이 지워지지 않음**: 예전엔 trap이 디코드되면 flush-mux의 trap 입력(`clr_sel`=8)이 뒤 명령을 flush했는데, 이 경로를 없애고 대체 로직이 없음
   - dsim: `A 출력; halt; B 출력`이 dev는 `A`, 지금은 `AB`. `test/selftest`의 Y(halt) 뒤 "출력되면 안 되는" `!`가 출력됨
   - `syscall`도 같은 경로라 뒤 명령이 실행될 것으로 보임 (테스트 프로그램 없음)

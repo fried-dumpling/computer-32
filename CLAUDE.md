@@ -149,18 +149,19 @@ Opcode table is in `tools/assembler/assembler.hpp` (`instructionBase` map).
 
 ## CPU Microarchitecture (Digital circuits in `components/`)
 
+Circuits that nothing references (old versions, unused helpers, `RAS`, `SC-buff`, `BTB-buff`, ...) are in `components/legacy/`; Digital still finds them by file name.
+
 - **`computer-32.dig`** — top-level system (CPU + memory + IO)
   - Structure snapshot of `cpu-32.dig` (pins, start sequence, regions, module tree, unfinished nets, cleanup list): `document/cpu-32.md`.
 - **`cpu-32.dig`** / **`cpu-test.dig`** — main CPU: fetch, decode, dispatch, execute, commit pipeline (test variant has extra probes)
-- **`res-station.dig`** (+ `res-station 2.dig`, `res-station-debug.dig`) — reservation station (instruction window size 16)
-- **`ROB-gen.dig`** (+ `ROB-gen 2.dig`) — reorder buffer for in-order commit; **`ROB-FL.dig`**, **`ROB-PC.dig`**, **`ROB-SC.dig`** — per-field ROB submodules (flags, PC, side-channel data); **`ROB-INT.dig`** — separate, smaller ROB dedicated to interrupt/trap entries
-- **`regFile.dig`..`regFile4.dig`** — speculative register file with renaming (iterated versions)
-- **`BTB.dig`** / **`BTB-buff.dig`** — branch target buffer (size 16, 2-bit predictor, 12-bit tag, 4-bit index)
-- **`RAS.dig`** — return address stack (4 speculative + 8 architectural modules)
+- **`res-station.dig`** (+ `res-station-debug.dig`) — reservation station (instruction window size 16)
+- **`ROB-gen.dig`** — reorder buffer for in-order commit; **`ROB-FL.dig`**, **`ROB-PC.dig`**, **`ROB-SC.dig`** — per-field ROB submodules (flags, PC, side-channel data); **`ROB-INT.dig`** — separate, smaller ROB dedicated to interrupt/trap entries
+- **`regFile.dig`** — speculative register file with renaming (was `regFile4`; older versions `regFile1`..`regFile3` are in `legacy/`)
+- **`BTB.dig`** — branch target buffer (size 16, 2-bit predictor, 12-bit tag, 4-bit index)
+- **`legacy/RAS.dig`** — return address stack (4 speculative + 8 architectural modules); not instanced in cpu-32
 - **`load-buffer.dig`** / **`store-buffer.dig`** (+ `-debug` variants) — memory operation buffers
 - **`store-controller.dig`** — **store-arbiter**: picks the commit/ROB-write order across multiple functional units (ALU, DIR for mov/set/register-ex, LOAD/STORE-BUFFER, etc.), 8-entry. Depends on **`index-compressor.dig`** and **`priority-test8V.dig`** (also `priority-test8`, `priority-test8V8B` variants exist). This is a separate concept from the load/store buffer age matrix below.
   - **`store-controller-half.dig`** — 4-entry version of the same arbiter, used for the interrupt/trap ROB write path (few units currently raise exceptions, so 8 entries were overkill) and reused for the flag-store arbiter (which only uses 2 of its slots today). Depends on `index-compressor-half.dig` / `priority-test4V.dig`.
-- **`SC-buff.dig`** — side-channel/store-controller buffer support
 - **`flush-mux.dig`** — misprediction/exception flush muxing
 - **`id-manager.dig`** (+ `-debug`) — instruction ID allocation/tracking
 - **`alu-32.dig`** — 32-bit ALU
