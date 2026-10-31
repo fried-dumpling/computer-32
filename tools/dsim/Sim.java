@@ -17,7 +17,6 @@
 //   stopRestart=1  stop shortly after a restart is detected (default 1)
 //   stall=N        stop when PC, com1 and com2 (stallCols=a,b,...) keep their value N halves (default 2000, 0 = off)
 //   idle=N         stop after N halves without terminal output (default 0 = off)
-//   patch=name     in-memory circuit patch from Patch.java (e.g. scsfd)
 //   probe=f.dig@x,y=name;...  extra Probe on an unnamed net point (f = top or a subcircuit file)
 //   cols=a,b,...   with csv : dump only these signals
 //   zseed=N|zero   floating (high-Z) bits normally read as fresh random bits on every read (new Random() per
@@ -51,8 +50,6 @@ public class Sim {
                 ve.getElementAttributes().set(Keys.DIP_DEFAULT, true);
         // a moved DipSwitch would leave the clock unconnected and the run would silently do nothing
         if (!dips.isEmpty()) throw new IllegalArgumentException("no DipSwitch at " + dips + " (-Ddip=x,y;...)");
-
-        if (System.getProperty("patch") != null) Patch.apply(cl, System.getProperty("patch"));
 
         // tap=top;load-buffer-debug.dig;...  : add a Probe on every Tunnel net of those circuits
         // (top = the main circuit). Probe label = T_<net> (top) or <file>/<net>.

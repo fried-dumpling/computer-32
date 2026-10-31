@@ -1,20 +1,15 @@
 #!/bin/sh
 # Regenerate the non-debug modules and cpu-32.dig from the debug modules and cpu-test.dig,
 # then check that every remaining pin is on the same net as in the source.
-#   sh sync-nondebug.sh [components dir]   (from tools/dsim, after building)
+#   sh sync-nondebug.sh [components dir]   (after building)
 # Writes <dir>/{id-manager,res-station,load-buffer,store-buffer,cpu-32,computer-32}.dig in place.
-# dir defaults to the computer-32 worktree (../../../computer-32/components) when it exists, since circuits
-# are edited there, and to this checkout's ../../components otherwise.
+# dir defaults to ../../components relative to this script.
 set -e
 J="${J:-D:/Users/taeh5/Digital/Digital 0.31/Digital.jar}"
-HERE="$(pwd)"
+HERE="$(cd "$(dirname "$0")" && pwd)"
 # java on Windows needs a D:/... path (pwd -W in git bash)
-CP="$J;$(pwd -W 2>/dev/null || pwd)/build"
-C="${1:-}"
-if [ -z "$C" ]; then
-    if [ -d ../../../computer-32/components ]; then C=../../../computer-32/components; else C=../../components; fi
-fi
-cd "$C"
+CP="$J;$(cd "$HERE" && (pwd -W 2>/dev/null || pwd))/build"
+cd "${1:-$HERE/../../components}"
 echo "components: $(pwd)"
 T="$(mktemp -d)"
 

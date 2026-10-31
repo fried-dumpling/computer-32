@@ -6,7 +6,7 @@
 
 ```
 J="D:/Users/taeh5/Digital/Digital 0.31/Digital.jar"
-javac -cp "$J" -d build Sim.java Patch.java NetQuery.java Strip.java NetSig.java Pins.java
+javac -cp "$J" -d build Sim.java NetQuery.java Strip.java NetSig.java Pins.java
 ```
 
 ## Sim : 실행
@@ -30,7 +30,7 @@ java [옵션] -cp "$J;build" Sim <circuit.dig> <program.bin> <keys> [maxHalfCycl
 | `idle=N` | N 반클럭 동안 터미널 출력이 없으면 끝냅니다(프로그램 끝의 `jmp $` 등). 기본 0 = 끔 |
 | `tap=top;ROB-SC.dig;...` | 해당 회로의 tunnel마다 probe 추가. 이름은 `T_<넷>`(top) 또는 `<파일>/<넷>` |
 | `csv=파일` | 모든 signal(probe, In/Out)을 반클럭마다 덤프. `csvFrom=N`이나 `csvKey=N`(N번째 키부터) |
-| `patch=scsfd` | `Patch.java`의 메모리 안 회로 수정 (파일은 그대로) |
+| `probe=f.dig@x,y=이름;...` | 이름 없는 넷 좌표에 probe 추가. `f`는 `top`이나 하위 회로 파일(예: `res-station-debug.dig`) |
 | `lines=1` | 줄 단위 입력 |
 | `zseed=N` / `zseed=zero` | floating(high-Z) 비트를 읽을 때 쓰는 난수를 고정합니다. Digital은 값마다 `new Random()`을 써서 읽을 때마다 다른 값을 주므로, 이 옵션이 없으면 실행마다 결과가 달라질 수 있습니다. `zero`면 항상 0 |
 | `hash=파일` | 반클럭마다 모든 signal의 해시 한 줄. 두 실행이 처음 갈라지는 반클럭을 찾는 용도 |
@@ -38,10 +38,10 @@ java [옵션] -cp "$J;build" Sim <circuit.dig> <program.bin> <keys> [maxHalfCycl
 
 - `program.bin`에 `-`를 주면 ROM이 자기 파일(`boot/boot.bin`, `boot/rom.bin`)을 읽습니다. 지금 회로에는 program memory로 지정된 ROM이 없으므로 `-`를 씁니다.
 
-예 (tools worktree에서, computer-32 worktree의 회로를 실행하고 3번째 키부터 덤프):
+예 (tools/dsim에서, 3번째 키부터 덤프):
 
 ```
-java -Dtap=top -Dcsv=t3.csv -DcsvKey=3 -cp "$J;build" Sim "../../../computer-32/components/cpu-test.dig" - "123"
+java -Dtap=top -Dcsv=t3.csv -DcsvKey=3 -cp "$J;build" Sim "../../components/cpu-test.dig" - "123"
 ```
 
 ## NetQuery : 넷 조회
@@ -59,7 +59,7 @@ java -cp "$J;build" NetQuery <circuit.dig> sub ROB-SC.dig net D  # 하위 회로
 sh sync-nondebug.sh [components 디렉터리]
 ```
 
-- 디렉터리를 주지 않으면 computer-32 worktree의 `../../../computer-32/components`가 있으면 그것을, 없으면 이 checkout의 `../../components`를 씁니다. 처음에 실제 대상 경로를 출력합니다.
+- 디렉터리를 주지 않으면 스크립트 위치 기준 `../../components`를 씁니다. 처음에 실제 대상 경로를 출력합니다.
 - `*-debug.dig`에서 non-debug 모듈을 다시 만듭니다(`id-manager`, `res-station`, `load-buffer`, `store-buffer`).
   - Probe와, probe에만 연결된 로직을 지웁니다.
   - id-manager에서는 디버그 Out `VV1`, `VV2`, `US`, `C16`도 지웁니다.
@@ -88,12 +88,6 @@ sh sync-nondebug.sh [components 디렉터리]
 
 이 회로는 Probe 하나만 지워도 실행 결과가 달라질 수 있으므로(race), 변환 결과는 실행 비교가 아니라 넷리스트 비교로 확인합니다.
 
-## Patch : 실험용 회로 수정
-
-- `scsfd`: `scs_i = clr ? FD : SCS±N`을 `(clr ? FD : SCS)±N`으로 바꿉니다. flush 반클럭에 dispatch된 call/ret의 SP 갱신이 버려지는 문제(원인 3)를 고치는지 확인하는 용도입니다. 회로에 이미 반영됐으므로, 현재 회로에서는 대상 mux가 없어서 실패합니다.
-- `wfprio`: RS의 FL/SC 의존 태그 갱신에서 실제 삽입을 commit-clear보다 우선시킵니다(원인 4). `inst-wfile`의 FL/SC data mux와 RS의 `FL_inst`/`SC_inst` mux를 바꿉니다.
-
-`-Dprobe=res-station-debug.dig@x,y=이름;...`으로 이름 없는 넷 좌표에도 probe를 달 수 있습니다.
 
 ## emutrace.py : 에뮬레이터 trace
 
