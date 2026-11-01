@@ -857,7 +857,7 @@
     <visualElement>
       <elementName>MMU-D.dig</elementName>
       <elementAttributes/>
-      <pos x="500" y="640"/>
+      <pos x="500" y="620"/>
     </visualElement>
   </visualElements>
   <wires>
@@ -1374,16 +1374,8 @@
       <p2 x="1480" y="1520"/>
     </wire>
     <wire>
-      <p1 x="1620" y="1780"/>
-      <p2 x="1680" y="1780"/>
-    </wire>
-    <wire>
-      <p1 x="1540" y="1140"/>
-      <p2 x="1560" y="1140"/>
-    </wire>
-    <wire>
-      <p1 x="1420" y="1140"/>
-      <p2 x="1440" y="1140"/>
+      <p1 x="800" y="500"/>
+      <p2 x="820" y="500"/>
     </wire>
     <wire>
       <p1 x="1320" y="500"/>
@@ -1394,8 +1386,16 @@
       <p2 x="1000" y="500"/>
     </wire>
     <wire>
-      <p1 x="800" y="500"/>
-      <p2 x="820" y="500"/>
+      <p1 x="1620" y="1780"/>
+      <p2 x="1680" y="1780"/>
+    </wire>
+    <wire>
+      <p1 x="1540" y="1140"/>
+      <p2 x="1560" y="1140"/>
+    </wire>
+    <wire>
+      <p1 x="1420" y="1140"/>
+      <p2 x="1440" y="1140"/>
     </wire>
     <wire>
       <p1 x="1120" y="1400"/>
