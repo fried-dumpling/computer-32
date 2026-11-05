@@ -31,7 +31,9 @@ and `set`. `set` writes only the bits of its mode and keeps the others, as
 measured on the circuit: S16H = [31:16], 16L / S16L = [15:0],
 8L / S8L = [7:0], 8H / S8H = [15:8].
 
-Unsupported opcodes (carry ops, rotates, interrupts, ...) raise EmuError.
+rol / ror rotate by the amount mod 32 (checked on the circuit,
+program/test/rotate.asm). Unsupported opcodes (carry ops, interrupts, ...)
+raise EmuError.
 
 Images: CPU() takes the raw program bytes (dlnk -raw), loaded at 0, pc = 0.
 load_image() also reads the default dlnk output with its 8 byte header
@@ -208,6 +210,13 @@ class CPU:
             self.poison()
         elif op in alu_ri:
             self.wr(a, alu_rr[alu_ri[op]](self.rd(a), imm))
+            self.poison()
+        elif 0x0C <= op <= 0x0F:               # rol, roli, ror, rori
+            amt = (self.rd(b) if op in (0x0C, 0x0E) else imm) & 31
+            x = self.rd(a)
+            if op >= 0x0E:
+                amt = (32 - amt) & 31
+            self.wr(a, (x << amt | x >> (32 - amt)) & M32)
             self.poison()
         elif op in (0x10, 0x12, 0x13, 0x15):
             amt = self.rd(b) if op in (0x10, 0x13) else imm

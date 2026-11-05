@@ -47,7 +47,7 @@ Strict by default:
 - ALU instructions other than `cmp`/`test` invalidate the flags; a branch on invalid flags is an error.
 - Only `32B` mode is allowed, except `ld`/`st` widths (`32B`/`16L`/`8L`/`8H`) and `set` `S16H`/`16L`.
 - Partial `ld` keeps the other bits like the circuit; `st .8L`/`.16L` writes only those bytes (it does not copy the circuit's store D_MD bug).
-- No carry, rotate or interrupt instructions (add them when needed). `jmp $` is treated as halt.
+- No carry or interrupt instructions (add them when needed). `rol`/`ror` rotate by the amount mod 32, as on the circuit. `jmp $` is treated as halt.
 
 ### Headless circuit simulator (dsim)
 
@@ -219,6 +219,8 @@ dlnk main.o lib.o -o ../boot/rom.bin      ; from program/
 Memory map (`boot/src/boot.asm`): RAM `0x00000000-0x03FFFFFF`, keyboard/terminal `0x04000000` (KEY_IN, KEY_V, KEY_R, TERM_OUT at offsets 0/4/8/12), display `0x08000000` (GraphicCard 160×90, one word per pixel, `0x8000 + RGB555`), ROM `0xFC000000-0xFC3FFFFF`, boot `0xFFFFFF00-0xFFFFFFFF`.
 
 ### Known circuit problems that affect programs
+
+Past circuit bugs found with dsim (symptom, cause, fix, status): `document/errors.md`. Check it first when a similar symptom shows up.
 
 - **`halt` runs before an older branch resolves** (2026-10-17, dsim). When a branch is predicted not taken and `halt` follows it, `halt` is issued and stops the CPU while the branch still waits in the reservation station, so the misprediction is never recovered. `calc`, `picalc` and `test/fill` all have `halt` right after a branch and stop at once. Workaround: end with `jmp.one pc.32B, 0` instead of `halt`.
 - **`st .8L`/`.16L`/`.8H` writes 4 bytes**: the store D_MD is always 0, so the selected value is zero-extended to a word.
