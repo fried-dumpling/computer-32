@@ -24,6 +24,7 @@
 //   delta=file     like csv but only changes: header "names...", then "half col value" per changed signal
 //   hash=file      write one hash of all signals per half cycle ("half hash"), to find where two runs diverge
 //   lines=1       keys is a '|' separated list of lines; one whole line + \n is fed per prompt
+//   rom=file       ROMs that load boot/rom.bin (in romCircuit, default rom-test.dig) load this file instead
 import de.neemann.digital.cli.CircuitLoader;
 import de.neemann.digital.core.*;
 import de.neemann.digital.core.element.Keys;
@@ -112,6 +113,25 @@ public class Sim {
                 ci.add(new VisualElement("Probe").setPos(at).setAttribute(Keys.LABEL, fl[1])
                         .setShapeFactory(cl.getShapeFactory()));
             }
+
+        // rom=file  : ROMs whose data file is boot/rom.bin read this file instead (romCircuit=rom-test.dig),
+        // so runs with different programs can go at the same time
+        String rom = System.getProperty("rom");
+        if (rom != null) {
+            File romFile = new File(rom).getAbsoluteFile();
+            if (!romFile.isFile()) throw new IllegalArgumentException("no rom file " + romFile);
+            de.neemann.digital.draw.elements.Circuit ci = ((de.neemann.digital.draw.library.ElementTypeDescriptionCustom)
+                    cl.getLibrary().getElementType(System.getProperty("romCircuit", "rom-test.dig"))).getCircuit();
+            int n = 0;
+            for (VisualElement ve : ci.getElements()) {
+                File f = ve.getElementAttributes().get(Keys.LAST_DATA_FILE);
+                if (f != null && f.getName().equals("rom.bin")) {
+                    ve.getElementAttributes().set(Keys.LAST_DATA_FILE, romFile);
+                    n++;
+                }
+            }
+            if (n == 0) throw new IllegalArgumentException("no ROM with rom.bin in " + System.getProperty("romCircuit", "rom-test.dig"));
+        }
 
         Model m = cl.createModel();
         if (!prog.equals("-"))      // "-" : ROMs load their own files (autoReload)

@@ -47,7 +47,7 @@ Strict by default:
 - ALU instructions other than `cmp`/`test` invalidate the flags; a branch on invalid flags is an error.
 - Only `32B` mode is allowed, except `ld`/`st` widths (`32B`/`16L`/`8L`/`8H`) and `set` `S16H`/`16L`.
 - Partial `ld` keeps the other bits like the circuit; `st .8L`/`.16L` writes only those bytes (it does not copy the circuit's store D_MD bug).
-- No carry, rotate or interrupt instructions (add them when needed). `jmp $` is treated as halt.
+- No carry or interrupt instructions (add them when needed). `rol`/`ror` rotate by the amount mod 32, as on the circuit. `jmp $` is treated as halt.
 
 ### Headless circuit simulator (dsim)
 
@@ -149,18 +149,19 @@ Opcode table is in `tools/assembler/assembler.hpp` (`instructionBase` map).
 
 ## CPU Microarchitecture (Digital circuits in `components/`)
 
+Circuits that nothing references (old versions, unused helpers, `RAS`, `SC-buff`, `BTB-buff`, ...) are in `components/legacy/`; Digital still finds them by file name.
+
 - **`computer-32.dig`** — top-level system (CPU + memory + IO)
   - Structure snapshot of `cpu-32.dig` (pins, start sequence, regions, module tree, unfinished nets, cleanup list): `document/cpu-32.md`.
 - **`cpu-32.dig`** / **`cpu-test.dig`** — main CPU: fetch, decode, dispatch, execute, commit pipeline (test variant has extra probes)
-- **`res-station.dig`** (+ `res-station 2.dig`, `res-station-debug.dig`) — reservation station (instruction window size 16)
-- **`ROB-gen.dig`** (+ `ROB-gen 2.dig`) — reorder buffer for in-order commit; **`ROB-FL.dig`**, **`ROB-PC.dig`**, **`ROB-SC.dig`** — per-field ROB submodules (flags, PC, side-channel data); **`ROB-INT.dig`** — separate, smaller ROB dedicated to interrupt/trap entries
-- **`regFile.dig`..`regFile4.dig`** — speculative register file with renaming (iterated versions)
-- **`BTB.dig`** / **`BTB-buff.dig`** — branch target buffer (size 16, 2-bit predictor, 12-bit tag, 4-bit index)
-- **`RAS.dig`** — return address stack (4 speculative + 8 architectural modules)
+- **`res-station.dig`** (+ `res-station-debug.dig`) — reservation station (instruction window size 16)
+- **`ROB-gen.dig`** — reorder buffer for in-order commit; **`ROB-FL.dig`**, **`ROB-PC.dig`**, **`ROB-SC.dig`** — per-field ROB submodules (flags, PC, side-channel data); **`ROB-INT.dig`** — separate, smaller ROB dedicated to interrupt/trap entries
+- **`regFile.dig`** — speculative register file with renaming (was `regFile4`; older versions `regFile1`..`regFile3` are in `legacy/`)
+- **`BTB.dig`** — branch target buffer (size 16, 2-bit predictor, 12-bit tag, 4-bit index)
+- **`legacy/RAS.dig`** — return address stack (4 speculative + 8 architectural modules); not instanced in cpu-32
 - **`load-buffer.dig`** / **`store-buffer.dig`** (+ `-debug` variants) — memory operation buffers
 - **`store-controller.dig`** — **store-arbiter**: picks the commit/ROB-write order across multiple functional units (ALU, DIR for mov/set/register-ex, LOAD/STORE-BUFFER, etc.), 8-entry. Depends on **`index-compressor.dig`** and **`priority-test8V.dig`** (also `priority-test8`, `priority-test8V8B` variants exist). This is a separate concept from the load/store buffer age matrix below.
   - **`store-controller-half.dig`** — 4-entry version of the same arbiter, used for the interrupt/trap ROB write path (few units currently raise exceptions, so 8 entries were overkill) and reused for the flag-store arbiter (which only uses 2 of its slots today). Depends on `index-compressor-half.dig` / `priority-test4V.dig`.
-- **`SC-buff.dig`** — side-channel/store-controller buffer support
 - **`flush-mux.dig`** — misprediction/exception flush muxing
 - **`id-manager.dig`** (+ `-debug`) — instruction ID allocation/tracking
 - **`alu-32.dig`** — 32-bit ALU
@@ -218,6 +219,8 @@ dlnk main.o lib.o -o ../boot/rom.bin      ; from program/
 Memory map (`boot/src/boot.asm`): RAM `0x00000000-0x03FFFFFF`, keyboard/terminal `0x04000000` (KEY_IN, KEY_V, KEY_R, TERM_OUT at offsets 0/4/8/12), display `0x08000000` (GraphicCard 160×90, one word per pixel, `0x8000 + RGB555`), ROM `0xFC000000-0xFC3FFFFF`, boot `0xFFFFFF00-0xFFFFFFFF`.
 
 ### Known circuit problems that affect programs
+
+Past circuit bugs found with dsim (symptom, cause, fix, status): `document/errors.md`. Check it first when a similar symptom shows up.
 
 - **`halt` runs before an older branch resolves** (2026-10-17, dsim). When a branch is predicted not taken and `halt` follows it, `halt` is issued and stops the CPU while the branch still waits in the reservation station, so the misprediction is never recovered. `calc`, `picalc` and `test/fill` all have `halt` right after a branch and stop at once. Workaround: end with `jmp.one pc.32B, 0` instead of `halt`.
 - **`st .8L`/`.16L`/`.8H` writes 4 bytes**: the store D_MD is always 0, so the selected value is zero-extended to a word.

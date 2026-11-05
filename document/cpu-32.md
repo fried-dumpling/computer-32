@@ -128,7 +128,7 @@ Rectangle 라벨 기준이고, 좌표는 cpu-32 회로 좌표입니다. 영역 �
 | 영역 | y | 내용 |
 |---|---|---|
 | decode circuit | -4180..-300 | 명령어 종류별 디코드: ALU, register, stack, RAM (x 600..1740), jump, call, return, wait/halt, block, exld/st (x 1780..2640) |
-| register system | -260..900 | `regFile4`, ROB(`ROB-gen`, `ROB-PC`, `ROB-SC`, `ROB-FL`, `ROB-INT`) |
+| register system | -260..900 | `regFile`, ROB(`ROB-gen`, `ROB-PC`, `ROB-SC`, `ROB-FL`, `ROB-INT`) |
 | program counter controller | 940..1340 | `BTB`, `add-4c32` |
 | bus system | 1380..1940 | 명령어 버스 레지스터 `I_A-_R`, `I_D-_R`. DipSwitch 1개(660,1440) |
 | data bus ctrl | 1980..3440 | `inst-sfcomp` ×2, 데이터 버스 Driver |
@@ -168,7 +168,7 @@ cpu-32.dig
 - BTB.dig
 - ROB-gen.dig / ROB-PC.dig / ROB-FL.dig / ROB-INT.dig
 - ROB-SC.dig             - fill-16 x2 - fill-8 x2
-- regFile4.dig           - mux8x4 x2, reg8x4 x5, reg8x4M x26
+- regFile.dig            - mux8x4 x2, reg8x4 x5, reg8x4M x26
 - id-manager.dig         - fill-16 x2 - fill-8 x2
 - flush-mux.dig
 - res-station.dig        - fill-8, inst-comp x9, inst-wfile (inst-comp x29)
@@ -220,14 +220,5 @@ cpu-32.dig
 2. **임시 Ground 출력**: `INT_vstr`/`INT_pstr`/`INT_ret`, `MMU_*`, `CSH_*`.
 3. **안 쓰는 입력**: `INT_ker`, `INT_rqac`.
 4. **명령어 latch**: `I_D-_R` enable에 `I_valid`를 넣을지 정합니다(§7).
-5. **어디서도 쓰지 않는 `.dig`**: 아래 파일은 cpu-32, cpu-test, computer-32 어디에서도 쓰지 않습니다.
-   - 작업 중일 수 있는 파일(`IPU-test`, `MMU-BL`, `LCG-20`)은 지우면 안 됩니다.
-   - `RAS.dig`(return address stack)는 CLAUDE.md에 있지만 cpu-32에는 인스턴스가 없습니다.
-   ```
-   BTB-buff, IPU-test, LCG-20, LCGP-32, LCGP-8, MMU-BL, RAS, ROB-gen 2, SC-buff, busMF16-demux,
-   computer-32-test, data-selector, fill-4, flush-mux-old, inst-comp3, inst-min, inst-wfile-debug,
-   map-inst2reg, map2-inst2reg, mux1x4, priority-16, priority-4, priority-8, priority-test8,
-   priority-test8V8B, queue, reg8x4-ready, regFile, regFile2, regFile3, register32x32, register32x8,
-   rename test, res-station 2, rotateL-4, rotateR-4, sub-4c32, trap-ref-old
-   ```
+5. **어디서도 쓰지 않는 `.dig`**: cpu-32, cpu-test, computer-32, computer-32-test, MMU-D 어디에서도 쓰지 않는 파일은 `components/legacy/`로 옮겼습니다(2026-10-31). `store-buffer8-debug`는 작업 중이라 남겼습니다. `RAS.dig`(return address stack)도 cpu-32에 인스턴스가 없어서 legacy에 있습니다.
 6. **영역 이름**: 철자를 맞출 곳이 있습니다(`primeary`, `aribiter`, `kernal`).

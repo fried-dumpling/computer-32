@@ -1,6 +1,6 @@
 # TODO
 
-> `todo.txt`를 정리한 문서입니다(원본은 그대로 둠). 상태는 2026-10-23 기준 저장소 내용과 대조했습니다.
+> `todo.txt`를 정리한 문서입니다(원본은 그대로 둠). 상태는 2026-10-23 기준 저장소 내용과 대조했고, 2026-11-05에 다시 갱신했습니다. 회로 버그 기록은 `document/errors.md`.
 > - `[x]` 완료 · `[~]` 진행 중 / 부분 완료 · `[ ]` 미착수 · `(?)` 코드로 확인되지 않아 직접 확인 필요
 > - 이 탭에는 해야 할 일만 둡니다. 끝난 일과 설계 기록은 아래 [완료](#완료) 탭에 있습니다.
 
@@ -8,17 +8,19 @@
 
 | 영역 | 상태 | 비고 |
 |---|---|---|
-| 어셈블러 | 거의 완료 | `#include`, `#ifdef`, `#ifndef` 구현됨 (`document/SYNTAX.md` §include/ifdef). 확장 레지스터 ex-1 – ex-6 전부 지원 |
+| 어셈블러 | 거의 완료 | `#include`, `#ifdef`, `#ifndef` 구현됨 (`document/SYNTAX.md` §include/ifdef). 확장 레지스터 ex-1 – ex-6 전부 지원. `interst`/`interld`와 11-05 버그 수정 3건은 `tools` 브랜치 쪽 (아래 "부속별 정리 1") |
 | 링커 | 동작 | 다중 오브젝트 링크, 8바이트 헤더 / `-raw` / `-start`. jmp 축소 최적화는 미구현 (선택 사항) |
 | ISA 정리 | 완료 | `ISA.md`, `assembler.hpp`에 NMI / trap-flag 흔적 없음 |
-| 인터럽트 | 진행 중 | `syscall`/`iret`/`interst`/`interld`/`ldexp`/`stexp`, `ROB-INT.dig` 배선 중. TRAP 재구성 후 halt가 뒤 명령을 못 지움 (아래 "TRAP 재구성 후속") |
-| 메모리 (ld/st buffer) | 대부분 해결 | queue → age matrix 전환 완료 (6b8b02b) |
-| 메모리 바이트 주소 / 리틀엔디안 | 동작 | ld/st 폭, `set` 모드 회로 확인 (2026-10-18) |
+| 인터럽트 | 진행 중 | `syscall`/`iret`/`interst`/`interld`/`ldexp`/`stexp`, `ROB-INT.dig` 배선 중. halt 뒤 명령 문제는 11-05 selftest로 해결 확인, `syscall`은 미확인 |
+| 메모리 (ld/st buffer) | 대부분 해결 | queue → age matrix 전환 완료 (6b8b02b). outstanding 요청 (e9e045d, buff-outstanding). 남은 버그는 아래 "회로 에러" |
+| 메모리 바이트 주소 / 리틀엔디안 | 다시 확인 필요 | ld/st 폭, `set` 모드 회로 확인 (2026-10-18). 11-05 `knownbug`에서 `st .8L/.16L/.8H`가 다시 word 전체를 씀 |
 | 외부 RAM / ROM, boot-sequence | 동작 | boot ROM → 외부 ROM의 프로그램을 RAM으로 복사 → 실행. add_terminal, io_harness, calc, picalc 회로에서 통과 (2026-10-18) |
-| forwarding | 목표 설정 | 아래 "다음 목표" 1. `forward-test` 브랜치 WIP |
+| forwarding | 설계 중 | 아래 "다음 목표" 1. forward-arbiter 설계 메모(2026-11), `forward-test` 브랜치 WIP |
 | PC-mux | 완료 | 우선순위 인코더 + 단일 mux |
-| IPU / MMU / cache / 멀티채널 RAM | 미착수 | |
-| Git / 저장소 | 진행 중 | assembler-linker를 `tools/`로 병합, 문서·중복 정리 완료. 원격 보관·레포 밖 정리 남음 (아래 "다음 목표" 4) |
+| 클럭 | 완료 | CPU 전체를 한 클럭 에지로 (bf78b59, 11-01) |
+| MMU | 진행 중 | `MMU-BL.dig`(base-limit), `MMU-D.dig`(MMU 2개, 임시) 연결, "MMU works somewhat" (87711cc) |
+| IPU / cache / 멀티채널 RAM | 미착수 | |
+| Git / 저장소 | 거의 완료 | 병합, 문서·중복 정리, 레포 밖 정리 완료. GitHub archive와 빌드 산출물 결정 남음 (아래 "다음 목표" 4) |
 
 ---
 
@@ -32,6 +34,18 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 - [ ] flush 시 forwarding 경로의 결과 무효화 (wrong-spec id보다 큰 결과 무시)
 - [ ] 완료 기준: add_terminal / calc가 그대로 동작하고, 의존 명령 연속 실행 시 사이클 수 감소 확인
   - 기준값 (2026-10-18, headless sim): calc 4줄 147,564 명령 / 약 39만 사이클, picalc `0 20` 191,829 명령 / 약 57만 사이클 (IPC 약 0.35~0.38)
+- [ ] forward-arbiter 설계 (`todo.txt` < forwarding >, 2026-11)
+  - [ ] store arbiter(`store-controller*`) 앞에 forward-arbiter를 둘지 결정
+    - 결과가 레지스터 전체와 겹치면(fully overlap) forward
+    - 일부만 겹치면(partial overlap) forward하지 않음
+  - [ ] 신호를 store arbiter에서 받지 않고 FU의 load 출력 신호(`ld`)에서 바로 받기
+    - store arbiter를 거치면 forwarding이 2~3 latch(클럭?) 늦어져서 성능 이득이 작음
+    - 가능한지 확인 필요
+  - [ ] `ld` 신호에서 우선순위 높게 forward하고, 남은 건 나중에 store arbiter 경로로 처리
+    - 이미 forward된 결과가 store arbiter로 ROB에 다시 쓰일 때 그걸 알아야 하는지
+    - 모르더라도 문제가 없는지 확인 (두 번 전달돼도 틀린 동작이 없는지)
+  - [ ] inst-wfile이 흐트러지면 inst-wfile은 store arbiter로만 갱신
+    - load forward는 지금 기다리는(backup) 명령이 결과를 빨리 받는 경로로만 씀
 - [ ] `forward-test` 브랜치(WIP)는 부트 ROM 실행 중 PC `0xFFFFFF3C`에서 commit 4개 뒤 멈춤 (dsim은 클럭 DipSwitch가 옮겨져 `-Ddip=-560,-1640` 필요). TRAP·exld/st·flush-mux 등은 dev로 가져왔으므로 남은 건 RS / inst-wfile / ROB / load-buffer `ep_O` / data-select-1(H)
 
 ### 2. Boot-sequence | 외부 ROM
@@ -41,15 +55,13 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
     - [ ] stack / istack 설정, `interst`(vec/pri)·`panicvec` 설정
 
 ### 3. ISA ↔ 툴 맞추기 (`ISA.md` 6절)
-- [ ] `rol`/`ror` 회로 동작 확인 (시트: `rol` = rollleft, `ror` = rollright), 에뮬레이터에 추가
 - [ ] floatingpoint 테스트(`fp_test.py`)는 에뮬레이터 전용 — 회로에서 돌릴 방법 검토 (calc로 간접 확인만 됨)
 
 ### 4. Git / 저장소 정리
 병합과 문서 정리는 완료(아래 완료 탭). 남은 일:
-- [ ] `assembler-linker` 원격: 원본 `src` README에 "computer-32 리포의 `tools/`로 이전됨" 적고 push → `gh repo archive fried-dumpling/assembler-linker`
-- [ ] 레포 밖 정리: 상위 `computer 32 (new)/bin`(옛 dasm) 삭제, `src/` 폴더는 `archive/`로 이동
+- [~] `assembler-linker` 원격: README "moved to computer-32 repository's tools/ directory"는 push됨(main 57fedf2, dev 090b3c9). GitHub에서 archive만 남음 (Settings → Archive, 또는 `gh repo archive fried-dumpling/assembler-linker`. 이 PC에는 `gh`가 없음)
+- [ ] 상위 `computer 32 (new)/bin`(옛 dasm, 10-17 빌드): 사용자 PATH가 여기를 가리킴. PATH를 `computer-32/bin`으로 바꾼 뒤 삭제
 - [ ] 3b97a39에서 들어간 빌드 산출물: `boot/src/boot.out`(88바이트, boot 이미지의 raw 사본으로 보임), `program/calc/calc.bin`, `program/picalc/pi.bin` — 남길지, 지우고 `.gitignore`에 넣을지 결정
-- [ ] `fix/parser-comparator`: 로컬이 origin보다 1커밋 앞섬(dev에는 이미 포함) — push 또는 삭제
 - [ ] (선택) `log/` 히스토리 제거: 작업 폴더에선 111MB지만 압축돼 사본에서 지워 봐도 pack 크기가 거의 그대로였음. 히스토리 재작성 + force push가 필요해 보류
 
 ---
@@ -66,10 +78,8 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
   - assembler: 크기가 4의 배수가 아닌 allocate 뒤의 데이터/라벨을 맞춤
   - `iotools::Terminal`에 값 생략 옵션 파싱 추가 필요
 - [ ] 데이터 배치 한계: 4바이트보다 큰 allocate에 재배치 값이 들어가면 첫 워드만 패치됨, 크기가 4의 배수가 아니면 뒤 데이터가 정렬되지 않음
-- [ ] 중첩 `#include`의 경로 기준이 항상 최초 입력 파일의 디렉터리 (`PreprocData::fileName`이 갱신되지 않음)
-- [ ] `gen[n]` 인덱스 범위 검사 없음 (25 이상이면 특수 레지스터 id와 겹침)
-- [ ] global/extern 오류 메시지의 토큰이 이름이 아니라 키워드로 표시됨
-- [ ] ISA 남은 확인 (`ISA.md` 6절): 캐시 md 비트 방향(flush=1로 가정), `jp`/`jpi`/`break` 이름 (라벨 충돌 위험으로 별칭 보류). `rol`/`ror`는 위 "다음 목표" 3
+- [ ] `tools` 브랜치 정리: b8ff089(`interst`/`interld`, push됨)와 11-05 버그 수정 3건(3b5217f, 미push)을 `computer`에 merge → `bin/dasm.exe` 교체. 지금 `bin/dasm.exe`는 아직 `intervec`/`interpri`
+- [ ] ISA 남은 확인 (`ISA.md` 6절): 캐시 md 비트 방향(flush=1로 가정), `jp`/`jpi`/`break` 이름 (라벨 충돌 위험으로 별칭 보류)
 - [ ] (보류) LALR 파서가 테이블 충돌을 조용히 묻음 — `branch`, `factorial_norec`, `prime_old`(`program/archive`) parse 실패, 잘못된 소스가 엉뚱한 위치에서 실패
 
 선택 사항 (처음부터 구현하지 않기로 함):
@@ -89,15 +99,11 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
   - id 나이: issue > disp > processing > com2 > com1 (위가 새 것)
   - 작업 중 (미커밋): `flush-mux`에 `E_acp`, `id-manager-debug`에 `eclr` 출력, 새 `components/inst-sfcomp.dig`(A/B id·ep 비교 → `A_new`, `B_eq`)
 ##### TRAP 재구성 후속 (2026-10-23, forward-test에서 가져옴)
-forward-test의 TRAP 처리, exld/st 디코드(BLOCK·UMM 추가), `Fl_INT` → com1, `flush-mux`(trap 입력 제거, `clr_sel` 4비트), `id-manager-debug`, `regFile4`를 dev로 가져옴. 이전 회로는 `components/flush-mux-old.dig`, `components/trap-ref-old.dig`(dev 508f47c의 TRAP 블록).
-- [ ] **trap/halt 뒤 명령이 지워지지 않음**: 예전엔 trap이 디코드되면 flush-mux의 trap 입력(`clr_sel`=8)이 뒤 명령을 flush했는데, 이 경로를 없애고 대체 로직이 없음
-  - dsim: `A 출력; halt; B 출력`이 dev는 `A`, 지금은 `AB`. `test/selftest`의 Y(halt) 뒤 "출력되면 안 되는" `!`가 출력됨
-  - `syscall`도 같은 경로라 뒤 명령이 실행될 것으로 보임 (테스트 프로그램 없음)
-  - 미커밋 작업본(`E_acp`/`eclr`/`inst-sfcomp`, 2026-10-23 dsim): `A; halt; B`가 아무것도 출력하지 않음, selftest는 V에서 멈춤, calc는 `1+2` 결과가 깨지고 배너를 다시 출력. 3b97a39(커밋본)는 calc·pi 정상
-  - halt가 이전 분기보다 먼저 실행되는 문제(CLAUDE.md "Known circuit problems")와 같이 정리
+forward-test의 TRAP 처리, exld/st 디코드(BLOCK·UMM 추가), `Fl_INT` → com1, `flush-mux`(trap 입력 제거, `clr_sel` 4비트), `id-manager-debug`, `regFile4`를 dev로 가져옴. 이전 회로는 `components/legacy/flush-mux-old.dig`, `components/legacy/trap-ref-old.dig`(dev 508f47c의 TRAP 블록).
+- [ ] `syscall` 뒤 명령이 지워지는지 확인 (halt는 11-05 해결, 완료 탭). 테스트 프로그램 없음
+- [ ] halt가 이전 분기보다 먼저 실행되는 문제(CLAUDE.md "Known circuit problems"): 11-05 `knownbug`의 `h 123`과 `calc-halt`가 맞게 끝나 재현 안 됨. 고쳐진 게 맞으면 CLAUDE.md와 `runtests.sh`의 `_nh` 우회 정리
 - [ ] `id-manager-debug` ECLR 우선순위: 두 commit 슬롯 모두 에러면 com2를 고르고 com1 commit을 막음 (dev는 com1 우선). 의도 확인
 - [ ] `Fl_INT`가 com1 기준으로 바뀜 — 인터럽트 flush id/ep가 맞는지 확인
-- [ ] (dev에서도 있던 문제) `test/selftest`가 Y(halt)에서 `end` 뒤 `00000035`를 출력하고 재시작함
 - [ ] syscall / iret / trap 회귀 테스트 프로그램 작성
 
 ##### 문제: 인터럽트 수락과 trap이 동시에 발생
@@ -164,6 +170,13 @@ CPU 쪽:
 #### RAW table
 - [ ] invalid flush (내용 비어 있음)
 
+#### 회로 에러 (`document/errors.md`, 2026-11-05)
+- [ ] 15번: 버스 stall 중 flush — `flushstall`의 `c10`, `c30`~`c33`이 FAIL(call 뒤 poison `addi` 1회 실행)
+- [ ] 11번: self flush된 load가 이전 값으로 commit될 수 있음 — load id 완료 비트 지우기, replay가 ROB 결과를 덮어쓰기
+- [ ] 16번: `res-station.dig`(non-debug, cpu-32.dig가 씀) `inst-wfile` 핀 연결이 밀림 — `res-station-debug.dig`에 맞추거나 `sync-nondebug.sh`
+- [ ] 14번 후속: store 응답을 끈 상태. 다시 켜려면 load-buffer 응답 조건에 `D_LD` AND 또는 mid 레지스터 앞 mux, 그 뒤 `ldstmix` 재확인
+- [ ] `st .8L/.16L/.8H`가 word 전체를 씀(`knownbug` k1~k3, 11-05). 10-18에 고친 store `D_MD` 경로(완료 탭 "메모리 폭")가 지금 회로에 있는지 확인
+
 #### mmu 연결
 
 ### 3. IPU
@@ -171,8 +184,8 @@ CPU 쪽:
 - [ ] 인터럽트 순서 결정 — 현재 요청은 조정하지 않음?
 
 ### 4. MMU
-- [ ] 처음 구현
-   - [ ] base-limit 구현 (확장 레지스터 `p-base` / `p-limit`)
+- [~] 처음 구현 — `MMU-BL.dig`(addr/base/limit/md → addr_o, error), `MMU-D.dig`(MMU 2개, 임시), store-buffer/MMU outstanding (e9e045d)
+   - [~] base-limit 구현 (확장 레지스터 `p-base` / `p-limit`) — `p-base`/`p-limit` → MMU 연결과 `error` 처리(예외) 확인 필요
 - [ ] 페이지 구현: 페이지 계산은 ld/st buffer 뒤에서 수행 → 버퍼 안에서 물리/가상 주소 분리
 
 ### 5. CACHE
@@ -196,6 +209,24 @@ CPU 쪽:
 # 완료
 
 끝난 일과 설계 기록입니다. 원문 `fin?(fixed?)` 아래 항목(해결됨 / 설계 기록)도 여기로 옮겼습니다.
+
+## 2026-10-24 ~ 11-05
+- [x] CPU 전체를 한 클럭 에지로 (bf78b59). 실행 유닛을 `C_ct` → `C_dt`, 키보드 클럭 glitch 수정
+- [x] store-buffer / MMU outstanding 요청 (e9e045d), MMU-BL / MMU-D (f7f0758, 87711cc)
+- [x] 회로 에러 1~10, 12~14번 수정 (`document/errors.md`). runtests 9개(selftest z1~3, memtest, memtest2, fill, calc-halt, calc, picalc)가 에뮬레이터와 같음
+- [x] trap/halt 뒤 명령 flush, selftest Y 재시작(`00000035`) — selftest가 에뮬레이터와 같음 (11-05)
+  - 당시 기록(10-23): 예전엔 trap이 디코드되면 flush-mux의 trap 입력(`clr_sel`=8)이 뒤 명령을 flush했는데, 이 경로를 없애고 대체 로직이 없음
+    - dsim: `A 출력; halt; B 출력`이 dev는 `A`, 지금은 `AB`. `test/selftest`의 Y(halt) 뒤 "출력되면 안 되는" `!`가 출력됨
+    - 미커밋 작업본(`E_acp`/`eclr`/`inst-sfcomp`, 2026-10-23 dsim): `A; halt; B`가 아무것도 출력하지 않음, selftest는 V에서 멈춤, calc는 `1+2` 결과가 깨지고 배너를 다시 출력. 3b97a39(커밋본)는 calc·pi 정상
+- [x] `rol`/`roli`/`ror`/`rori` 회로 확인: 보통의 32비트 회전, 회전량 mod 32. 에뮬레이터에 추가, `program/test/rotate.asm` + runtests `rotate` (11-05)
+- [x] 어셈블러 버그 3건 (11-05, `tools` 3b5217f). 바깥 `computer 32 (new)/bin`에 배포됨. 기존 프로그램 44개 출력이 수정 전과 같음
+  - 중첩 `#include`가 그 `#include`가 적힌 파일의 디렉터리 기준 (`#include` 토큰의 fileId로 찾음)
+  - `gen[n]`/`reg[n]`의 상수 n > 24면 `register index out of range (0..24): gen[25]`
+  - global/extern 오류 메시지에 키워드 대신 이름 (`global symbol is not defined in this file: foo`)
+- [x] 레포 밖 정리: 상위 `computer 32 (new)/src` → `archive/src`
+- [x] `fix/parser-comparator`: push됨, dev에 포함
+- [x] dsim: Patch.java 제거, 경로를 스크립트 기준으로 (3a592e1). `runtests.sh` 회귀 스크립트
+- [x] `components/legacy/`로 안 쓰는 회로 이동, `regFile4` → `regFile` (2026-10-31)
 
 ## Boot-sequence | 외부 ROM (2026-10-17 ~ 18)
 - [x] 외부 RAM (테스트용) — `components/ram-test.dig`
@@ -401,3 +432,8 @@ CPU의 추측이 틀렸을 때 발생. store-buffer는 commit 이후에만 쓰�
 | todo / ISA 정리 | 1088d9e | todo 완료 탭, ISA 문서 갱신 |
 | 툴 리포 병합 | f288c44 ~ 508f47c | assembler-linker를 `tools/`로, exe는 `bin/` |
 | TRAP 재구성 | 3b97a39 | forward-test의 TRAP·exld/st·flush-mux·id-manager·regFile4 가져옴, halt 문제 발견 |
+| decode / flush 우선순위 | d7ed1ea, 603bda3 | issue/disp enable로 decode 게이트, flush 우선순위, 인터럽트 sequencer 배선 |
+| 회로 이름 / dsim | b094f10 ~ 39bdc63 | `cpu-test.dig`로 이름 변경, dsim 옵션·스크립트, ISA ABI 문서 |
+| INT-MMU | f7f0758 ~ 87711cc | `interst`/`interld`, MMU-BL, MMU-D, store-buffer8-debug |
+| outstanding / 한 클럭 | e9e045d ~ ee41224 | store-buffer·MMU outstanding, tools merge, CPU 전체 한 클럭 에지 (computer) |
+| cpu-merge | db2ea18 | outstanding stb/bus/MMU를 한 클럭 CPU에 합침 (buff-outstanding, WIP) |

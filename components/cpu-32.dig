@@ -4396,7 +4396,7 @@
       <pos x="-320" y="300"/>
     </visualElement>
     <visualElement>
-      <elementName>regFile4.dig</elementName>
+      <elementName>regFile.dig</elementName>
       <elementAttributes/>
       <pos x="1480" y="-200"/>
     </visualElement>

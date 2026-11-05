@@ -28,6 +28,30 @@ work on
 
 ============= computer ====================
 
+< forwarding >
+
+== logic
+use forward-arbiter before store aribter?
+-> if fully overlap: forward
+-> if partial overlap: do not forward
+
+signifant performance increase required:
+-> no signal from store arbiter?
+% cause it would delay forwarding by 2~3 latch(clock cycle?)
+% FU's load output signal would be useful...
+% can it?
+
+$ how about high priority forward from ld-sig
+$ and later fed from store arbiter to execute leftover..
+-> how to find that current store to ROB is already forwarded?
+-> maybe you don't?
+-> it won't do anything wrong.. or does it?
+
+- if it distrupts inst-wfile, it could..
+-> then inst-wfile should be updated only by store-arbiter
+-> load forward act as quick access for current bottlenecked instruction!
+
+
 < interrupt interface >
 >> istack & ktmp <<
 -> stack temporary used for pushing interrupt values
