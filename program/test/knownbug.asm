@@ -10,7 +10,9 @@
 ;    k2 : st .16L of 0xBEEF into 0x11223344, expect 0x1122BEEF
 ;    k3 : st .8H  of 0xCC00 into 0x11223344, expect 0x112233CC
 ;         (the emulator writes bits 15..8 to the addressed byte)
-;    (circuit: the store D_MD is always 0, so it writes the whole word)
+;    (circuit: load-buffer forwarding ignores the width, so the ld right
+;     after the store gets the zero-extended value 000000AA / 0000BEEF /
+;     000000CC. memory is right: with a delay before the ld, all pass)
 ;    h  : loop of 3 rounds printing '1' '2' '3', then halt right after the
 ;         loop branch. the branch is predicted not taken the first time,
 ;         and the circuit runs halt before the branch resolves, so it

@@ -13,7 +13,7 @@
 | ISA 정리 | 완료 | `ISA.md`, `assembler.hpp`에 NMI / trap-flag 흔적 없음 |
 | 인터럽트 | 진행 중 | `syscall`/`iret`/`interst`/`interld`/`ldexp`/`stexp`, `ROB-INT.dig` 배선 중. halt 뒤 명령 문제는 11-05 selftest로 해결 확인, `syscall`은 미확인 |
 | 메모리 (ld/st buffer) | 대부분 해결 | queue → age matrix 전환 완료 (6b8b02b). outstanding 요청 (e9e045d, buff-outstanding). 남은 버그는 아래 "회로 에러" |
-| 메모리 바이트 주소 / 리틀엔디안 | 다시 확인 필요 | ld/st 폭, `set` 모드 회로 확인 (2026-10-18). 11-05 `knownbug`에서 `st .8L/.16L/.8H`가 다시 word 전체를 씀 |
+| 메모리 바이트 주소 / 리틀엔디안 | 다시 확인 필요 | ld/st 폭, `set` 모드 회로 확인 (2026-10-18). 메모리 쓰기는 맞음(11-06 다시 읽어 확인). `st .8L/.16L/.8H` 직후 더 넓은 load가 받는 forward 값만 틀림(`errors.md` 17번) |
 | 외부 RAM / ROM, boot-sequence | 동작 | boot ROM → 외부 ROM의 프로그램을 RAM으로 복사 → 실행. add_terminal, io_harness, calc, picalc 회로에서 통과 (2026-10-18) |
 | forwarding | 설계 중 | 아래 "다음 목표" 1. forward-arbiter 설계 메모(2026-11), `forward-test` 브랜치 WIP |
 | PC-mux | 완료 | 우선순위 인코더 + 단일 mux |
@@ -175,7 +175,7 @@ CPU 쪽:
 - [ ] 11번: self flush된 load가 이전 값으로 commit될 수 있음 — load id 완료 비트 지우기, replay가 ROB 결과를 덮어쓰기
 - [ ] 16번: `res-station.dig`(non-debug, cpu-32.dig가 씀) `inst-wfile` 핀 연결이 밀림 — `res-station-debug.dig`에 맞추거나 `sync-nondebug.sh`
 - [ ] 14번 후속: store 응답을 끈 상태. 다시 켜려면 load-buffer 응답 조건에 `D_LD` AND 또는 mid 레지스터 앞 mux, 그 뒤 `ldstmix` 재확인
-- [ ] `st .8L/.16L/.8H`가 word 전체를 씀(`knownbug` k1~k3, 11-05). 10-18에 고친 store `D_MD` 경로(완료 탭 "메모리 폭")가 지금 회로에 있는지 확인
+- [ ] load-buffer forward가 폭을 보지 않음(`knownbug` k1~k3, `errors.md` 17번): store가 load 범위를 다 덮을 때만 forward하고, 아니면 store가 끝난 뒤 메모리에서 읽거나 바이트를 합치기
 
 #### mmu 연결
 

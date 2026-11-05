@@ -50,9 +50,9 @@ bash tools/dsim/runtests.sh flushstall ldstmix knownbug     ; 루트에서. 결�
 
 ### 결과 (2026-11-05, dsim, `cpu-test.dig` 작업 트리)
 
-- `flushstall` **DIFF**: `c10`, `c30`, `c31`, `c32`, `c33`이 `FAIL 00050100`입니다(zseed 1/2/3 모두 같음). call 뒤 poison `addi`가 한 번 더 실행됩니다(4 대신 5). 나머지 34개 케이스는 PASS.
+- `flushstall` SAME (모두 PASS). 처음에는 `c10`, `c30`~`c33`이 `FAIL 00050100`이었고, 프론트엔드 수정 뒤 통과했습니다(`document/errors.md` 15번).
 - `ldstmix` SAME (모두 PASS). store 응답을 다시 켜면 확인할 것.
-- `knownbug` DIFF: k1..k3 FAIL(`000000AA`, `0000BEEF`, `000000CC`: word 전체를 씀). `h 123`은 맞게 나옵니다. 분기 뒤 `halt` 문제는 이 경우에는 재현되지 않습니다.
+- `knownbug` DIFF: k1..k3 FAIL(`000000AA`, `0000BEEF`, `000000CC`: 직후 load가 폭을 무시한 forward 값을 받음, 메모리는 맞음. `document/errors.md` 17번). `h 123`은 맞게 나옵니다. 분기 뒤 `halt` 문제는 이 경우에는 재현되지 않습니다.
 
 ## fill.asm 상태 (2026-10-17, dsim)
 

@@ -65,7 +65,7 @@ pin 좌표는 `cpu-32` 모양 안의 위치(0..320)입니다. "내부"는 cpu-32
 | `D_A-_bus` | 3-state 버스 | 32 | 320,200 | `Driver`@1580,2620 | 데이터 주소입니다. |
 | `D_LD` | out | 1 | 320,220 | `And`@1600,2260 | load 요청입니다. |
 | `D_ST` | out | 1 | 320,240 | `And`@1600,2340 | store 요청입니다. |
-| `D_MD` | out | 2 | 320,260 | `Driver`@1580,2700 | 접근 폭입니다. 0 = 32, 1 = 16, 2 = 8, 3 = u.u(핀 설명 기준). store D_MD가 항상 0인 버그가 있습니다(CLAUDE.md "Known circuit problems"). |
+| `D_MD` | out | 2 | 320,260 | `Driver`@1580,2700 | 접근 폭입니다. 0 = 32, 1 = 16, 2 = 8, 3 = u.u(핀 설명 기준). |
 
 ### 위쪽: 인터럽트 (IPU 연결 예정, `IPU-test.dig`)
 
@@ -195,7 +195,7 @@ cpu-32.dig
   - Digital은 high-Z를 읽을 때마다 무작위 값을 주므로, 그 값이 무효 명령어로 decode됩니다(`BUS_INSTV`=0으로 표시).
   - 10-25 23:17 수정 뒤에는 이 명령어가 issue에 영향을 주지 않아 결과가 결정적입니다. latch 자체는 남아 있습니다.
   - dsim에서는 `-Dzseed=N`으로 재현할 수 있습니다.
-- `halt`가 앞선 branch가 끝나기 전에 실행되는 문제, `st .8L/.16L` 폭 문제는 CLAUDE.md "Known circuit problems"를 보세요.
+- `halt`가 앞선 branch가 끝나기 전에 실행되는 문제, `st .8L/.16L` 직후 load의 forward 폭 문제는 CLAUDE.md "Known circuit problems"를 보세요.
 - 하위 회로 안의 DipSwitch는 GUI에서 누를 수 없고, 저장된 기본값으로 고정됩니다. cpu-32에는 4개가 있습니다.
   - (100,580), (160,560): 둘 다 정지 Or 입력입니다.
   - (660,1440): bus system의 Splitter 입력입니다.

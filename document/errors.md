@@ -26,14 +26,15 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-05) 중 dsim으로 찾은 회�
 | 14 | 11-04 | 버스 mid | store 응답이 load 데이터로 들어감 | ✅ (store 응답 끔) |
 | 15 | 11-04 | 프론트엔드 flush | calc `ret`이 0x40a00000으로 점프, picalc 끝자리 틀림 | ✅ (11-05 최종 수정, flushstall 통과) |
 | 16 | 11-02 | res-station.dig (non-debug) | `inst-wfile` 핀 연결이 밀림 | ❌ |
-| — | — | 기존 알려진 문제 | `halt`가 분기보다 먼저 실행, `st .8L`이 4바이트 씀 | ❌ (CLAUDE.md, `knownbug`) |
+| 17 | 11-05 | load-buffer forward 폭 | `st .8L` 직후 `ld .32B`가 `000000AA` (정답 `112233AA`) | ❌ |
+| — | — | 기존 알려진 문제 | `halt`가 분기보다 먼저 실행 | ⚠️ `knownbug`, `calc-halt`에서 재현 안 됨 (CLAUDE.md) |
 
-2026-11-05 기준 runtests 9개(selftest z1~3, memtest, memtest2, fill, calc-halt, calc, picalc) 모두 에뮬레이터와 같습니다.
+2026-11-05 기준 runtests 13개 중 `knownbug`(k1~k3, 17번)만 DIFF이고 나머지는 모두 에뮬레이터와 같습니다.
 
 회귀 테스트(`program/test/`, 설명은 `program/document/test.md`):
 - `flushstall`: 15번 (store K개 + nop N개 뒤 call/ret/jmp/분기 flush) → 모두 PASS (11-05 최종 수정 후)
 - `ldstmix`: 13·14번 (load/store 섞기, 연속 load, pointer chase) → 모두 PASS. store 응답을 다시 켜면 재확인
-- `knownbug`: `st .8L/.16L/.8H`, halt 직후 분기 → DIFF가 정상 (k1~k3 FAIL, halt 문제는 이번엔 재현 안 됨)
+- `knownbug`: 17번, 분기 직후 halt → DIFF가 정상 (k1~k3 FAIL, halt 문제는 이번엔 재현 안 됨)
 
 ---
 
@@ -167,6 +168,21 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-05) 중 dsim으로 찾은 회�
 ## 16. res-station.dig (non-debug) 핀 연결이 밀림 (11-02) ❌
 - `inst-wfile`에 `clr_self` 입력이 생기면서 핀 위치가 밀렸는데 `res-station.dig`(cpu-32.dig가 씀)는 갱신 안 됨: `clr_id` 연결 없음, `clr_ep`←`clr_id`, `clr_self`←`clr_ep`.
 - `res-station-debug.dig`처럼 맞추거나 `sync-nondebug.sh`로 맞춰야 합니다. (self flush 구조가 바뀌어 `clr_self`가 없어졌다면 다시 확인)
+
+## 17. load-buffer forward가 접근 폭을 보지 않음 (11-05) ❌
+- **증상:** `knownbug`에서 `0x11223344`를 쓰고 부분 store 직후 같은 주소를 `ld .32B`로 읽으면 틀립니다.
+
+  | 케이스 | store | 읽은 값 | 정답 |
+  |---|---|---|---|
+  | k1 | `st .8L` 0xAA | `000000AA` | `112233AA` |
+  | k2 | `st .16L` 0xBEEF | `0000BEEF` | `1122BEEF` |
+  | k3 | `st .8H` 0xCC00 | `000000CC` | `112233CC` |
+
+- **원인:** `LDB_forward`가 store의 폭을 보지 않고, 0으로 확장된 store 데이터를 더 넓은 load에 그대로 넘깁니다. 메모리의 나머지 바이트가 합쳐지지 않습니다.
+- **메모리는 맞음 (11-06 확인):** store와 load 사이에 300번 도는 루프를 넣으면 k1~k3 모두 PASS이고 에뮬레이터와 같습니다(`zseed=1`, 한 번 실행). 버스의 `D_MD`도 k1=2, k2=1로 맞습니다.
+- **처음 잘못 본 것:** "store `D_MD`가 항상 0이라 4바이트를 쓴다". 10-18에 고친 옛 버그의 설명이 CLAUDE.md에 남아 있었고, 11-05 결과가 그 증상과 비슷해 같은 원인으로 봤습니다.
+- **고칠 방향:** store가 load 범위를 다 덮을 때만 forward하고, 아니면 store가 끝날 때까지 기다린 뒤 메모리에서 읽습니다. 또는 바이트 단위로 합칩니다.
+- **확인 안 한 것:** 같은 폭이나 더 좁은 load(`st .32B` 뒤 `ld .8L` 등)의 forward, 주소가 어긋난 경우(`st .8L` at +1 뒤 word load).
 
 ---
 

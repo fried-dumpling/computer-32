@@ -35,6 +35,7 @@ java [옵션] -cp "$J;build" Sim <circuit.dig> <program.bin> <keys> [maxHalfCycl
 | `zseed=N` / `zseed=zero` | floating(high-Z) 비트를 읽을 때 쓰는 난수를 고정합니다. Digital은 값마다 `new Random()`을 써서 읽을 때마다 다른 값을 주므로, 이 옵션이 없으면 실행마다 결과가 달라질 수 있습니다. `zero`면 항상 0 |
 | `hash=파일` | 반클럭마다 모든 signal의 해시 한 줄. 두 실행이 처음 갈라지는 반클럭을 찾는 용도 |
 | `delta=파일` | `csv`처럼 덤프하되 바뀐 값만 `half 열번호 값`으로 씁니다(첫 줄은 이름 목록) |
+| `rom=파일` | `boot/rom.bin`을 읽는 ROM이 대신 이 파일을 읽습니다. `boot/rom.bin`을 건드리지 않으므로 다른 프로그램을 동시에 돌릴 수 있습니다. ROM이 있는 회로는 `romCircuit=`(기본 `rom-test.dig`) |
 
 - `program.bin`에 `-`를 주면 ROM이 자기 파일(`boot/boot.bin`, `boot/rom.bin`)을 읽습니다. 지금 회로에는 program memory로 지정된 ROM이 없으므로 `-`를 씁니다.
 
@@ -43,6 +44,18 @@ java [옵션] -cp "$J;build" Sim <circuit.dig> <program.bin> <keys> [maxHalfCycl
 ```
 java -Dtap=top -Dcsv=t3.csv -DcsvKey=3 -cp "$J;build" Sim "../../components/cpu-test.dig" - "123"
 ```
+
+## runtests.sh : 회귀 테스트
+
+```
+bash tools/dsim/runtests.sh [-j N] [-nobuild] [이름...]
+```
+
+- 테스트 프로그램을 빌드해 `cpu-test.dig`에서 병렬로 돌리고(`-Drom`), 터미널 출력을 에뮬레이터와 비교해 `== 이름 SAME|DIFF`를 출력합니다. git-bash에서 실행하고, `build/`에 Sim이 컴파일되어 있어야 합니다.
+- `-j N`: 동시 실행 수(기본 9). `-nobuild`: 프로그램을 다시 빌드하지 않음. `이름`을 주면 그 테스트만 돌립니다(기본 전체).
+- 출력은 `program/build/dsim/<이름>.sim`, `.emu`입니다. 이름 끝이 `_nh`인 이미지는 `halt`를 `jmp.one pc.32B, 0`으로 바꿔 빌드한 것입니다.
+- 테스트 목록은 스크립트의 `T` 배열입니다. `knownbug`는 알려진 문제를 담고 있어 DIFF가 정상입니다.
+- `DIGITAL_JAR` 환경 변수로 `Digital.jar` 경로를 바꿀 수 있습니다.
 
 ## NetQuery : 넷 조회
 

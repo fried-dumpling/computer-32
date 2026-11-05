@@ -46,7 +46,7 @@ Reads the default dlnk output (8 byte header: start address, length); `-raw` for
 Strict by default:
 - ALU instructions other than `cmp`/`test` invalidate the flags; a branch on invalid flags is an error.
 - Only `32B` mode is allowed, except `ld`/`st` widths (`32B`/`16L`/`8L`/`8H`) and `set` `S16H`/`16L`.
-- Partial `ld` keeps the other bits like the circuit; `st .8L`/`.16L` writes only those bytes (it does not copy the circuit's store D_MD bug).
+- Partial `ld` keeps the other bits like the circuit; `st .8L`/`.16L` writes only those bytes. A load after a partial store reads the merged word (it does not copy the circuit's load-buffer forwarding bug below).
 - No carry or interrupt instructions (add them when needed). `rol`/`ror` rotate by the amount mod 32, as on the circuit. `jmp $` is treated as halt.
 
 ### Headless circuit simulator (dsim)
@@ -223,4 +223,4 @@ Memory map (`boot/src/boot.asm`): RAM `0x00000000-0x03FFFFFF`, keyboard/terminal
 Past circuit bugs found with dsim (symptom, cause, fix, status): `document/errors.md`. Check it first when a similar symptom shows up.
 
 - **`halt` runs before an older branch resolves** (2026-10-17, dsim). When a branch is predicted not taken and `halt` follows it, `halt` is issued and stops the CPU while the branch still waits in the reservation station, so the misprediction is never recovered. `calc`, `picalc` and `test/fill` all have `halt` right after a branch and stop at once. Workaround: end with `jmp.one pc.32B, 0` instead of `halt`.
-- **`st .8L`/`.16L`/`.8H` writes 4 bytes**: the store D_MD is always 0, so the selected value is zero-extended to a word.
+- **A wider load right after `st .8L`/`.16L`/`.8H` to the same address gets the wrong value**: load-buffer forwarding ignores the access width, so the load receives the store's zero-extended value (e.g. `ld .32B` after `st .8L` of 0xAA gets `0x000000AA`). Memory itself is written correctly: the same load after the store has finished reads the right word (`document/errors.md` #17). Workaround: don't read wider than a partial store until it has finished.
