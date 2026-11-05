@@ -336,7 +336,7 @@ ex-6 – ex-11(값 6~11)는 예약이라 이름이 없습니다.
 #include<lib/io.txt>
 ```
 
-- 경로는 **dasm에 넘긴 최초 입력 파일의 디렉터리** 기준입니다. 하위 폴더의 파일이 다시 include할 때도 마찬가지입니다. 예를 들어 `lib/a.txt` 안의 `#include<b.txt>`는 `lib/b.txt`가 아니라 `b.txt`를 찾습니다.
+- 경로는 **`#include`가 적힌 파일의 디렉터리** 기준입니다. 예를 들어 `lib/a.txt` 안의 `#include<b.txt>`는 `lib/b.txt`를 찾습니다.
 - 같은 파일을 두 번 include하면 오류입니다. 순환이나 자기 자신 include도 같고, `a/../b.txt`처럼 표기만 다른 같은 경로도 포함됩니다.
 - 각 파일의 줄 번호는 따로 추적되므로, 오류 메시지는 해당 파일과 그 파일 안의 줄을 가리킵니다.
 
@@ -441,6 +441,6 @@ global section       ; 이름 없는 섹션(.text / .data / .bss)
 |---|---|
 | preprocess | `duplicate include`, `invalid include path`, `macro argument out of range`, `wrong number of macro arguments`, `expected ( after macro name`, `expected identifier after #define`, `#end without matching #ifdef/#ifndef`, `#ifdef/#ifndef without matching #end`, `unterminated directive` |
 | parse | `unexpected token: <토큰>` (입력 끝이면 `<EOF>`) |
-| evaluate | `missing expression` (정의되지 않은 이름), `negative index` (`gen[-1]`), `not constant` (데이터 크기가 상수가 아님), `invalid size` (음수 크기, 원소 크기가 0 이하이거나 전체 크기를 나누지 못함), `initializer too long` (목록 원소나 문자열이 크기보다 큼), `global symbol is not defined in this file`, `extern symbol is defined in this file`, `global section is not defined in this file` |
+| evaluate | `missing expression` (정의되지 않은 이름), `negative index` (`gen[-1]`), `register index out of range (0..24)` (`gen[25]`), `not constant` (데이터 크기가 상수가 아님), `invalid size` (음수 크기, 원소 크기가 0 이하이거나 전체 크기를 나누지 못함), `initializer too long` (목록 원소나 문자열이 크기보다 큼), `global symbol is not defined in this file`, `extern symbol is defined in this file`, `global section is not defined in this file` |
 | link | `invalid object file '<경로>'`, `undefined symbol '<이름>'`, `duplicate symbol '<이름>'`, `start label '<이름>' is not defined (use -start <label> or -raw)`, `start label '<이름>' is defined locally in more than one file (...); declare it global` |
 | 공통 | `cannot read file '<경로>'`, `cannot write file '<경로>'`, `no input file`, `unknown flag '<옵션>'`, `missing value for '<옵션>'`, `invalid value for '<옵션>': '<값>'`, `unexpected argument '<인자>'` |

@@ -638,6 +638,7 @@ namespace assembler {
 				std::vector<Token> replaceTokens;
 				std::string fileName;
 				std::unordered_set<std::string> includedFiles;
+				int includeFileId = 0; // fileId of the #include token being resolved (its file is the base directory)
 
 				int uniqueCounter = 0;
 			} PreprocData;
@@ -841,6 +842,7 @@ namespace assembler {
 						std::string path = "";
 						if (!includePath(path, it->text))
 							return (int)PreprocessError::INVALID_INCLUDE_PATH;
+						data->includeFileId = it->fileId;
 						int code = includeCallback(data->replaceTokens, path, data);
 						if (code) return code;
 
@@ -1771,7 +1773,8 @@ namespace assembler {
 				EXTERN_DEFINED,      // `extern name` but name is also defined in this file
 				INVALID_SIZE,        // negative total size, or list element size <= 0 / not dividing the total
 				INITIALIZER_TOO_LONG, // list has more elements / string more bytes than the total size holds
-				GLOBAL_SECTION_UNDEFINED  // `global section name` but no section of that name in this file
+				GLOBAL_SECTION_UNDEFINED,  // `global section name` but no section of that name in this file
+				REGISTER_OUT_OF_RANGE     // gen[n]/reg[n] with a constant n above 24 (would alias the special registers)
 			};
 
 			inline const char* evaluateErrorName(int code) {
@@ -1785,6 +1788,7 @@ namespace assembler {
 				case EvaluateError::INVALID_SIZE: return "invalid size";
 				case EvaluateError::INITIALIZER_TOO_LONG: return "initializer too long";
 				case EvaluateError::GLOBAL_SECTION_UNDEFINED: return "global section is not defined in this file";
+				case EvaluateError::REGISTER_OUT_OF_RANGE: return "register index out of range (0..24)";
 				}
 				return "unknown error";
 			}
@@ -1854,6 +1858,8 @@ namespace assembler {
 				std::vector<u32> compressionIndex;
 
 				int curLineCount;
+
+				std::string errorName; // set by a failing global/extern check: the symbol name, since the error token is the keyword
 
 				_EvalData() : curLineCount(0) {}
 			} EvalData;
@@ -2606,21 +2612,27 @@ namespace assembler {
 				switch (cur->type) {
 				// calculateAddr has defined every label/equ by now
 				case (u64)ASTNodeType::global + (u64)TokenType::__end:
-					if (data->idenifierValue.find(cur->text) == data->idenifierValue.end())
+					if (data->idenifierValue.find(cur->text) == data->idenifierValue.end()) {
+						data->errorName = cur->text;
 						return (int)EvaluateError::GLOBAL_UNDEFINED;
+					}
 					break;
 				case (u64)ASTNodeType::global_section + (u64)TokenType::__end: {
 					std::string name = cur->child.empty() ? "" : cur->text;
 					bool found = false;
 					for (auto it = data->sections.cbegin(); it != data->sections.cend() && !found; ++it)
 						found = it->type != SectionType::OUTER && it->name == name;
-					if (!found)
+					if (!found) {
+						data->errorName = name;
 						return (int)EvaluateError::GLOBAL_SECTION_UNDEFINED;
+					}
 					break;
 				}
 				case (u64)ASTNodeType::_extern + (u64)TokenType::__end:
-					if (data->idenifierValue.find(cur->text) != data->idenifierValue.end())
+					if (data->idenifierValue.find(cur->text) != data->idenifierValue.end()) {
+						data->errorName = cur->text;
 						return (int)EvaluateError::EXTERN_DEFINED;
+					}
 					break;
 
 				case (u64)ASTNodeType::equate + (u64)TokenType::__end: {
@@ -2785,8 +2797,13 @@ namespace assembler {
 						return (int)EvaluateError::MISSING_EXPRESSION;
 
 					ExprData& expr = data->expressionValue[cur->child[1]];
-					if (expr.type == ExprType::CONSTANT)
+					if (expr.type == ExprType::CONSTANT) {
+						if (expr.value > 24) {
+							data->errorName = cur->child[0]->text + "[" + std::to_string(expr.value) + "]";
+							return (int)EvaluateError::REGISTER_OUT_OF_RANGE;
+						}
 						data->instructionValue[cur].data = regBase[(TokenType)cur->child[0]->type] + expr.value;
+					}
 					else {
 						ReplaceData rep = {};
 						rep.index = data->operationVector.size();
@@ -3491,7 +3508,9 @@ namespace assembler {
 			// normalize before comparing/storing so "A/B/../C" and "A/C" (or "A/./C") are
 			// recognized as the same file for duplicate/circular #include detection.
 
-			std::string baseDir = preprocData->fileName;
+			// a nested #include resolves against the file that contains it, not the main file
+			int baseId = preprocData->includeFileId;
+			std::string baseDir = (baseId > 0 && baseId < (int)includedFiles.size()) ? includedFiles[baseId] : preprocData->fileName;
 			size_t baseSlash = baseDir.find_last_of("/\\");
 			baseDir = (baseSlash == std::string::npos) ? "" : baseDir.substr(0, baseSlash + 1);
 			// reassign the parameter directly rather than redeclaring -- a redeclared local of the
@@ -3606,7 +3625,7 @@ namespace assembler {
 		dump.errorCode |= (validEvaluate) ? 0 : (int)AssemblerDump::FAIL_EVALUATE;
 
 		if (!validEvaluate) {
-			dump.errorMessage = describeError(errorTok, std::string(evaluator::functions::evaluateErrorName(evaluateError)) + ": " + errorTok.text);
+			dump.errorMessage = describeError(errorTok, std::string(evaluator::functions::evaluateErrorName(evaluateError)) + ": " + (data.errorName.empty() ? errorTok.text : data.errorName));
 			parser::parser.delAST(pAST);
 			return -1;
 		}
