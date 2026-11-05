@@ -56,7 +56,7 @@ Flags: `zero`, `neg`, `pos`, `carry`, `carry4`, `overflow`, `one` (always 1), `g
 | register / stack | `set` `sets` `mov` `block` `push` `pop` |
 | memory | `ld.<base>` `st.<base>` (address = base register + signed 16-bit offset) |
 | control flow | `jmp.<flag>` `ijmp.<flag>` `call` `ret` `nop` `brk` `wait` (targets are base register + offset, not PC relative) |
-| kernel | `halt` `syscall` `iret` `intervec` `interpri` `ldexp` `stexp` `pctl` `getabs` `cache` `atom` |
+| kernel | `halt` `syscall` `iret` `interst` `interld` `ldexp` `stexp` `pctl` `getabs` `cache` `atom` |
 
 The assembler keeps `jmp` / `ijmp` / `brk` for the sheet's `jp` / `jpi` / `break`.
 

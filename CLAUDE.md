@@ -102,7 +102,7 @@ pop <reg>
 ```
 syscall                              ; software interrupt
 iret                                 ; return from interrupt
-interst <reg>, <imm8>, vec|pri | <id> ; int_vec/int_pri[id] = reg + imm8
+interst <reg>, <imm8>, vec|pri | <id> ; int_vec/int_pri[id] = reg + imm8 (id 0..63)
 interld <reg>, vec|pri | <id>        ; reg = int_vec/int_pri[id]
 ldexp <reg>, <reg_ex>                ; load from an extended/special register
 stexp <reg>, <reg_ex>                ; store to an extended/special register
@@ -190,7 +190,7 @@ Instruction semantics, flags and ABI: `document/ISA.md`. Assembler syntax: `docu
 ### Conventions
 
 - **Library = header + implementation.** `x.hsm` has constants, macros and `extern` declarations behind an `#ifndef` guard. `x.asm` does `#define X_IMPL 1`, includes the header (so the `extern`s drop out; `extern` and a definition in one file is a dasm error) and exports functions with `global`. Assemble each `.asm` separately and link.
-- `#include<...>` paths are relative to the directory of the file passed to dasm (`calc/calc.asm` uses `../io/io.hsm`).
+- `#include<...>` paths are relative to the directory of the file containing the `#include` (`calc/calc.asm` uses `../io/io.hsm`).
 - Labels in objects are stored as `<file>#label`, so only `global` names can clash. Libraries prefix their labels (`fp_`, `io_`).
 - **Link the main object first.** dlnk places text from address 0 in link order, then all data; the header's start address is `_start` (`-start` to change). Libraries start with a jump over themselves in case they are linked first.
 - **ABI:** args `gen[1..4]`, return `gen[0]`, `gen[5..12]` callee-saved, `gen[1..4]` and `gen[13..20]` clobbered.

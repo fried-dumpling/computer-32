@@ -53,7 +53,7 @@ namespace assembler {
 			wait, halt,
 
 			syscall, iret,
-			intervec, interpri,
+			interst, interld,
 			stexp, ldexp,
 			pctl, getabs,
 			flush, inval,
@@ -62,6 +62,7 @@ namespace assembler {
 			cpuid, panicvec, istack, intlevel, pagebase, plimit,
 			enable, disable,
 			L1D, L1I, TLB, L2, ALL,
+			vec, pri,
 
 			reg,
 			gen,
@@ -173,8 +174,8 @@ namespace assembler {
 
 				{ "syscall", TokenType::syscall},
 				{ "iret", TokenType::iret},
-				{ "intervec", TokenType::intervec},
-				{ "interpri", TokenType::interpri},
+				{ "interst", TokenType::interst},
+				{ "interld", TokenType::interld},
 
 				{ "stexp", TokenType::stexp },
 				{ "ldexp", TokenType::ldexp },
@@ -199,6 +200,8 @@ namespace assembler {
 				{ "TLB", TokenType::TLB },
 				{ "L2", TokenType::L2 },
 				{ "ALL", TokenType::ALL },
+				{ "vec", TokenType::vec },
+				{ "pri", TokenType::pri },
 
 				{ "reg",TokenType::reg },
 				{ "gen", TokenType::gen },
@@ -347,8 +350,8 @@ namespace assembler {
 
 			{ TokenType::syscall, "syscall" },
 			{ TokenType::iret, "iret" },
-			{ TokenType::intervec, "intervec" },
-			{ TokenType::interpri, "interpri" },
+			{ TokenType::interst, "interst" },
+			{ TokenType::interld, "interld" },
 
 			{ TokenType::stexp, "stexp" },
 			{ TokenType::ldexp, "ldexp" },
@@ -371,6 +374,8 @@ namespace assembler {
 			{ TokenType::TLB, "TLB" },
 			{ TokenType::L2, "L2" },
 			{ TokenType::ALL, "ALL" },
+			{ TokenType::vec, "vec" },
+			{ TokenType::pri, "pri" },
 
 			{ TokenType::reg, "reg" },
 			{ TokenType::gen, "gen" },
@@ -633,6 +638,7 @@ namespace assembler {
 				std::vector<Token> replaceTokens;
 				std::string fileName;
 				std::unordered_set<std::string> includedFiles;
+				int includeFileId = 0; // fileId of the #include token being resolved (its file is the base directory)
 
 				int uniqueCounter = 0;
 			} PreprocData;
@@ -836,6 +842,7 @@ namespace assembler {
 						std::string path = "";
 						if (!includePath(path, it->text))
 							return (int)PreprocessError::INVALID_INCLUDE_PATH;
+						data->includeFileId = it->fileId;
 						int code = includeCallback(data->replaceTokens, path, data);
 						if (code) return code;
 
@@ -1145,6 +1152,7 @@ namespace assembler {
 
 			ctlid,
 			cacheid,
+			intid,
 
 			index,
 
@@ -1199,7 +1207,6 @@ namespace assembler {
 			instruction_RVRI,
 			instruction_FVRI,
 
-			instruction_IXP,
 			instruction_RXR,
 			instruction_CTL,
 			instruction_CACHE,
@@ -1221,6 +1228,7 @@ namespace assembler {
 
 			ctlid,
 			cacheid,
+			intid,
 
 			index,
 
@@ -1273,6 +1281,7 @@ namespace assembler {
 
 			{ NonterminalType::ctlid, "ctlid" },
 			{ NonterminalType::cacheid, "cacheid" },
+			{ NonterminalType::intid, "intid" },
 
 			{ NonterminalType::index, "index" },
 
@@ -1345,6 +1354,7 @@ namespace assembler {
 
 			{ ASTNodeType::ctlid, "ctlid" },
 			{ ASTNodeType::cacheid, "cacheid" },
+			{ ASTNodeType::intid, "intid" },
 
 			{ ASTNodeType::index, "index" },
 
@@ -1478,8 +1488,9 @@ namespace assembler {
 
 			{ { NT::intruction, AT::instruction_N, -1}, { { TT::syscall, true, false } } },
 			{ { NT::intruction, AT::instruction_N, -1}, { { TT::iret, true, false } } },
-			{ { NT::intruction, AT::instruction_RII, -1}, { { TT::intervec, true, false }, { NT::reg, true, false }, { TT::comma, false, false },  { NT::immidate8, true, false }, { TT::comma, false, false }, { NT::immidate8, true, false } } },
-			{ { NT::intruction, AT::instruction_IXP, -1}, { { TT::interpri, true, false }, { NT::immidate8, true, false }, { TT::comma, false, false },  { NT::immidate8, true, false }  } },
+			// interst R, m, vec | id ; interld R, pri | id
+			{ { NT::intruction, AT::instruction_RII, -1}, { { TT::interst, true, false }, { NT::reg, true, false }, { TT::comma, false, false },  { NT::immidate8, true, false }, { TT::comma, false, false }, { NT::intid, true, false } } },
+			{ { NT::intruction, AT::instruction_RXR, -1}, { { TT::interld, true, false }, { NT::reg, true, false }, { TT::comma, false, false }, { NT::intid, true, false } } },
 
 			{ { NT::intruction, AT::instruction_RXR, -1}, { { TT::ldexp, true, false}, { NT::reg, true, false } , { TT::comma, false, false }, { NT::reg_ex, true, false } } },
 			{ { NT::intruction, AT::instruction_RXR, -1}, { { TT::stexp, true, false}, { NT::reg, true, false } , { TT::comma, false, false }, { NT::reg_ex, true, false } } },
@@ -1514,6 +1525,10 @@ namespace assembler {
 			{ { NT::cacheid, AT::cacheid, -1 }, { { NT::cacheid, true, true }, { TT::verticalbar, false, false }, { TT::TLB, true, false } } },
 			{ { NT::cacheid, AT::cacheid, -1 }, { { NT::cacheid, true, true }, { TT::verticalbar, false, false }, { TT::L1D, true, false } } },
 			{ { NT::cacheid, AT::cacheid, -1 }, { { NT::cacheid, true, true }, { TT::verticalbar, false, false }, { TT::L1I, true, false } } },
+
+			// interrupt table entry: md | id (children: md token, id expression)
+			{ { NT::intid, AT::intid, -1 }, { { TT::vec, true, false }, { TT::verticalbar, false, false }, { NT::expression, true, false } } },
+			{ { NT::intid, AT::intid, -1 }, { { TT::pri, true, false }, { TT::verticalbar, false, false }, { NT::expression, true, false } } },
 
 			{ { NT::reg, AT::reg, 0 }, { { NT::regid, true, false }, { TT::dot, false, false }, { NT::regmode, true, false } } },
 
@@ -1758,7 +1773,8 @@ namespace assembler {
 				EXTERN_DEFINED,      // `extern name` but name is also defined in this file
 				INVALID_SIZE,        // negative total size, or list element size <= 0 / not dividing the total
 				INITIALIZER_TOO_LONG, // list has more elements / string more bytes than the total size holds
-				GLOBAL_SECTION_UNDEFINED  // `global section name` but no section of that name in this file
+				GLOBAL_SECTION_UNDEFINED,  // `global section name` but no section of that name in this file
+				REGISTER_OUT_OF_RANGE     // gen[n]/reg[n] with a constant n above 24 (would alias the special registers)
 			};
 
 			inline const char* evaluateErrorName(int code) {
@@ -1772,6 +1788,7 @@ namespace assembler {
 				case EvaluateError::INVALID_SIZE: return "invalid size";
 				case EvaluateError::INITIALIZER_TOO_LONG: return "initializer too long";
 				case EvaluateError::GLOBAL_SECTION_UNDEFINED: return "global section is not defined in this file";
+				case EvaluateError::REGISTER_OUT_OF_RANGE: return "register index out of range (0..24)";
 				}
 				return "unknown error";
 			}
@@ -1841,6 +1858,8 @@ namespace assembler {
 				std::vector<u32> compressionIndex;
 
 				int curLineCount;
+
+				std::string errorName; // set by a failing global/extern check: the symbol name, since the error token is the keyword
 
 				_EvalData() : curLineCount(0) {}
 			} EvalData;
@@ -2065,8 +2084,8 @@ namespace assembler {
 
 				{ TokenType::syscall, 0x76 },
 				{ TokenType::iret, 0x77 },
-				{ TokenType::intervec, 0x78 },
-				{ TokenType::interpri, 0x79 },
+				{ TokenType::interst, 0x78 },
+				{ TokenType::interld, 0x79 },
 
 				{ TokenType::ldexp, 0x7A },
 				{ TokenType::stexp, 0x7B },
@@ -2135,6 +2154,13 @@ namespace assembler {
 			// md bit of the cache id byte: set = flush, clear = inval
 			const u32 cacheFlushBit = 0x80;
 
+			// interst/interld byte 3: md (bit 7) | id (bit 5:0)
+			std::map<TokenType, u32> intMdBase = {
+				{ TokenType::vec, 0x00 },
+				{ TokenType::pri, 0x80 }
+			};
+			const u32 intIdMask = 0x3F;
+
 			int calculateSection(AST* cur, void* vpData) {
 				EvalData* data = (EvalData*)vpData;
 
@@ -2166,7 +2192,6 @@ namespace assembler {
 					case (u64)ASTNodeType::instruction_IRI + (u64)TokenType::__end:
 					case (u64)ASTNodeType::instruction_RVRI + (u64)TokenType::__end:
 					case (u64)ASTNodeType::instruction_FVRI + (u64)TokenType::__end:
-					case (u64)ASTNodeType::instruction_IXP + (u64)TokenType::__end:
 					case (u64)ASTNodeType::instruction_RXR + (u64)TokenType::__end:
 					case (u64)ASTNodeType::instruction_CTL + (u64)TokenType::__end:
 					case (u64)ASTNodeType::instruction_CACHE + (u64)TokenType::__end:
@@ -2417,7 +2442,6 @@ namespace assembler {
 				case (u64)ASTNodeType::instruction_IRI + (u64)TokenType::__end:
 				case (u64)ASTNodeType::instruction_RVRI + (u64)TokenType::__end:
 				case (u64)ASTNodeType::instruction_FVRI + (u64)TokenType::__end:
-				case (u64)ASTNodeType::instruction_IXP + (u64)TokenType::__end:
 				case (u64)ASTNodeType::instruction_RXR + (u64)TokenType::__end:
 				case (u64)ASTNodeType::instruction_CTL + (u64)TokenType::__end:
 				case (u64)ASTNodeType::instruction_CACHE + (u64)TokenType::__end: {
@@ -2588,21 +2612,27 @@ namespace assembler {
 				switch (cur->type) {
 				// calculateAddr has defined every label/equ by now
 				case (u64)ASTNodeType::global + (u64)TokenType::__end:
-					if (data->idenifierValue.find(cur->text) == data->idenifierValue.end())
+					if (data->idenifierValue.find(cur->text) == data->idenifierValue.end()) {
+						data->errorName = cur->text;
 						return (int)EvaluateError::GLOBAL_UNDEFINED;
+					}
 					break;
 				case (u64)ASTNodeType::global_section + (u64)TokenType::__end: {
 					std::string name = cur->child.empty() ? "" : cur->text;
 					bool found = false;
 					for (auto it = data->sections.cbegin(); it != data->sections.cend() && !found; ++it)
 						found = it->type != SectionType::OUTER && it->name == name;
-					if (!found)
+					if (!found) {
+						data->errorName = name;
 						return (int)EvaluateError::GLOBAL_SECTION_UNDEFINED;
+					}
 					break;
 				}
 				case (u64)ASTNodeType::_extern + (u64)TokenType::__end:
-					if (data->idenifierValue.find(cur->text) != data->idenifierValue.end())
+					if (data->idenifierValue.find(cur->text) != data->idenifierValue.end()) {
+						data->errorName = cur->text;
 						return (int)EvaluateError::EXTERN_DEFINED;
+					}
 					break;
 
 				case (u64)ASTNodeType::equate + (u64)TokenType::__end: {
@@ -2730,11 +2760,6 @@ namespace assembler {
 					appendReplace(data->instructionValue[cur].replace, data->instructionValue[cur->child[2]].replace, 16);
 					appendReplace(data->instructionValue[cur].replace, data->instructionValue[cur->child[3]].replace, 0);
 					goto pushInstruction;
-				case (u64)ASTNodeType::instruction_IXP + (u64)TokenType::__end:
-					data->instructionValue[cur].data = (instructionBase[(TokenType)cur->child[0]->type] << 24) + (data->instructionValue[cur->child[1]].data << 8) + (data->instructionValue[cur->child[2]].data);
-					appendReplace(data->instructionValue[cur].replace, data->instructionValue[cur->child[1]].replace, 8);
-					appendReplace(data->instructionValue[cur].replace, data->instructionValue[cur->child[2]].replace, 0);
-					goto pushInstruction;
 				case (u64)ASTNodeType::instruction_RXR + (u64)TokenType::__end:
 					data->instructionValue[cur].data = (instructionBase[(TokenType)cur->child[0]->type] << 24) + (data->instructionValue[cur->child[1]].data << 16) + (data->instructionValue[cur->child[2]].data);
 					appendReplace(data->instructionValue[cur].replace, data->instructionValue[cur->child[1]].replace, 16);
@@ -2772,8 +2797,13 @@ namespace assembler {
 						return (int)EvaluateError::MISSING_EXPRESSION;
 
 					ExprData& expr = data->expressionValue[cur->child[1]];
-					if (expr.type == ExprType::CONSTANT)
+					if (expr.type == ExprType::CONSTANT) {
+						if (expr.value > 24) {
+							data->errorName = cur->child[0]->text + "[" + std::to_string(expr.value) + "]";
+							return (int)EvaluateError::REGISTER_OUT_OF_RANGE;
+						}
 						data->instructionValue[cur].data = regBase[(TokenType)cur->child[0]->type] + expr.value;
+					}
 					else {
 						ReplaceData rep = {};
 						rep.index = data->operationVector.size();
@@ -2797,6 +2827,25 @@ namespace assembler {
 					for (auto it = cur->child.cbegin(); it != cur->child.cend(); it++)
 						data->instructionValue[cur].data |= cacheBase[(TokenType)(*it)->type];
 					break;
+				case (u64)ASTNodeType::intid + (u64)TokenType::__end: {
+					if (data->expressionValue.find(cur->child[1]) == data->expressionValue.end())
+						return (int)EvaluateError::MISSING_EXPRESSION;
+
+					// id fills only bit 5:0 so a large id can't touch the md bit
+					ExprData& expr = data->expressionValue[cur->child[1]];
+					data->instructionValue[cur].data = intMdBase[(TokenType)cur->child[0]->type];
+					if (expr.type == ExprType::CONSTANT)
+						data->instructionValue[cur].data |= expr.value & intIdMask;
+					else {
+						ReplaceData rep = {};
+						rep.index = data->operationVector.size();
+						rep.offset = 0;
+						rep.size = 6;
+						data->instructionValue[cur].replace.push_back(rep);
+						data->operationVector.push_back(expr.operations);
+					}
+					break;
+				}
 
 				case (u64)ASTNodeType::immidate16 + (u64)TokenType::__end: {
 					if (data->expressionValue.find(cur->child[0]) == data->expressionValue.end())
@@ -3010,7 +3059,7 @@ namespace assembler {
 		}
 	}
 
-	const unsigned long long version = 415;
+	const unsigned long long version = 416;
 
 	namespace cache {
 		using u64 = unsigned __int64;
@@ -3459,7 +3508,9 @@ namespace assembler {
 			// normalize before comparing/storing so "A/B/../C" and "A/C" (or "A/./C") are
 			// recognized as the same file for duplicate/circular #include detection.
 
-			std::string baseDir = preprocData->fileName;
+			// a nested #include resolves against the file that contains it, not the main file
+			int baseId = preprocData->includeFileId;
+			std::string baseDir = (baseId > 0 && baseId < (int)includedFiles.size()) ? includedFiles[baseId] : preprocData->fileName;
 			size_t baseSlash = baseDir.find_last_of("/\\");
 			baseDir = (baseSlash == std::string::npos) ? "" : baseDir.substr(0, baseSlash + 1);
 			// reassign the parameter directly rather than redeclaring -- a redeclared local of the
@@ -3574,7 +3625,7 @@ namespace assembler {
 		dump.errorCode |= (validEvaluate) ? 0 : (int)AssemblerDump::FAIL_EVALUATE;
 
 		if (!validEvaluate) {
-			dump.errorMessage = describeError(errorTok, std::string(evaluator::functions::evaluateErrorName(evaluateError)) + ": " + errorTok.text);
+			dump.errorMessage = describeError(errorTok, std::string(evaluator::functions::evaluateErrorName(evaluateError)) + ": " + (data.errorName.empty() ? errorTok.text : data.errorName));
 			parser::parser.delAST(pAST);
 			return -1;
 		}

@@ -254,8 +254,8 @@ msg: 8, "Hi\n\0"            ; 48 69 0A 00 00 00 00 00
 
 | 명령어 | 문법 | 인코딩 |
 |---|---|---|
-| `intervec` | `intervec R, I8, I8` | `78 R m d`: `int_vec[d] = R + m` (m 0~255, d 0~63) |
-| `interpri` | `interpri I8, I8` | `79 00 I8 I8` |
+| `interst` | `interst R, I8, <int>` | `78 R m (md\|id)`: md=`vec`면 `int_vec[id] = R + m`, md=`pri`면 `int_pri[id] = R + m` (m 0~255) |
+| `interld` | `interld R, <int>` | `79 R 00 (md\|id)`: `R = int_vec[id]` 또는 `int_pri[id]` |
 | `ldexp` / `stexp` | `ldexp R, <ex>` | `7A/7B R 00 ex` |
 | `pctl` | `pctl enable` / `pctl disable` | `7C 00 00 01` / `7C 00 00 00` |
 | `getabs` | `getabs R1, R2` | `7D R1 R2 00` |
@@ -266,20 +266,31 @@ msg: 8, "Hi\n\0"            ; 48 69 0A 00 00 00 00 00
 
 | `<ex>` | ISA 이름 | 값 | `<cache>` | 값 |
 |---|---|---|---|---|
-| `cpuid` | ex-1 `cpu-id` | 0 | `L1I` | 0x01 |
-| `panicvec` | ex-2 `panic-vec` | 1 | `L1D` | 0x02 |
-| `istack` | ex-3 `istack` | 2 | `TLB` | 0x04 |
-| `intlevel` | ex-4 `int-level` | 3 | `L2` | 0x08 |
-| `pagebase`, `pbase` | ex-5 `p-base` | 4 | `ALL` | 0x40 |
-| `plimit`, `pagelimit` | ex-6 `p-limit` | 5 | | |
+| `cpuid` | ex-0 `cpu-id` | 0 | `L1I` | 0x01 |
+| `panicvec` | ex-1 `panic-vec` | 1 | `L1D` | 0x02 |
+| `istack` | ex-2 `istack` | 2 | `TLB` | 0x04 |
+| `intlevel` | ex-3 `int-level` | 3 | `L2` | 0x08 |
+| `pagebase`, `pbase` | ex-4 `p-base` | 4 | `ALL` | 0x40 |
+| `plimit`, `pagelimit` | ex-5 `p-limit` | 5 | | |
 
-ex-7 – ex-12(값 6~11)는 예약이라 이름이 없습니다.
+ex-6 – ex-11(값 6~11)는 예약이라 이름이 없습니다.
 
 `<cache>`는 `|`로 여러 개를 합칠 수 있습니다: `inval R, 0, L1I | L1D`(id 0x03). 각 이름은 한 번에 하나씩만 쓰는 비트이고, 같은 이름을 두 번 써도 오류는 아닙니다.
 
+`<int>`는 `<md> | <id>`입니다. byte 3에 md가 bit 7, id가 bit 5–0으로 들어가고, bit 6은 0입니다.
+- md는 `vec`(0) 또는 `pri`(0x80)이며 반드시 먼저 씁니다.
+- id는 식이며 하위 6비트(0~63)만 씁니다. 큰 값을 넣어도 md 비트는 바뀌지 않습니다. extern 심볼이면 링크할 때 6비트 필드로 패치합니다.
+- `|` 뒤의 식에 `|`가 더 있으면 식 안의 OR로 계산됩니다(`pri | 2 | 1` → id 3).
+
+```asm
+    interst gen[3].32B, 0x10, vec | 5     ; 78 18 10 05  int_vec[5] = gen[3] + 0x10
+    interst zero.32B, 7, pri | 63         ; 78 D0 07 BF  int_pri[63] = 7
+    interld gen[2].32B, vec | 0           ; 79 10 00 00
+```
+
 ### 예약어
 
-명령어 이름, 레지스터 이름, 모드, 플래그, `<ex>`/`<cache>` 이름, `enable`/`disable`, `global`/`extern`/`equ`/`section`은 라벨이나 `#define` 이름으로 쓸 수 없습니다. 예: `test:`, `pos equ 1`, `ALL:`.
+명령어 이름, 레지스터 이름, 모드, 플래그, `<ex>`/`<cache>` 이름, `vec`/`pri`, `enable`/`disable`, `global`/`extern`/`equ`/`section`은 라벨이나 `#define` 이름으로 쓸 수 없습니다. 예: `test:`, `pos equ 1`, `ALL:`, `vec:`.
 
 ## 8. 전처리기
 
@@ -325,7 +336,7 @@ ex-7 – ex-12(값 6~11)는 예약이라 이름이 없습니다.
 #include<lib/io.txt>
 ```
 
-- 경로는 **dasm에 넘긴 최초 입력 파일의 디렉터리** 기준입니다. 하위 폴더의 파일이 다시 include할 때도 마찬가지입니다. 예를 들어 `lib/a.txt` 안의 `#include<b.txt>`는 `lib/b.txt`가 아니라 `b.txt`를 찾습니다.
+- 경로는 **`#include`가 적힌 파일의 디렉터리** 기준입니다. 예를 들어 `lib/a.txt` 안의 `#include<b.txt>`는 `lib/b.txt`를 찾습니다.
 - 같은 파일을 두 번 include하면 오류입니다. 순환이나 자기 자신 include도 같고, `a/../b.txt`처럼 표기만 다른 같은 경로도 포함됩니다.
 - 각 파일의 줄 번호는 따로 추적되므로, 오류 메시지는 해당 파일과 그 파일 안의 줄을 가리킵니다.
 
@@ -430,6 +441,6 @@ global section       ; 이름 없는 섹션(.text / .data / .bss)
 |---|---|
 | preprocess | `duplicate include`, `invalid include path`, `macro argument out of range`, `wrong number of macro arguments`, `expected ( after macro name`, `expected identifier after #define`, `#end without matching #ifdef/#ifndef`, `#ifdef/#ifndef without matching #end`, `unterminated directive` |
 | parse | `unexpected token: <토큰>` (입력 끝이면 `<EOF>`) |
-| evaluate | `missing expression` (정의되지 않은 이름), `negative index` (`gen[-1]`), `not constant` (데이터 크기가 상수가 아님), `invalid size` (음수 크기, 원소 크기가 0 이하이거나 전체 크기를 나누지 못함), `initializer too long` (목록 원소나 문자열이 크기보다 큼), `global symbol is not defined in this file`, `extern symbol is defined in this file`, `global section is not defined in this file` |
+| evaluate | `missing expression` (정의되지 않은 이름), `negative index` (`gen[-1]`), `register index out of range (0..24)` (`gen[25]`), `not constant` (데이터 크기가 상수가 아님), `invalid size` (음수 크기, 원소 크기가 0 이하이거나 전체 크기를 나누지 못함), `initializer too long` (목록 원소나 문자열이 크기보다 큼), `global symbol is not defined in this file`, `extern symbol is defined in this file`, `global section is not defined in this file` |
 | link | `invalid object file '<경로>'`, `undefined symbol '<이름>'`, `duplicate symbol '<이름>'`, `start label '<이름>' is not defined (use -start <label> or -raw)`, `start label '<이름>' is defined locally in more than one file (...); declare it global` |
 | 공통 | `cannot read file '<경로>'`, `cannot write file '<경로>'`, `no input file`, `unknown flag '<옵션>'`, `missing value for '<옵션>'`, `invalid value for '<옵션>': '<값>'`, `unexpected argument '<인자>'` |
