@@ -1,0 +1,269 @@
+#define GP_BASE 0x8000000
+#define IO_BASE 0x4000000
+
+#define KEY_IN 0
+#define KEY_VALID 4
+#define KEY_RET 8
+#define TERM_OUT 12
+
+
+#define INBUFFSIZE 20
+#define STACKSIZE 20
+
+#define WIDTH 160
+#define HEIGHT 90
+#define SCR (WIDTH * HEIGHT)
+
+; #1 -> register
+; #2 -> data
+#define LSET 2
+    set #1.S16H, (#2) >> 16
+    set #1.16L, (#2) & 0xFFFF
+#end
+
+.data
+fontBuff:
+    4, 0x00000F ;cursor
+    4, 0x000000 ;space
+fontROM_cap:
+    4, 0x699F99 ;A
+    4, 0xE9E99E ;B
+    4, 0x698896 ;C
+    4, 0xE9999E ;D
+    4, 0xF8E88F ;E
+    4, 0xF8E888 ;F
+    4, 0x698B96 ;G
+    4, 0x99F999 ;H
+    4, 0xF4444F ;I
+    4, 0x111196 ;J
+    4, 0x9ACCA9 ;K
+    4, 0x88888F ;L
+    4, 0x9FF999 ;M
+    4, 0x9DDBB9 ;N
+    4, 0x699996 ;O
+    4, 0xE99E88 ;P
+    4, 0x699961 ;Q
+    4, 0xE88EA9 ;R
+    4, 0x694296 ;S
+    4, 0xF44444 ;T
+    4, 0x999996 ;U
+    4, 0x999966 ;V
+    4, 0x999FF9 ;W
+    4, 0x996699 ;X
+    4, 0x99A444 ;Y
+    4, 0xF1248F ;Z
+fontROM_sml:
+    4, 0x0E1F97 ;a
+    4, 0x88E99E ;b
+    4, 0x069896 ;c
+    4, 0x117997 ;d
+    4, 0x069E86 ;e
+    4, 0x34E444 ;f
+    4, 0x07978E ;g
+    4, 0x88E999 ;h
+    4, 0x40C44F ;i
+    4, 0x101196 ;j
+    4, 0x889E88 ;k
+    4, 0x62222F ;l
+    4, 0x09FF99 ;m
+    4, 0x0E9999 ;n
+    4, 0x069996 ;o
+    4, 0x0E99E8 ;p
+    4, 0x079971 ;q
+    4, 0x0BD888 ;r
+    4, 0x07861E ;s
+    4, 0x44F443 ;t
+    4, 0x099997 ;u
+    4, 0x0999AC ;v
+    4, 0x099FF9 ;w
+    4, 0x099699 ;x
+    4, 0x099E44 ;y
+    4, 0x0F168F ;z
+fontROM_num:
+    4, 0x69BD96 ;0
+    4, 0x4C444F ;1
+    4, 0x69123F ;2
+    4, 0x692896 ;3
+    4, 0x99F111 ;4
+    4, 0xF8E11E ;5
+    4, 0x68E886 ;6
+    4, 0xF11111 ;7
+    4, 0x696996 ;8
+    4, 0x697111 ;9
+
+fontBuff:
+    4*24, 0
+
+readIdx:    4, 0
+inputIdx:   4, 0
+inputBuff:  4*INBUFFSIZE, 0
+            4*STACKSIZE, 0
+stackEnd:
+
+.text
+    LSET(stack, stackEnd)
+    LSET(sbp, stackEnd)
+    LSET(gen[24], IO_BASE)
+    LSET(gen[23], GP_BASE)
+
+    set gen[5].32B, 0
+
+mainloop:
+    call zero.32B, func_getKey
+
+    cmpi gen[5].32B, 0
+    ijmp.zero zero.32B, skipProc
+    
+    call zero.32B, func_getInput
+    call zero.32B, func_mapIndex
+    call zero.32B, func_getFont
+    call zero.32B, func_copyScr
+
+skipProc:
+    addi gen[5].32B, 1
+    cmpi gen[5].32B, 5
+    jmp.neg zero.32B, skipSub
+    subi gen[5].32B, 5
+
+skipSub:
+    jmp.one zero.32B, mainloop
+    
+    halt
+
+
+    ; <getKey>
+    ; gen[13] -> valid
+    ; gen[14] -> value
+    ; gen[15] -> idx
+    ; gen[20] -> buff[]
+    ; gen[21] -> &idx
+func_getKey:
+    push sbp.32B
+    push gen[20].32B
+    push gen[21].32B
+
+    ; set pointers
+    LSET(gen[20], inputBuff)
+    LSET(gen[21], inputIdx)
+
+    ; check key input
+    block
+    ld.gen[24] gen[13].32B, KEY_VALID
+    cmpi gen[13].32B, 0
+getKey_skip_ref:
+    jmp.zero pc.32B, getKey_skip - getKey_skip_ref
+
+    ; get key value
+    ld.gen[24] gen[14].32B, KEY_IN
+    st.gen[24] full.32B, KEY_RET
+
+    ; store key value
+    add gen[20].32B, gen[15].32B
+    ld.gen[20] gen[15].32B, 0
+
+    ; idx += 4, idx %= INBUFFSIZE*4
+    addi gen[15].32B, 4
+    cmpi gen[15].32B, INBUFFSIZE*4
+getKey_neg_ref:
+    jmp.neg pc.32B, getKey_neg - getKey_neg_ref
+    subi gen[15].32B, INBUFFSIZE*4
+getKey_neg:
+    st.gen[21] gen[15].32B, 0
+
+getKey_skip:
+    pop gen[21].32B
+    pop gen[20].32B
+    pop sbp.32B
+
+    ret
+
+    ; <getInput>
+    ;
+func_getInput:
+    push sbp.32B
+
+    
+
+    pop sbp.32B
+    ret
+
+    ; <copyScr>
+    ; 
+func_copyScr:
+    push sbp.32B
+
+    
+
+    pop sbp.32B
+    ret
+
+
+    ; <getFont>
+    ; gen[1] -> offset
+    ; gen[13] -> fontData
+    ; gen[14] -> curColor
+    ; gen[15] -> tmp
+    ; gen[16] -> limit
+    ; gen[20] -> fontROM
+    ; gen[21] -> fontBuff
+func_getFont:
+    push sbp.32B
+    push gen[20].32B
+    push gen[21].32B
+
+    ; set values
+    LSET(gen[20], fontROM)
+    LSET(gen[21], fontBuff)
+    LSET(gen[16], fontBuff + 4*24)
+
+    ; get fontData
+    add gen[20].32B, gen[1].32B
+    ld.gen[20] gen[13].32B, 0
+
+getFont_loop:
+    ; get pixel from fontData
+    mov gen[15].32B, gen[13].32
+    bndi gen[15].32B, 1
+
+    ; calc color (g=31)
+    shiftli gen[15].32B, 4
+    mov gen[14].32B, gen[15].32B
+    shiftli gen[15].32B, 1
+    mov gen[14].32B, gen[15].32B
+    shiftli gen[15].32B, 1
+    mov gen[14].32B, gen[15].32B
+    shiftli gen[15].32B, 1
+    mov gen[14].32B, gen[15].32B
+    shiftli gen[15].32B, 1
+    mov gen[14].32B, gen[15].32B
+
+    ; add const 0x8000
+    addi gen[14].32B, 0x4000
+    shiftli gen[14].32B, 1
+
+    ; *(fontBuff++) = color
+    st.gen[21] gen[14].32B, 0
+    addi gen[21].32B, 4
+    
+    ; shift fontData, loop if fontBuff < limit
+    shiftri gen[13].32B, 1
+    cmp gen[21].32B, gen[16].32B
+getFont_loop_ref:
+    jmp.neg pc.32B, getFont_loop_ref - getFont_loop
+
+    pop gen[21].32B
+    pop gen[20].32B
+    pop sbp.32B
+
+    ret
+
+
+    ; <mapIndex>
+    ;
+func_mapIndex:
+    push sbp.32B
+
+
+
+    pop sbp.32B
+    ret
