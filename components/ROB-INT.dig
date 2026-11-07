@@ -2679,6 +2679,10 @@
           <string>Bits</string>
           <int>16</int>
         </entry>
+        <entry>
+          <string>Inputs</string>
+          <int>3</int>
+        </entry>
       </elementAttributes>
       <pos x="2500" y="440"/>
     </visualElement>

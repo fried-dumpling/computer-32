@@ -1,0 +1,86 @@
+; =====================================================================
+;  int.hsm : shared macros of the interrupt tests (program/test/int_*.asm)
+;  run them with tools/dsim/runint.py. the emulator has no interrupts.
+;
+;  every program starts with: jmp main ; nop ; handler at address 8,
+;  because the runner drives INT_vec = 8.
+; =====================================================================
+#ifndef INT_HSM
+#define INT_HSM 1
+
+#define IO_BASE 0x4000000
+#define TERM_OUT 12
+#define ISTACK 0x2000           ; istack before the interrupt
+#define SENT 0x5A5A5A5A         ; words around ISTACK start as this
+
+#macro LSET 2
+    set #1.S16H, ((#2) >> 16) & 0xFFFF
+    set #1.16L, (#2) & 0xFFFF
+#end
+
+#macro PUTC 1
+    set gen[20].32B, #1
+    st.gen[24] gen[20].32B, TERM_OUT
+#end
+
+; print without touching gen[20] or the flags (for handlers that return)
+#macro HPUTC 1
+    set gen[22].32B, #1
+    st.gen[24] gen[22].32B, TERM_OUT
+#end
+
+#macro HEXD 1
+    mov gen[20].32B, gen[1].32B
+    shiftri gen[20].32B, #1
+    bnd gen[20].32B, gen[18].32B
+    cmpi gen[20].32B, 10
+    jmp.neg zero.32B, ##num
+    addi gen[20].32B, 'A'-10-'0'
+##num:
+    addi gen[20].32B, '0'
+    st.gen[24] gen[20].32B, TERM_OUT
+#end
+
+; print gen[1] as 8 hex digits and a space
+#macro PHEX 0
+    set gen[18].32B, 0xF
+    HEXD(28)
+    HEXD(24)
+    HEXD(20)
+    HEXD(16)
+    HEXD(12)
+    HEXD(8)
+    HEXD(4)
+    HEXD(0)
+    PUTC(' ')
+#end
+
+#macro INIT 0
+    set stack.32B, 0x3000
+    LSET(gen[24], IO_BASE)
+#end
+
+; istack = ISTACK, with SENT in the words around it. the return PC must
+; land in ISTACK-4 and nothing else may change (ISA.md 2.2)
+#macro INITIST 0
+    LSET(gen[1], SENT)
+    st.zero gen[1].32B, ISTACK-8
+    st.zero gen[1].32B, ISTACK-4
+    st.zero gen[1].32B, ISTACK
+    set gen[1].32B, ISTACK
+    stexp gen[1].32B, istack
+#end
+
+; print "<istack> <mem[ISTACK-4]> <mem[ISTACK]> <int-level> "
+#macro DUMPINT 0
+    ldexp gen[1].32B, istack
+    PHEX()
+    ld.zero gen[1].32B, ISTACK-4
+    PHEX()
+    ld.zero gen[1].32B, ISTACK
+    PHEX()
+    ldexp gen[1].32B, intlevel
+    PHEX()
+#end
+
+#end

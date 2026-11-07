@@ -33,6 +33,9 @@ dlnk fill.o -o ../boot/rom.bin
 | `ldstmix.asm` | 밀린 load 여러 개와 store를 섞었을 때 load 값 (bus controller mid 겹침 버그) | 입력 없음. `m1`..`m6` `PASS` / `FAIL <오류 수 hex>` |
 | `rotate.asm` | `rol`/`roli`/`ror`/`rori` (X = 0x12345678, 회전량 0~36) | 입력 없음. `<케이스> <결과 hex>`, 에뮬레이터와 비교 |
 | `knownbug.asm` | 루트 `CLAUDE.md`의 알려진 회로 문제: `st .8L/.16L/.8H`, 분기 바로 뒤 `halt` | 입력 없음. 고쳐질 때까지 DIFF가 정상 |
+| `selfflush.asm` | 늦은 store를 앞지른 load의 self flush(`document/errors.md` 11번): 일반 load, dest = base, 의존 load, `pop`, `ret`, `st.stack` 뒤 stack 변경 | 입력 없음. `<글자> <오류 수 hex>`, 에뮬레이터와 비교. 2026-11-07: 처음엔 `g`, `j`, `l` FAIL(`stack` base store가 더 젊은 pop/ret/push가 바꾼 stack을 씀). `st.stack`이 PCA를 쓰도록 고친 뒤 모두 PASS(zseed 1~3) |
+| `haltbr.asm` | 늦게 풀리는 not-taken 예측 분기 바로 뒤 `halt` (H1..H10) | 이미지마다 `#define H<n> 1`을 앞에 붙여 빌드. `AB`(H6은 `A123`)가 정상. 2026-11-07: 10개 × zseed 1~3 모두 정상 |
+| `int_*.asm` (`int.hsm`) | 인터럽트 진입, 복귀, `syscall`, `interst`/`interld`, 확장 레지스터 | 입력 없음. `tools/dsim/runint.py`로 실행. 아래 "인터럽트 회귀 테스트" |
 
 `M4.o`, `M7.o`, `fill.o`는 예전 빌드 결과입니다.
 
@@ -53,6 +56,50 @@ bash tools/dsim/runtests.sh flushstall ldstmix knownbug     ; 루트에서. 결�
 - `flushstall` SAME (모두 PASS). 처음에는 `c10`, `c30`~`c33`이 `FAIL 00050100`이었고, 프론트엔드 수정 뒤 통과했습니다(`document/errors.md` 15번).
 - `ldstmix` SAME (모두 PASS). store 응답을 다시 켜면 확인할 것.
 - `knownbug` DIFF: k1..k3 FAIL(`000000AA`, `0000BEEF`, `000000CC`: 직후 load가 폭을 무시한 forward 값을 받음, 메모리는 맞음. `document/errors.md` 17번). `h 123`은 맞게 나옵니다. 분기 뒤 `halt` 문제는 이 경우에는 재현되지 않습니다.
+
+## 인터럽트 회귀 테스트 (`int_*.asm`)
+
+에뮬레이터에 인터럽트가 없으므로 `runtests.sh`가 아니라 `tools/dsim/runint.py`로 돌립니다. 기대값은 `document/ISA.md` 2.2절입니다. 인터럽트 시점 H는 고정하지 않습니다. 인터럽트 없이 먼저 돌려 PC가 프로그램의 루프 주소에 닿는 half를 찾고, 거기서부터 2 half 간격으로 넣습니다.
+
+```
+python tools/dsim/runint.py [-j N] [-seeds 1,2,3] [-nobuild] [그룹...]     ; 루트에서. 그룹: ext prec sled misp iret sys tbl
+```
+
+결과는 `PASS`, `FAIL`, `XFAIL`(지금 실패가 예상됨), `XPASS`(예상과 달리 통과), `SKIP`(이번 실행에서 판단 불가)입니다. `FAIL`이나 `XPASS`가 있으면 종료 코드가 1입니다. 고쳐져서 `XPASS`가 나오면 `runint.py`의 `XFAIL`에서 그 항목을 지웁니다. 실행 출력은 `program/build/dsim/int/<프로그램>-z<seed>-<H>.sim`에 남습니다.
+
+| 항목 | 프로그램 | 확인하는 것 |
+|---|---|---|
+| 1a, 1b | `int_ext` | `stexp`/`ldexp` 왕복. 1a: `istack`, `panicvec`, `intlevel`(5비트), `cpuid`. 1b: `pbase`, `plimit` |
+| 2 | `int_prec` | 루프 두 주기의 모든 위상에서 진입해 핸들러가 끝까지 도는지 |
+| 3a, 3b, 3c | `int_prec` | 점 개수와 `gen[5]`가 한 commit 지점인지(3a), 복귀 PC까지 맞는지(3b), 복귀 PC +4를 허용하고 맞는지(3c) |
+| 4 | `int_prec` | `istack -= 4; mem[istack] = 복귀 PC`, 원래 `istack` 칸은 그대로 |
+| 5 | `int_sled` | 복귀 PC = 첫 미commit 명령. `addi` 연속이라 `sled + 4*gen[5]`로 정확히 계산됩니다 |
+| 6a, 6b | `int_prec`, `int_sys` | `syscall`이 없으면 `INT_req`가 0, 있으면 1 |
+| 7a, 7b, 7c | `int_iret` | `iret` 뒤 프로그램이 이어지는지, `istack`과 `int-level`이 복원되는지 |
+| 8a, 8b | `int_sys` | `syscall`이 핸들러로 들어가고 복귀 PC가 다음 명령인지, 돌아와 `BC`를 출력하는지. 테스트 벤치에 IPU가 없어 `INT_req`가 오른 뒤 `INT_in` 펄스로 응답합니다 |
+| 9 | `int_tbl` | `interst`/`interld` 왕복. `bin/dasm.exe`가 구버전이라 nop 4개를 러너가 패치합니다(`PATCH`) |
+| 10a, 10b, 10c | `int_misp` | 번갈아 오분기하는 분기 주변 진입. 복귀 PC와 `gen[5..7]`이 정상 경로의 명령 경계인지(10a는 +4 허용, 10b는 정확히), 끝까지 도는지(10c) |
+| 11 | `int_misp` | Fl_INT와 Fl_JPU가 같은 half인 실행의 결과. 그런 실행이 없으면 `SKIP` |
+| 13 | `int_prec` | 핸들러 안의 `int-level`이 `{mask 1, level 1}` = 0x11 |
+
+- 러너는 시작할 때 `components/`를 `program/build/dsim/int/components/`로 복사해 그 복사본을 돌립니다. 실행 중에 Digital에서 회로를 저장해도 결과가 섞이지 않습니다.
+- `misp`만 tunnel probe(`-Dtap=top`)를 붙여 돕니다. H=24642, 24654, 24656, 24658, 24678에서 probe 없는 실행과 출력이 같았습니다.
+- 위상 sweep은 2 half 간격의 짝수 half(클럭 상승)만 봅니다.
+
+### 결과 (2026-11-06, dsim, `cpu-test.dig` 작업 트리 22:19 저장본, `prec`는 zseed 1, 2, 3, 나머지는 1)
+
+| 결과 | 항목 |
+|---|---|
+| PASS | 1a, 3a, 3c, 4, 6a, 6b, 13 |
+| XFAIL | 1b(`pbase`/`plimit`이 0으로 읽힘, Ground 연결), 2, 3b, 5, 7a, 8a, 8b, 9, 10a, 10b, 10c, 11 |
+| SKIP | 7b, 7c (`iret`이 돌아오지 않아 판단 불가) |
+
+- 2: 48회 중 12회 stall. seed마다 같은 위상 4곳(H=12766, 12772, 12782, 12788), PC=0x3C/0x38.
+- 5: 16회 모두 복귀 PC가 정답 +4. 3b가 실패하는 것도 이 때문입니다(3c는 통과).
+- 7a: `Ii` 출력 뒤 PC=0x20에서 stall. `INT_ret`은 Ground입니다.
+- 10a: 32회 중 7회. 예: H=24642, `gen[5]`=180(짝수 바퀴, 정상 경로는 +28)인데 복귀 PC가 오분기 경로의 +24입니다. Fl_INT 뒤 12 half에 Fl_JPU가 또 나옵니다.
+- 10c: 38회 중 6회 stall. H=24614, 24678은 항목 2와 같은 모양이고, H=24656~24662(Fl_JPU 직후)는 핸들러의 `I`도 출력하지 않고 PC=0x904, 0x8E0~0x8E8에서 멈춥니다.
+- 11: H=24654 한 번 발생. 오분기 경로의 `addi gen[6]`이 반영되어 `gen[6]`=91입니다(정답 90).
 
 ## fill.asm 상태 (2026-10-17, dsim)
 

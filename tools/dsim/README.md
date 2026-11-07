@@ -57,6 +57,19 @@ bash tools/dsim/runtests.sh [-j N] [-nobuild] [이름...]
 - 테스트 목록은 스크립트의 `T` 배열입니다. `knownbug`는 알려진 문제를 담고 있어 DIFF가 정상입니다.
 - `DIGITAL_JAR` 환경 변수로 `Digital.jar` 경로를 바꿀 수 있습니다.
 
+## runint.py : 인터럽트 회귀 테스트
+
+```
+python tools/dsim/runint.py [-j N] [-seeds 1,2,3] [-nobuild] [그룹...]
+```
+
+- 에뮬레이터에 인터럽트가 없어서 `document/ISA.md` 2.2절로 계산한 값과 비교합니다. 항목과 최근 결과는 `program/document/test.md`에 있습니다.
+- 그룹은 `ext prec sled misp iret sys tbl`이고(기본 전체), `-seeds`는 `prec` sweep의 zseed입니다(나머지는 첫 번째 값). 전체 약 100초입니다.
+- 항목마다 `PASS`, `FAIL`, `XFAIL`, `XPASS`, `SKIP`을 출력하고, `FAIL`이나 `XPASS`가 있으면 종료 코드 1입니다. 지금 실패가 예상되는 항목은 스크립트의 `XFAIL`에 이유와 함께 있습니다.
+- 회로 입력은 `-Dset=E=1,run=1,INT_vec=8,INT_lev=1`, `-Dat=H:INT_in=1;H+60:INT_in=0`입니다. 그래서 핸들러는 주소 8에 둡니다. H는 인터럽트 없는 실행에서 PC가 루프 주소에 닿는 half로 계산합니다.
+- `components/`를 `program/build/dsim/int/components/`로 복사해서 돌리므로 실행 중 회로를 저장해도 됩니다. 출력은 같은 폴더의 `<프로그램>-z<seed>-<H>.sim`, `.delta`입니다.
+- `bin/dasm.exe`가 `interst`/`interld`를 어셈블하지 못해 `int_tbl`은 nop을 패치합니다. `bin/dasm.exe`를 바꾸면 `int_tbl.asm`에 명령을 쓰고 스크립트의 `PATCH`를 지웁니다.
+
 ## NetQuery : 넷 조회
 
 ```
