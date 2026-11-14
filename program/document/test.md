@@ -77,7 +77,7 @@ python tools/dsim/runint.py [-j N] [-seeds 1,2,3] [-nobuild] [그룹...]     ; �
 | 6a, 6b | `int_prec`, `int_sys` | `syscall`이 없으면 `INT_req`가 0, 있으면 1 |
 | 7a, 7b, 7c | `int_iret` | `iret` 뒤 프로그램이 이어지는지, `istack`과 `int-level`이 복원되는지 |
 | 8a, 8b | `int_sys` | `syscall`이 핸들러로 들어가고 복귀 PC가 다음 명령인지, 돌아와 `BC`를 출력하는지. 테스트 벤치에 IPU가 없어 `INT_req`가 오른 뒤 `INT_in` 펄스로 응답합니다 |
-| 9 | `int_tbl` | `interst`/`interld` 왕복. `bin/dasm.exe`가 구버전이라 nop 4개를 러너가 패치합니다(`PATCH`) |
+| 9 | `int_tbl` | `interst`/`interld` 왕복(`int_vec[3]`, `int_pri[3]`). 출력 `A00000105 00000009 E` |
 | 10a, 10b, 10c | `int_misp` | 번갈아 오분기하는 분기 주변 진입. 복귀 PC와 `gen[5..7]`이 정상 경로의 명령 경계인지(10a는 +4 허용, 10b는 정확히), 끝까지 도는지(10c) |
 | 11 | `int_misp` | Fl_INT와 Fl_JPU가 같은 half인 실행의 결과. 그런 실행이 없으면 `SKIP` |
 | 13 | `int_prec` | 핸들러 안의 `int-level`이 `{mask 1, level 1}` = 0x11 |

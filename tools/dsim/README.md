@@ -71,7 +71,6 @@ python tools/dsim/runint.py [-j N] [-seeds 1,2,3] [-nobuild] [그룹...]
 - 항목마다 `PASS`, `FAIL`, `XFAIL`, `XPASS`, `SKIP`을 출력하고, `FAIL`이나 `XPASS`가 있으면 종료 코드 1입니다. 지금 실패가 예상되는 항목은 스크립트의 `XFAIL`에 이유와 함께 있습니다.
 - 회로 입력은 `-Dset=E=1,run=1,INT_vec=8,INT_lev=1`, `-Dat=H:INT_in=1;H+60:INT_in=0`입니다. 그래서 핸들러는 주소 8에 둡니다. H는 인터럽트 없는 실행에서 PC가 루프 주소에 닿는 half로 계산합니다.
 - `components/`를 `program/build/dsim/int/components/`로 복사해서 돌리므로 실행 중 회로를 저장해도 됩니다. 출력은 같은 폴더의 `<프로그램>-z<seed>-<H>.sim`, `.delta`입니다.
-- `bin/dasm.exe`가 `interst`/`interld`를 어셈블하지 못해 `int_tbl`은 nop을 패치합니다. `bin/dasm.exe`를 바꾸면 `int_tbl.asm`에 명령을 쓰고 스크립트의 `PATCH`를 지웁니다.
 
 ## NetQuery : 넷 조회
 

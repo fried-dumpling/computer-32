@@ -35,9 +35,6 @@ ISTACK, SENT = 0x2000, 0x5A5A5A5A
 MAX_HALF = 400000
 
 PROGRAMS = ["ext", "prec", "sled", "misp", "iret", "sys", "tbl"]
-# nth nop of the image -> word. bin/dasm.exe cannot assemble these (see int_tbl.asm)
-PATCH = {"tbl": [0x78080503, 0x79100003, 0x78080283, 0x79180083]}
-NOP = 0x72000000
 
 # item -> why it fails today. Remove the entry when the item passes.
 XFAIL = {
@@ -67,15 +64,6 @@ def build(name):
     image = OUT / f"int_{name}.bin"
     tool(ROOT / "bin" / "dasm.exe", PROG / "test" / f"int_{name}.asm", "-o", obj)
     tool(ROOT / "bin" / "dlnk.exe", obj, "-o", image)
-    if name in PATCH:
-        data = bytearray(image.read_bytes())
-        words = iter(PATCH[name])
-        nops = [i for i in range(8, len(data) - 3, 4) if int.from_bytes(data[i:i + 4], "little") == NOP]
-        if len(nops) != len(PATCH[name]):
-            raise SystemExit(f"int_{name}: {len(nops)} nops, PATCH has {len(PATCH[name])}")
-        for i in nops:
-            data[i:i + 4] = next(words).to_bytes(4, "little")
-        image.write_bytes(data)
 
 
 class Run:
