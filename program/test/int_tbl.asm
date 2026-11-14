@@ -1,6 +1,5 @@
 ; =====================================================================
 ;  int_tbl.asm : interst / interld round trip of int_vec and int_pri
-;  run : python tools/dsim/runint.py tbl
 ;
 ;  encoding (2026-11-14 ISA: interst = 79, interld = 78):
 ;    interst gen[1].32B, 5, vec | 3   ; 0x79080503  int_vec[3] = gen[1] + 5

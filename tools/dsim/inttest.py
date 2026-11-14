@@ -1,14 +1,16 @@
 #!/usr/bin/env python
-"""Interrupt regression tests on components/cpu-test.dig (expected values: document/ISA.md 2.2).
+"""Interrupt regression tests on components/computer-32-test.dig (CPU + IPU).
 
-  python tools/dsim/runint.py [-j N] [-seeds 1,2,3] [-nobuild] [group...]
+  python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [group...]
   group : ext prec sled misp iret sys tbl (default all). Output: program/build/dsim/int/
 
-The emulator has no interrupts, so each item is compared with values from the ISA, not with
-the emulator. An item in XFAIL is expected to fail today: it prints XFAIL while it fails and
-XPASS once it passes. The exit code is 1 on FAIL or XPASS (then remove the XFAIL entry).
+The emulator has no interrupts, so each item is compared with values from ISA.md 2.2, not
+with the emulator. An item in XFAIL is expected to fail today: it prints XFAIL while it
+fails and XPASS once it passes. The exit code is 1 on FAIL or XPASS (then remove the entry).
 
-The interrupt half H is never fixed: each program first runs without a pulse, and H is taken
+An interrupt is a 2-half pulse on IPU line IRQ (top-level In "I-in"). The programs set
+int_vec[IRQ] = handler and int_pri[IRQ] = 1 with INTVEC() (program/test/int.hsm).
+The pulse half H is never fixed: each program first runs without a pulse, and H is taken
 from the half where PC reaches the program's loop (it prints the address as L<hex>).
 """
 import argparse
@@ -27,29 +29,24 @@ PROG = ROOT / "program"
 OUT = PROG / "build" / "dsim" / "int"
 DSIM = ROOT / "tools" / "dsim"
 SNAP = OUT / "components"
+CIRCUIT = "computer-32-test.dig"
 JAR = os.environ.get("DIGITAL_JAR", "D:/Users/taeh5/Digital/Digital 0.31/Digital.jar")
 
-VEC, LEV = 8, 1
-PULSE = 60                  # halves INT_in stays high
+IRQ = 3                     # must match int.hsm
+PULSE = 2                   # halves I-in bit IRQ stays high (the IPU latches a 1-half pulse)
 ISTACK, SENT = 0x2000, 0x5A5A5A5A
 MAX_HALF = 400000
+# boot sequencer start (S/R), then the boot ROM copies the -Drom image to RAM
+START = "6:R=0;10:S=1;16:S=0"
+TAP = "cpu-32.dig:PCS=PC,com1,com2,INT_req=INT_req,Fl_INT=Fl_INT,Fl_JPU=Fl_JPU"
 
 PROGRAMS = ["ext", "prec", "sled", "misp", "iret", "sys", "tbl"]
 
 # item -> why it fails today. Remove the entry when the item passes.
 XFAIL = {
-    "1b": "p-base / p-limit read Ground, not connected (MMU_base|PGBS)",
-    "2": "Fl_INT in the same clock as a commit stalls (PC 0x38/0x3C, RS_full=1)",
-    "3b": "the return PC is +4, see item 5",
-    "5": "the stored return PC is the first uncommitted instruction + 4",
-    "7a": "iret does not return, stalls in the handler (INT_ret is Ground)",
-    "8a": "an INT_in pulse does not enter the handler after syscall (bench has no IPU, INT_rqac unused)",
-    "8b": "no way back from syscall: IPU not connected",
-    "9": "interst/interld stall, IPU not connected",
-    "10a": "Fl_INT near a mispredicted branch: the return PC is on the wrong path",
-    "10b": "the return PC is +4 (item 5) or on the wrong path (item 10a)",
-    "10c": "Fl_INT just after Fl_JPU: the handler is not entered, stalls in the loop; also the item 2 stall",
-    "11": "wrong-path add reaches the register (gen[6] one too many)",
+    "7a": "iret path not built (INT_ret only reaches a BitExtender in the IPU)",
+    "8a": "the IPU does not answer INT_req (syscall); INT_rqac is Ground",
+    "8b": "same as 8a",
 }
 
 
@@ -79,20 +76,17 @@ class Run:
         return f"z{self.seed}/H={self.h}/PC={self.pc}"
 
 
-def sim(name, seed=1, h=None, cols=None, tap=False, tag=None):
-    """One run. h = half of the INT_in rising edge (None: no pulse)."""
+def sim(name, seed=1, h=None, cols=None, tag=None):
+    """One run. h = half of the IRQ rising edge (None: no pulse)."""
     tag = tag or f"{name}-z{seed}-{'none' if h is None else h}"
-    opts = [f"-Dzseed={seed}", f"-Drom={OUT / f'int_{name}.bin'}", "-Dstall=6000", "-Didle=20000",
-            f"-Dset=E=1,run=1,INT_vec={VEC},INT_lev={LEV}"]
-    if h is not None:
-        opts.append(f"-Dat={h}:INT_in=1;{h + PULSE}:INT_in=0")
+    at = START if h is None else f"{START};{h}:I-in={1 << IRQ};{h + PULSE}:I-in=0"
+    opts = ["-Ddip=", f"-Dzseed={seed}", f"-Drom={OUT / f'int_{name}.bin'}", "-Dstall=6000", "-Didle=20000",
+            "-Dset=S=0,R=1,B_used=0,I-in=0", f"-Dat={at}", f"-Dtap={TAP}"]
     delta = None
     if cols:
         delta = OUT / f"{tag}.delta"
         opts += [f"-Dcols={','.join(cols)}", f"-Ddelta={delta}"]
-    if tap:
-        opts.append("-Dtap=top")
-    cmd = ["java", *opts, "-cp", f"{JAR};{DSIM / 'build'}", "Sim", str(SNAP / "cpu-test.dig"), "-", "", str(MAX_HALF)]
+    cmd = ["java", *opts, "-cp", f"{JAR};{DSIM / 'build'}", "Sim", str(SNAP / CIRCUIT), "-", "", str(MAX_HALF)]
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=DSIM)
     if "[half=" not in p.stdout:
         raise RuntimeError(f"Sim failed for {tag}:\n{p.stderr[-2000:]}")
@@ -192,7 +186,7 @@ def brief(items, limit=6):
 
 
 def t_ext(rep, pool, a):
-    r = sim("ext", 1)
+    r = sim("ext", a.seeds[0])
     m = re.match(HEX * 7 + "E", r.text)
     got = [hx(x) for x in m.groups()] if m else None
     detail = f"output {r.text!r}"
@@ -213,7 +207,6 @@ def t_prec(rep, pool, a):
     runs = list(pool.map(lambda j: sim("prec", j[0], j[1]), jobs))
 
     done, stalled = [], []
-    addr = cals[0][1]
     for r in runs:
         m = ENTRY.match(r.text)
         if m:
@@ -301,13 +294,13 @@ def t_misp(rep, pool, a):
     span = 2 * (hits[len(hits) // 2 + 2] - hits[len(hits) // 2])
     base = hits[len(hits) // 2] & ~1
     print(f"misp: loop={addr:#x} pattern={span // 2} halves, H from {base}", flush=True)
-    cols = ["T_Fl_INT", "T_Fl_JPU", "PC"]
-    runs = list(pool.map(lambda h: sim("misp", z, h, cols=cols, tap=True), range(base, base + span, 2)))
+    cols = ["Fl_INT", "Fl_JPU", "PC"]
+    runs = list(pool.map(lambda h: sim("misp", z, h, cols=cols), range(base, base + span, 2)))
     states, done, stalled, both = misp_states(), [], [], []
     for r in runs:
         m = ENTRY_M.match(r.text)
         d = read_delta(r.delta)
-        clash = overlap(high_spans(d["T_Fl_INT"]), high_spans(d["T_Fl_JPU"]))
+        clash = overlap(high_spans(d["Fl_INT"]), high_spans(d["Fl_JPU"]))
         f = None
         if m:
             f = {"g5": hx(m.group(3)), "g6": hx(m.group(4)), "g7": hx(m.group(5)), "ist": hx(m.group(6)),
@@ -352,7 +345,7 @@ def t_iret(rep, pool, a):
         else:
             bad.append(f"{r.where()} {r.text[-12:]!r}")
     rep.item("7a", "iret: the program goes on, 60 dots and gen[5] = 60", (not bad) if entered else None,
-             f"{len(entered)} entered, {len(bad)} wrong: " + brief(bad, 3) if bad else "")
+             f"{len(entered)} entered, {len(bad)} wrong: " + brief(bad, 3) if bad else f"{len(entered)} runs")
     wrong = [r.where() for r, ist, _ in resumed if ist != ISTACK]
     rep.item("7b", "iret: istack back to ISTACK", (not wrong) if resumed else None, brief(wrong))
     wrong = [r.where() for r, _, lv in resumed if lv != 0]
@@ -361,19 +354,15 @@ def t_iret(rep, pool, a):
 
 def t_sys(rep, pool, a):
     z = a.seeds[0]
-    r = sim("sys", z, cols=["PC", "INT_req"], tag=f"sys-z{z}-cal")
+    r = sim("sys", z, cols=["PC", "INT_req"], tag=f"sys-z{z}-run")
     rises = [h for h, s in high_spans(read_delta(r.delta)["INT_req"])]
     rep.item("6b", "syscall raises INT_req", bool(rises), f"high at half {rises[:3]}, output {r.text!r}")
-    m = re.match(r"L" + HEX + "A", r.text)
-    after = hx(m.group(1)) if m else None
-    if not rises or after is None:
-        rep.item("8a", "syscall enters the handler, return PC = next word", None, "no INT_req to answer")
-        rep.item("8b", "syscall returns, BC printed", None, "no INT_req to answer")
-        return
-    r = sim("sys", z, h=(rises[0] + 10) & ~1)     # the bench has no IPU: answer INT_req with a pulse
     m = re.match(r"L" + HEX + "AH" + HEX + "h", r.text)
-    ok = bool(m) and hx(m.group(2)) == after
-    rep.item("8a", "syscall enters the handler, return PC = next word", ok, f"want R={after:#x}, output {r.text!r}")
+    after = re.match(r"L" + HEX, r.text)
+    want = hx(after.group(1)) if after else None
+    ok = bool(m) and hx(m.group(2)) == want
+    rep.item("8a", "syscall enters the handler, return PC = next word", ok,
+             f"want R={want:#x}, output {r.text!r}" if want is not None else f"output {r.text!r}")
     rep.item("8b", "syscall returns, BC printed", r.text.endswith("BCE"), f"output {r.text!r}, stop [{r.tail.strip()}]")
 
 
@@ -401,7 +390,7 @@ def main():
             build(g)
     # run on a copy: saving a circuit in Digital during a sweep must not mix two circuits
     src = ROOT / "components"
-    print(f"circuit: cpu-test.dig saved {datetime.fromtimestamp((src / 'cpu-test.dig').stat().st_mtime):%Y-%m-%d %H:%M:%S}")
+    print(f"circuit: {CIRCUIT} saved {datetime.fromtimestamp((src / CIRCUIT).stat().st_mtime):%Y-%m-%d %H:%M:%S}")
     shutil.rmtree(SNAP, ignore_errors=True)
     shutil.copytree(src, SNAP, ignore=lambda d, names: [n for n in names if Path(d, n).is_file() and not n.endswith(".dig")])
     rep = Report()

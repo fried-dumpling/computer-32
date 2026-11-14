@@ -1,6 +1,5 @@
 ; =====================================================================
 ;  int_sled.asm : exact return PC. a straight run of "addi gen[5], 1"
-;  run : python tools/dsim/runint.py sled
 ;
 ;  gen[5] counts the committed instructions, so the first uncommitted one
 ;  is at sled + 4 * gen[5]. that must be the return PC (ISA.md 2.2).
@@ -33,7 +32,7 @@ global _start
 _start:
     jmp.one zero.32B, main
     nop
-handler:                                ; address 8 = INT_vec
+handler:                                ; int_vec[IRQ], address 8
     PUTC('I')
     mov gen[1].32B, gen[5].32B
     PHEX()
@@ -43,6 +42,7 @@ handler:                                ; address 8 = INT_vec
 main:
     INIT()
     INITIST()
+    INTVEC()
     PUTC('L')
     set gen[1].32B, sled
     PHEX()

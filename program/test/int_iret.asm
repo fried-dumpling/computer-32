@@ -1,6 +1,5 @@
 ; =====================================================================
 ;  int_iret.asm : iret returns and the program goes on
-;  run : python tools/dsim/runint.py iret
 ;
 ;  the handler leaves gen[1], gen[5], gen[18], gen[20] and the flags alone, so
 ;  the loop must finish as if nothing happened: 60 dots in all and gen[5] = 60.
@@ -15,13 +14,14 @@ global _start
 _start:
     jmp.one zero.32B, main
     nop
-handler:                                ; address 8 = INT_vec
+handler:                                ; int_vec[IRQ], address 8
     HPUTC('I')
     HPUTC('i')
     iret
 main:
     INIT()
     INITIST()
+    INTVEC()
     PUTC('L')
     set gen[1].32B, loop
     PHEX()

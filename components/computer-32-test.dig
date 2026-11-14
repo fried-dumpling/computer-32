@@ -2210,20 +2210,6 @@
       <pos x="-780" y="300"/>
     </visualElement>
     <visualElement>
-      <elementName>Ground</elementName>
-      <elementAttributes>
-        <entry>
-          <string>rotation</string>
-          <rotation rotation="1"/>
-        </entry>
-        <entry>
-          <string>Bits</string>
-          <int>64</int>
-        </entry>
-      </elementAttributes>
-      <pos x="-800" y="340"/>
-    </visualElement>
-    <visualElement>
       <elementName>MMU-I.dig</elementName>
       <elementAttributes/>
       <pos x="-140" y="360"/>
@@ -2335,6 +2321,90 @@
         </entry>
       </elementAttributes>
       <pos x="-660" y="1240"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>INT-in</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-780" y="340"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>INT-acp</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-780" y="380"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>NetName</string>
+          <string>INT-in</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-1200" y="1020"/>
+    </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>addValueToGraph</string>
+          <boolean>false</boolean>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>I-in</string>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>64</int>
+        </entry>
+      </elementAttributes>
+      <pos x="-1220" y="1020"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>INT-acp</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-1220" y="1060"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Probe</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>I-acp</string>
+        </entry>
+        <entry>
+          <string>intFormat</string>
+          <intFormat>bin</intFormat>
+        </entry>
+      </elementAttributes>
+      <pos x="-1200" y="1060"/>
     </visualElement>
   </visualElements>
   <wires>
@@ -2469,6 +2539,10 @@
     <wire>
       <p1 x="-580" y="2340"/>
       <p2 x="20" y="2340"/>
+    </wire>
+    <wire>
+      <p1 x="-1220" y="1060"/>
+      <p2 x="-1200" y="1060"/>
     </wire>
     <wire>
       <p1 x="-560" y="2600"/>
@@ -2663,7 +2737,7 @@
       <p2 x="-1080" y="340"/>
     </wire>
     <wire>
-      <p1 x="-800" y="340"/>
+      <p1 x="-780" y="340"/>
       <p2 x="-760" y="340"/>
     </wire>
     <wire>
@@ -2835,7 +2909,7 @@
       <p2 x="-1200" y="380"/>
     </wire>
     <wire>
-      <p1 x="-800" y="380"/>
+      <p1 x="-780" y="380"/>
       <p2 x="-760" y="380"/>
     </wire>
     <wire>
@@ -3281,6 +3355,10 @@
     <wire>
       <p1 x="-40" y="2040"/>
       <p2 x="20" y="2040"/>
+    </wire>
+    <wire>
+      <p1 x="-1220" y="1020"/>
+      <p2 x="-1200" y="1020"/>
     </wire>
     <wire>
       <p1 x="0" y="1640"/>

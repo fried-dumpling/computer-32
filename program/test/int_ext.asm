@@ -1,6 +1,5 @@
 ; =====================================================================
 ;  int_ext.asm : stexp / ldexp round trip of the extended registers
-;  run : python tools/dsim/runint.py ext
 ;
 ;  output : "<cpuid> <cpuid again> <istack> <panicvec> <intlevel> <pbase>
 ;            <plimit> E"

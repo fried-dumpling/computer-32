@@ -1,8 +1,7 @@
 ; =====================================================================
 ;  int_prec.asm : interrupt entry from a loop with a store and a branch
-;  run : python tools/dsim/runint.py prec
 ;
-;  the runner pulses INT_in at every phase of the loop (two loop periods,
+;  the runner pulses IRQ at every phase of the loop (two loop periods,
 ;  2 halves apart) and checks each run:
 ;    - the handler runs to the end ('i')
 ;    - the printed dots, gen[5] and the return PC describe one commit point
@@ -19,7 +18,7 @@ global _start
 _start:
     jmp.one zero.32B, main
     nop
-handler:                                ; address 8 = INT_vec
+handler:                                ; int_vec[IRQ], address 8
     PUTC('I')
     mov gen[1].32B, gen[5].32B
     PHEX()
@@ -29,6 +28,7 @@ handler:                                ; address 8 = INT_vec
 main:
     INIT()
     INITIST()
+    INTVEC()
     PUTC('L')
     set gen[1].32B, loop
     PHEX()

@@ -35,7 +35,7 @@ dlnk fill.o -o ../boot/rom.bin
 | `knownbug.asm` | 루트 `CLAUDE.md`의 알려진 회로 문제: `st .8L/.16L/.8H`, 분기 바로 뒤 `halt` | 입력 없음. 고쳐질 때까지 DIFF가 정상 |
 | `selfflush.asm` | 늦은 store를 앞지른 load의 self flush(`document/errors.md` 11번): 일반 load, dest = base, 의존 load, `pop`, `ret`, `st.stack` 뒤 stack 변경 | 입력 없음. `<글자> <오류 수 hex>`, 에뮬레이터와 비교. 2026-11-07: 처음엔 `g`, `j`, `l` FAIL(`stack` base store가 더 젊은 pop/ret/push가 바꾼 stack을 씀). `st.stack`이 PCA를 쓰도록 고친 뒤 모두 PASS(zseed 1~3) |
 | `haltbr.asm` | 늦게 풀리는 not-taken 예측 분기 바로 뒤 `halt` (H1..H10) | 이미지마다 `#define H<n> 1`을 앞에 붙여 빌드. `AB`(H6은 `A123`)가 정상. 2026-11-07: 10개 × zseed 1~3 모두 정상 |
-| `int_*.asm` (`int.hsm`) | 인터럽트 진입, 복귀, `syscall`, `interst`/`interld`, 확장 레지스터 | 입력 없음. `tools/dsim/runint.py`로 실행. 아래 "인터럽트 회귀 테스트" |
+| `int_*.asm` (`int.hsm`) | 인터럽트 진입, 복귀, `syscall`, `interst`/`interld`, 확장 레지스터 | 입력 없음. `tools/dsim/inttest.py`로 실행. 아래 "인터럽트 회귀 테스트" |
 
 `M4.o`, `M7.o`, `fill.o`는 예전 빌드 결과입니다.
 
@@ -59,13 +59,19 @@ bash tools/dsim/runtests.sh flushstall ldstmix knownbug     ; 루트에서. 결�
 
 ## 인터럽트 회귀 테스트 (`int_*.asm`)
 
-에뮬레이터에 인터럽트가 없으므로 `runtests.sh`가 아니라 `tools/dsim/runint.py`로 돌립니다. 기대값은 `document/ISA.md` 2.2절입니다. 인터럽트 시점 H는 고정하지 않습니다. 인터럽트 없이 먼저 돌려 PC가 프로그램의 루프 주소에 닿는 half를 찾고, 거기서부터 2 half 간격으로 넣습니다.
+에뮬레이터에 인터럽트가 없으므로 기대값은 `document/ISA.md` 2.2절로 계산합니다.
+
+`tools/dsim/inttest.py`로 `components/computer-32-test.dig`(CPU + IPU)에서 돌립니다(2026-11-15부터. 그 전의 `runint.py`는 IPU 없는 `cpu-test.dig`에 `INT_in`/`INT_vec`/`INT_lev`를 직접 넣었고, 지웠습니다).
 
 ```
-python tools/dsim/runint.py [-j N] [-seeds 1,2,3] [-nobuild] [그룹...]     ; 루트에서. 그룹: ext prec sled misp iret sys tbl
+python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [그룹...]     ; 루트에서. 그룹: ext prec sled misp iret sys tbl
 ```
 
-결과는 `PASS`, `FAIL`, `XFAIL`(지금 실패가 예상됨), `XPASS`(예상과 달리 통과), `SKIP`(이번 실행에서 판단 불가)입니다. `FAIL`이나 `XPASS`가 있으면 종료 코드가 1입니다. 고쳐져서 `XPASS`가 나오면 `runint.py`의 `XFAIL`에서 그 항목을 지웁니다. 실행 출력은 `program/build/dsim/int/<프로그램>-z<seed>-<H>.sim`에 남습니다.
+- 인터럽트는 IPU 입력선 `IRQ`(= 3, top-level In `I-in`의 bit 3)에 2 half 펄스를 넣어 만듭니다. IPU는 1 half 펄스도 잡습니다. 들어가는 프로그램은 `INTVEC()`(`int.hsm`)로 `int_vec[IRQ] = handler`, `int_pri[IRQ] = 1`을 씁니다. `int_pri`가 0인 선은 받지 않습니다.
+- 시작은 boot-sequencer(`-Dset=S=0,R=1,B_used=0,I-in=0 -Dat=6:R=0;10:S=1;16:S=0`)이고, 프로그램은 `-Drom`으로 boot ROM이 RAM에 복사합니다.
+- 인터럽트 없이 먼저 돌려 PC가 루프 주소에 닿는 half H를 찾고, 거기서부터 2 half 간격으로 펄스를 넣습니다. `I-in`이 오른 뒤 약 42 half에 IPU의 `acp`가 1 half 나오고, 그 4 half 뒤 PC가 핸들러가 됩니다.
+- 결과는 `PASS`, `FAIL`, `XFAIL`(지금 실패가 예상됨, 이유는 스크립트의 `XFAIL`), `XPASS`(예상과 달리 통과), `SKIP`(이번 실행에서 판단 불가)입니다. `FAIL`이나 `XPASS`가 있으면 종료 코드 1이고, `XPASS`가 나오면 `XFAIL`에서 그 항목을 지웁니다.
+- `components/`를 `program/build/dsim/int/components/`로 복사해 돌리므로 실행 중에 회로를 저장해도 됩니다. 출력은 같은 폴더의 `<프로그램>-z<seed>-<H>.sim`, `.delta`입니다. 전체 약 2분입니다.
 
 | 항목 | 프로그램 | 확인하는 것 |
 |---|---|---|
@@ -76,17 +82,28 @@ python tools/dsim/runint.py [-j N] [-seeds 1,2,3] [-nobuild] [그룹...]     ; �
 | 5 | `int_sled` | 복귀 PC = 첫 미commit 명령. `addi` 연속이라 `sled + 4*gen[5]`로 정확히 계산됩니다 |
 | 6a, 6b | `int_prec`, `int_sys` | `syscall`이 없으면 `INT_req`가 0, 있으면 1 |
 | 7a, 7b, 7c | `int_iret` | `iret` 뒤 프로그램이 이어지는지, `istack`과 `int-level`이 복원되는지 |
-| 8a, 8b | `int_sys` | `syscall`이 핸들러로 들어가고 복귀 PC가 다음 명령인지, 돌아와 `BC`를 출력하는지. 테스트 벤치에 IPU가 없어 `INT_req`가 오른 뒤 `INT_in` 펄스로 응답합니다 |
+| 8a, 8b | `int_sys` | `syscall`이 핸들러로 들어가고 복귀 PC가 다음 명령인지, 돌아와 `BC`를 출력하는지. IRQ 펄스 없이 IPU가 `INT_req`에 응답해야 합니다 |
 | 9 | `int_tbl` | `interst`/`interld` 왕복(`int_vec[3]`, `int_pri[3]`). 출력 `A00000105 00000009 E` |
 | 10a, 10b, 10c | `int_misp` | 번갈아 오분기하는 분기 주변 진입. 복귀 PC와 `gen[5..7]`이 정상 경로의 명령 경계인지(10a는 +4 허용, 10b는 정확히), 끝까지 도는지(10c) |
 | 11 | `int_misp` | Fl_INT와 Fl_JPU가 같은 half인 실행의 결과. 그런 실행이 없으면 `SKIP` |
 | 13 | `int_prec` | 핸들러 안의 `int-level`이 `{mask 1, level 1}` = 0x11 |
 
-- 러너는 시작할 때 `components/`를 `program/build/dsim/int/components/`로 복사해 그 복사본을 돌립니다. 실행 중에 Digital에서 회로를 저장해도 결과가 섞이지 않습니다.
-- `misp`만 tunnel probe(`-Dtap=top`)를 붙여 돕니다. H=24642, 24654, 24656, 24658, 24678에서 probe 없는 실행과 출력이 같았습니다.
+- 모든 실행에 `cpu-32`의 tunnel `PCS`(PC), `com1`, `com2`, `INT_req`, `Fl_INT`, `Fl_JPU` probe를 붙입니다(`-Dtap`).
 - 위상 sweep은 2 half 간격의 짝수 half(클럭 상승)만 봅니다.
 
-### 결과 (2026-11-06, dsim, `cpu-test.dig` 작업 트리 22:19 저장본, `prec`는 zseed 1, 2, 3, 나머지는 1)
+### 결과 (2026-11-15, `inttest.py`, `computer-32-test.dig` 00:12 저장본, `prec`는 zseed 1, 2, 3, 나머지는 1)
+
+| 결과 | 항목 |
+|---|---|
+| PASS | 1a, 1b, 2, 3a, 3b, 3c, 4, 5, 6a, 6b, 9, 10a, 10b, 10c, 13 |
+| XFAIL | 7a, 8a, 8b |
+| SKIP | 7b, 7c (`iret`이 돌아오지 않음), 11 (38 위상 중 Fl_INT와 Fl_JPU가 겹친 실행 없음) |
+
+- 7a: 8회 모두 `Ii` 출력 뒤 PC=0x1C(`iret`)에서 stall. iret 경로가 아직 없습니다.
+- 8a, 8b: `INT_req`는 half 4624에 오르지만 IPU가 응답하지 않아 `L00000278 A` 뒤 PC=0x278에서 stall.
+- 예전 bench(아래)에서 실패하던 2, 3b, 5, 10a~10c가 통과합니다. 복귀 PC +4 문제(5)는 이 회로에서는 나오지 않습니다(16회 모두 정확).
+
+### 예전 결과 (2026-11-06, `runint.py`, `cpu-test.dig` 작업 트리 22:19 저장본)
 
 | 결과 | 항목 |
 |---|---|

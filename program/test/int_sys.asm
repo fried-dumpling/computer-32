@@ -1,9 +1,9 @@
 ; =====================================================================
 ;  int_sys.asm : syscall enters the handler and returns to the next word
-;  run : python tools/dsim/runint.py sys
 ;
-;  the test bench has no IPU. the runner first runs this without a pulse to
-;  see INT_req go high, then answers it with an INT_in pulse, like an IPU.
+;  syscall raises INT_req and the IPU must answer it (no IRQ pulse). the
+;  syscall vector id is not decided yet (ISA.md 2.2), so no int_vec is set
+;  and the handler is still at address 8.
 ;  the return PC printed by the handler must be the word after syscall.
 ;
 ;  output : "L<after> AH<m-4> hBCE"

@@ -1,12 +1,18 @@
 ; =====================================================================
 ;  int.hsm : shared macros of the interrupt tests (program/test/int_*.asm)
-;  run them with tools/dsim/runint.py. the emulator has no interrupts.
+;  run them with tools/dsim/inttest.py on components/computer-32-test.dig.
+;  the emulator has no interrupts.
 ;
-;  every program starts with: jmp main ; nop ; handler at address 8,
-;  because the runner drives INT_vec = 8.
+;  the runner pulses the IPU input line IRQ (top-level In "I-in", bit IRQ).
+;  a program that takes it calls INTVEC() so that int_vec[IRQ] = handler
+;  and int_pri[IRQ] = IRQ_LEV. the handler is still at address 8 (jmp main ;
+;  nop ; handler), the layout from the old bench that drove INT_vec = 8.
 ; =====================================================================
 #ifndef INT_HSM
 #define INT_HSM 1
+
+#define IRQ 3                   ; I-in bit the runner pulses
+#define IRQ_LEV 1               ; its int_pri, so int-level in the handler = 0x11
 
 #define IO_BASE 0x4000000
 #define TERM_OUT 12
@@ -69,6 +75,13 @@
     st.zero gen[1].32B, ISTACK
     set gen[1].32B, ISTACK
     stexp gen[1].32B, istack
+#end
+
+; int_vec[IRQ] = handler, int_pri[IRQ] = IRQ_LEV (uses gen[1])
+#macro INTVEC 0
+    set gen[1].32B, handler
+    interst gen[1].32B, 0, vec | IRQ
+    interst zero.32B, IRQ_LEV, pri | IRQ
 #end
 
 ; print "<istack> <mem[ISTACK-4]> <mem[ISTACK]> <int-level> "
