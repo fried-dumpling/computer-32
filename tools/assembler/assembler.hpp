@@ -2084,8 +2084,8 @@ namespace assembler {
 
 				{ TokenType::syscall, 0x76 },
 				{ TokenType::iret, 0x77 },
-				{ TokenType::interst, 0x78 },
-				{ TokenType::interld, 0x79 },
+				{ TokenType::interst, 0x79 },
+				{ TokenType::interld, 0x78 },
 
 				{ TokenType::ldexp, 0x7A },
 				{ TokenType::stexp, 0x7B },
