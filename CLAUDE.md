@@ -149,7 +149,7 @@ Opcode table is in `tools/assembler/assembler.hpp` (`instructionBase` map).
 
 ## CPU Microarchitecture (Digital circuits in `components/`)
 
-Circuits that nothing references (old versions, unused helpers, `RAS`, `SC-buff`, `BTB-buff`, ...) are in `components/legacy/`; Digital still finds them by file name.
+Circuits that nothing references (old versions, unused helpers, `RAS`, `SC-buff`, `BTB-buff`, ...) are in `components/legacy/`; Digital still finds them by file name. Debug modules (`*-debug.dig`) and old test circuits are in `components/debugs/`. Digital only searches the opened circuit's folder and its subfolders, so a circuit in a subfolder cannot use modules in `components/` (opening `debugs/res-station-debug.dig` on its own loses its subcircuits); `cpu-test.dig` therefore stays in `components/`.
 
 - **`computer-32.dig`** — top-level system (CPU + memory + IO)
   - Structure snapshot of `cpu-32.dig` (pins, start sequence, regions, module tree, unfinished nets, cleanup list): `document/cpu-32.md`.

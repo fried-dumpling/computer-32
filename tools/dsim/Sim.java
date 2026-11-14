@@ -5,10 +5,10 @@
 //
 // keys     : one key is fed each time the program prints "> " (\n allowed)
 // options (-Dname=value, before Sim) :
-//   dip=x,y;x,y    DipSwitches turned on before the model is built
-//                  (default -560,-1640 = clock mux select -> Clock; "dip=" turns none on).
-//                  A position without a DipSwitch is an error.
-//   set=E=1,run=1  top-level inputs
+//   dip=x,y;f.dig@x,y  DipSwitches turned on before the model is built: x,y in the top circuit,
+//                  f.dig@x,y in subcircuit f (default -560,-1640 = cpu-test clock mux select -> Clock;
+//                  "dip=" turns none on). A position without a DipSwitch is an error.
+//   set=E=1,run=1  top-level inputs ("set=" : none)
 //   at=H:k=v,...;H:k=v  change top-level inputs at half cycle H (e.g. at=0:E=0,boot=1;10:E=1,boot=0)
 //   csv=file       dump every model signal (probes, In/Out) each half cycle
 //   csvFrom=N      start the dump at half cycle N (default 0)
@@ -17,6 +17,8 @@
 //   stopRestart=1  stop shortly after a restart is detected (default 1)
 //   stall=N        stop when PC, com1 and com2 (stallCols=a,b,...) keep their value N halves (default 2000, 0 = off)
 //   idle=N         stop after N halves without terminal output (default 0 = off)
+//   tap=top;f.dig;f.dig:net=label,net  Probe on every Tunnel net of those circuits (label T_<net> for top,
+//                  f/<net> otherwise), or only on the listed nets (=label renames it, e.g. PCS=PC)
 //   probe=f.dig@x,y=name;...  extra Probe on an unnamed net point (f = top or a subcircuit file)
 //   cols=a,b,...   with csv : dump only these signals
 //   zseed=N|zero   floating (high-Z) bits normally read as fresh random bits on every read (new Random() per
@@ -44,11 +46,19 @@ public class Sim {
         long maxHalf = a.length > 3 ? Long.parseLong(a[3]) : 2_000_000;
 
         CircuitLoader cl = new CircuitLoader(new File(dig));
-        Set<String> dips = new HashSet<>(Arrays.asList(System.getProperty("dip", "-560,-1640").split(";")));
+        Set<String> dips = new LinkedHashSet<>(Arrays.asList(System.getProperty("dip", "-560,-1640").split(";")));
         dips.remove("");
-        for (VisualElement ve : cl.getCircuit().getElements())
-            if (ve.getElementName().equals("DipSwitch") && dips.remove(ve.getPos().x + "," + ve.getPos().y))
-                ve.getElementAttributes().set(Keys.DIP_DEFAULT, true);
+        for (String d : new ArrayList<>(dips)) {    // x,y = top circuit, f.dig@x,y = a subcircuit
+            String[] fp = d.contains("@") ? d.split("@") : new String[]{"top", d};
+            de.neemann.digital.draw.elements.Circuit ci = fp[0].equals("top") ? cl.getCircuit()
+                    : ((de.neemann.digital.draw.library.ElementTypeDescriptionCustom)
+                    cl.getLibrary().getElementType(fp[0])).getCircuit();
+            for (VisualElement ve : ci.getElements())
+                if (ve.getElementName().equals("DipSwitch") && (ve.getPos().x + "," + ve.getPos().y).equals(fp[1])) {
+                    ve.getElementAttributes().set(Keys.DIP_DEFAULT, true);
+                    dips.remove(d);
+                }
+        }
         // a moved DipSwitch would leave the clock unconnected and the run would silently do nothing
         if (!dips.isEmpty()) throw new IllegalArgumentException("no DipSwitch at " + dips + " (-Ddip=x,y;...)");
 
@@ -57,6 +67,16 @@ public class Sim {
         String tap = System.getProperty("tap");
         if (tap != null)
             for (String which : tap.split(";")) {
+                // which:net[=label],net... : only those nets (label default <prefix><net>)
+                Map<String, String> only = null;
+                if (which.contains(":")) {
+                    only = new HashMap<>();
+                    for (String nl : which.substring(which.indexOf(':') + 1).split(",")) {
+                        String[] p = nl.split("=");
+                        only.put(p[0], p.length > 1 ? p[1] : null);
+                    }
+                    which = which.substring(0, which.indexOf(':'));
+                }
                 de.neemann.digital.draw.elements.Circuit ci;
                 String prefix;
                 if (which.equals("top")) { ci = cl.getCircuit(); prefix = "T_"; }
@@ -70,10 +90,16 @@ public class Sim {
                 for (VisualElement ve : ci.getElements())
                     if (ve.getElementName().equals("Tunnel")) {
                         String n = ve.getElementAttributes().get(Keys.NETNAME);
-                        if (seen.add(n))
+                        if ((only == null || only.containsKey(n)) && seen.add(n)) {
+                            String l = only != null && only.get(n) != null ? only.get(n) : prefix + n;
                             add.add(new VisualElement("Probe").setPos(ve.getPos())
-                                    .setAttribute(Keys.LABEL, prefix + n).setShapeFactory(cl.getShapeFactory()));
+                                    .setAttribute(Keys.LABEL, l).setShapeFactory(cl.getShapeFactory()));
+                        }
                     }
+                if (only != null && !seen.containsAll(only.keySet())) {
+                    Set<String> miss = new TreeSet<>(only.keySet()); miss.removeAll(seen);
+                    throw new IllegalArgumentException("tap: no tunnel " + miss + " in " + which);
+                }
                 for (VisualElement ve : add) ci.add(ve);
             }
 
@@ -162,6 +188,7 @@ public class Sim {
         if (zseed != null) System.err.println("zseed: " + seedHighZ(m, zseed) + " values");
         m.init();
         for (String kv : System.getProperty("set", "E=1,run=1").split(",")) {
+            if (kv.isEmpty()) continue;     // set= : no top-level inputs (e.g. E/run are DipSwitches)
             String[] p = kv.split("=");
             m.getInput(p[0]).setValue(Long.parseLong(p[1]));
         }

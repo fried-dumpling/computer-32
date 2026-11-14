@@ -5,6 +5,8 @@
 //           label:<ElementName>:<Label> element with that label
 //           left:<x>                    every element with pos.x < x
 //           right:<x>                   every element with pos.x >= x
+//           box:<x1>,<y1>,<x2>,<y2>     every element with pos inside (inclusive)
+//           !<root>                     un-mark the elements of an earlier root (roots apply in order)
 //   prints "E <name> <x> <y>" for each element and "W <x1> <y1> <x2> <y2>" for each wire to delete,
 //   then "KEEP-DRIVEN <net>" for nets that lost all drivers but still have consumers (boundary signals).
 //   "ALIAS-REMOVED a|b" (printed first) : a wire that joined tunnels a and b is gone, so that net splits.
@@ -32,16 +34,22 @@ public class Strip {
         List<VisualElement> els = c.getElements();
         Set<VisualElement> dead = new HashSet<>();
         for (int i = 1; i < a.length; i++) {
-            String[] r = a[i].split(":", 3);
+            boolean keep = a[i].startsWith("!");
+            String[] r = a[i].substring(keep ? 1 : 0).split(":", 3);
             for (VisualElement ve : els) {
+                Vector p = ve.getPos();
                 boolean hit = switch (r[0]) {
                     case "type" -> ve.getElementName().equals(r[1]);
                     case "label" -> ve.getElementName().equals(r[1]) && r[2].equals(ve.getElementAttributes().getLabel());
-                    case "left" -> ve.getPos().x < Integer.parseInt(r[1]);
-                    case "right" -> ve.getPos().x >= Integer.parseInt(r[1]);
+                    case "left" -> p.x < Integer.parseInt(r[1]);
+                    case "right" -> p.x >= Integer.parseInt(r[1]);
+                    case "box" -> {
+                        int[] b = Arrays.stream(r[1].split(",")).mapToInt(Integer::parseInt).toArray();
+                        yield p.x >= b[0] && p.y >= b[1] && p.x <= b[2] && p.y <= b[3];
+                    }
                     default -> throw new RuntimeException(a[i]);
                 };
-                if (hit) dead.add(ve);
+                if (hit) { if (keep) dead.remove(ve); else dead.add(ve); }
             }
         }
         // consumers per merged net
