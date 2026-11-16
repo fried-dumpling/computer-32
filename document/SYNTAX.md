@@ -267,13 +267,13 @@ msg: 8, "Hi\n\0"            ; 48 69 0A 00 00 00 00 00
 | `<ex>` | ISA 이름 | 값 | `<cache>` | 값 |
 |---|---|---|---|---|
 | `cpuid` | ex-0 `cpu-id` | 0 | `L1I` | 0x01 |
-| `panicvec` | ex-1 `panic-vec` | 1 | `L1D` | 0x02 |
-| `istack` | ex-2 `istack` | 2 | `TLB` | 0x04 |
-| `intlevel` | ex-3 `int-level` | 3 | `L2` | 0x08 |
+| `istack` | ex-1 `istack` | 1 | `L1D` | 0x02 |
+| `intlevel` | ex-2 `int-level` | 2 | `TLB` | 0x04 |
+| `inttmplv` | ex-3 `int-tmplv` | 3 | `L2` | 0x08 |
 | `pagebase`, `pbase` | ex-4 `p-base` | 4 | `ALL` | 0x40 |
 | `plimit`, `pagelimit` | ex-5 `p-limit` | 5 | | |
 
-ex-6 – ex-11(값 6~11)는 예약이라 이름이 없습니다.
+ex-6 – ex-11(값 6~11)는 예약이라 이름이 없습니다. 2026-11-16 시트에서 `panic-vec`이 빠지고 `int-tmplv`가 생기면서 id가 바뀌었습니다(`panicvec`은 이제 `unexpected token` 오류).
 
 `<cache>`는 `|`로 여러 개를 합칠 수 있습니다: `inval R, 0, L1I | L1D`(id 0x03). 각 이름은 한 번에 하나씩만 쓰는 비트이고, 같은 이름을 두 번 써도 오류는 아닙니다.
 

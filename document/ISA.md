@@ -124,14 +124,15 @@
 | id | 이름 |
 |---|---|
 | ex-0 | `cpu-id` |
-| ex-1 | `panic-vec` |
-| ex-2 | `istack` |
-| ex-3 | `int-level` |
+| ex-1 | `istack` |
+| ex-2 | `int-level` |
+| ex-3 | `int-tmplv` |
 | ex-4 | `p-base` |
 | ex-5 | `p-limit` |
 | ex-6 – ex-11 | 예약 |
 
 - 시트가 2026-10-25에 ex-0부터로 번호를 바꿨습니다. 어셈블러 id(0~5)와 같습니다.
+- 2026-11-16 시트에서 `panic-vec`을 없애고 `int-tmplv`(ex-3)를 추가했습니다. `istack`은 ex-1, `int-level`은 ex-2로 옮겨졌습니다.
 - `int-level`은 5비트 `{mask, level[3:0]}`입니다(2.2절). 실제 값은 IPU에 있고, `ldexp`/`stexp`는 IPU로 가는 요청입니다.
 
 ## 2.2 인터럽트 프로토콜
@@ -385,7 +386,7 @@ byte 3:
 | 항목 | 시트 | 어셈블러 |
 |---|---|---|
 | 이름 | `jp` / `jpi` / `break` | `jmp` / `ijmp` / `brk` (기존 소스 호환을 위해 유지) |
-| 확장 레지스터 이름 | `cpu-id` / `panic-vec` / `int-level` / `p-base` / `p-limit` | `cpuid` / `panicvec` / `intlevel` / `pagebase`(`pbase`) / `plimit`(`pagelimit`). `-`는 빼기 연산자라 이름에 못 씀. id는 ex-n = n(0~5)으로 같음 |
+| 확장 레지스터 이름 | `cpu-id` / `istack` / `int-level` / `int-tmplv` / `p-base` / `p-limit` | `cpuid` / `istack` / `intlevel` / `inttmplv` / `pagebase`(`pbase`) / `plimit`(`pagelimit`). `-`는 빼기 연산자라 이름에 못 씀. id는 ex-n = n(0~5)으로 같음 |
 | `rol` / `ror` | *rollleft* / *rollright* | 확인함(2026-11-05, dsim `program/test/rotate.asm`): 보통의 32비트 회전, 회전량은 mod 32(32 = 0, 36 = 4). 에뮬레이터도 같게 추가 |
 | ABI 별칭 | `at` / `kt0` / `kt1` / `addr` (`gen[21]`–`gen[24]`) | 없음. `gen[21]`–`gen[24]`로 써야 함 |
 | pseudo-instruction, 링커 veneer | `at` 예약 | 없음. 링커는 정해진 필드에 재배치 값만 패치함 |
