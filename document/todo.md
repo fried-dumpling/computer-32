@@ -101,7 +101,7 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 ##### TRAP 재구성 후속 (2026-10-23, forward-test에서 가져옴)
 forward-test의 TRAP 처리, exld/st 디코드(BLOCK·UMM 추가), `Fl_INT` → com1, `flush-mux`(trap 입력 제거, `clr_sel` 4비트), `id-manager-debug`, `regFile4`를 dev로 가져옴. 이전 회로는 `components/legacy/flush-mux-old.dig`, `components/legacy/trap-ref-old.dig`(dev 508f47c의 TRAP 블록).
 - [ ] `syscall` 뒤 명령이 지워지는지 확인 (halt는 11-05 해결, 완료 탭). 테스트 프로그램 없음
-- [ ] halt가 이전 분기보다 먼저 실행되는 문제(CLAUDE.md "Known circuit problems"): 11-05 `knownbug`의 `h 123`과 `calc-halt`가 맞게 끝나 재현 안 됨. 고쳐진 게 맞으면 CLAUDE.md와 `runtests.sh`의 `_nh` 우회 정리
+- [ ] `runtests.sh`의 `_nh` 우회와 knownbug 주석 정리, `selfflush`/`haltbr`를 T 배열에 넣을지 결정 — halt 문제는 재현 안 됨, CLAUDE.md에서 삭제함 (11-07)
 - [ ] `id-manager-debug` ECLR 우선순위: 두 commit 슬롯 모두 에러면 com2를 고르고 com1 commit을 막음 (dev는 com1 우선). 의도 확인
 - [ ] `Fl_INT`가 com1 기준으로 바뀜 — 인터럽트 flush id/ep가 맞는지 확인
 - [ ] syscall / iret / trap 회귀 테스트 프로그램 작성
@@ -138,7 +138,7 @@ CPU 쪽:
 - ABI: `at` = `gen[21]`(1개), `kt0`/`kt1` = `gen[22]`/`gen[23]`
 - [ ] IPU: level/mask 레지스터, `{level, mode}` 16칸 스택, `iret` pop req/ack, `ldexp`/`stexp int-level` 경로
 - [ ] CPU: mode 사본(디코드 권한 검사), `iret` 직렬화, 진입 시 istack push
-- [ ] (2026-10-26) `interst`(78)/`interld`(79), byte 3 = md(b7: vec=0, pri=1)|id(b5:0), 값 = `R[base] + imm` (`ISA.md` 5절). 어셈블러: `tools` 브랜치에 구현(`interst R, m, vec | id`, `interld R, pri | id`, pseudo-mnemonic 없음, `SYNTAX.md` 갱신, 미커밋). `bin/dasm.exe` 교체와 커밋 남음. 회로: IPU의 vec/pri 쓰기·읽기 경로, `interld` 직렬화
+- [ ] (2026-10-26) `interst`(79)/`interld`(78) (2026-11-14에 78/79에서 맞바꿈), byte 3 = md(b7: vec=0, pri=1)|id(b5:0), 값 = `R[base] + imm` (`ISA.md` 5절). 어셈블러: `tools` 브랜치에 구현(`interst R, m, vec | id`, `interld R, pri | id`, pseudo-mnemonic 없음, `SYNTAX.md` 갱신, 미커밋). `bin/dasm.exe` 교체와 커밋 남음. 회로: IPU의 vec/pri 쓰기·읽기 경로, `interld` 직렬화
 - [ ] 미정: `syscall` user 분류와 level/벡터, `cache`/`atom` user 여부(보류), mask = 1일 때 동기 예외 → `panic-vec`, `int-prev` EXT
 
 ##### 인터럽트 처리 흐름
@@ -170,9 +170,10 @@ CPU 쪽:
 #### RAW table
 - [ ] invalid flush (내용 비어 있음)
 
-#### 회로 에러 (`document/errors.md`, 2026-11-05)
-- [ ] 15번: 버스 stall 중 flush — `flushstall`의 `c10`, `c30`~`c33`이 FAIL(call 뒤 poison `addi` 1회 실행)
-- [ ] 11번: self flush된 load가 이전 값으로 commit될 수 있음 — load id 완료 비트 지우기, replay가 ROB 결과를 덮어쓰기
+#### 회로 에러 (`document/errors.md`, 2026-11-07)
+- [ ] 11번 후속(선택): self flush된 옛 load id가 commit됨(값은 regFile에 안 써서 안 보임). 옛 id commit과 다시 fetch된 load 사이 인터럽트, IO 주소 load(두 번 읽힘)는 확인 안 함
+- [ ] 18번 후속: issue가 밀린 `ld.stack` base, stack 외 SC 레지스터 확인
+- [ ] halt 후속: flush 뒤에도 `hlt`/`HALT_PC`가 옛 값으로 남음 — 인터럽트/`INT_HALT`에서 쓰면 확인
 - [ ] 16번: `res-station.dig`(non-debug, cpu-32.dig가 씀) `inst-wfile` 핀 연결이 밀림 — `res-station-debug.dig`에 맞추거나 `sync-nondebug.sh`
 - [ ] 14번 후속: store 응답을 끈 상태. 다시 켜려면 load-buffer 응답 조건에 `D_LD` AND 또는 mid 레지스터 앞 mux, 그 뒤 `ldstmix` 재확인
 - [ ] load-buffer forward가 폭을 보지 않음(`knownbug` k1~k3, `errors.md` 17번): store가 load 범위를 다 덮을 때만 forward하고, 아니면 store가 끝난 뒤 메모리에서 읽거나 바이트를 합치기
@@ -210,7 +211,10 @@ CPU 쪽:
 
 끝난 일과 설계 기록입니다. 원문 `fin?(fixed?)` 아래 항목(해결됨 / 설계 기록)도 여기로 옮겼습니다.
 
-## 2026-10-24 ~ 11-05
+## 2026-10-24 ~ 11-07
+- [x] 회로 에러 11번 확인(값이 안 보임), 18번(`st.stack` base가 더 젊은 stack 값) 수정 — `st.stack`이 PCA 사용 (11-07, `program/test/selfflush.asm`)
+- [x] `halt`가 분기보다 먼저 실행되는 문제 재현 안 됨 — `program/test/haltbr.asm` H1~H10, CLAUDE.md에서 삭제 (11-07)
+- [x] 회로 에러 15번 최종 수정 — `flushstall` 모두 PASS (11-05)
 - [x] CPU 전체를 한 클럭 에지로 (bf78b59). 실행 유닛을 `C_ct` → `C_dt`, 키보드 클럭 glitch 수정
 - [x] store-buffer / MMU outstanding 요청 (e9e045d), MMU-BL / MMU-D (f7f0758, 87711cc)
 - [x] 회로 에러 1~10, 12~14번 수정 (`document/errors.md`). runtests 9개(selftest z1~3, memtest, memtest2, fill, calc-halt, calc, picalc)가 에뮬레이터와 같음

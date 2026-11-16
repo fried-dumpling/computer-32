@@ -149,7 +149,7 @@ Opcode table is in `tools/assembler/assembler.hpp` (`instructionBase` map).
 
 ## CPU Microarchitecture (Digital circuits in `components/`)
 
-Circuits that nothing references (old versions, unused helpers, `RAS`, `SC-buff`, `BTB-buff`, ...) are in `components/legacy/`; Digital still finds them by file name.
+Circuits that nothing references (old versions, unused helpers, `RAS`, `SC-buff`, `BTB-buff`, ...) are in `components/legacy/`; Digital still finds them by file name. Debug modules (`*-debug.dig`) and old test circuits are in `components/debugs/`. Digital only searches the opened circuit's folder and its subfolders, so a circuit in a subfolder cannot use modules in `components/` (opening `debugs/res-station-debug.dig` on its own loses its subcircuits); `cpu-test.dig` therefore stays in `components/`.
 
 - **`computer-32.dig`** — top-level system (CPU + memory + IO)
   - Structure snapshot of `cpu-32.dig` (pins, start sequence, regions, module tree, unfinished nets, cleanup list): `document/cpu-32.md`.
@@ -222,5 +222,4 @@ Memory map (`boot/src/boot.asm`): RAM `0x00000000-0x03FFFFFF`, keyboard/terminal
 
 Past circuit bugs found with dsim (symptom, cause, fix, status): `document/errors.md`. Check it first when a similar symptom shows up.
 
-- **`halt` runs before an older branch resolves** (2026-10-17, dsim). When a branch is predicted not taken and `halt` follows it, `halt` is issued and stops the CPU while the branch still waits in the reservation station, so the misprediction is never recovered. `calc`, `picalc` and `test/fill` all have `halt` right after a branch and stop at once. Workaround: end with `jmp.one pc.32B, 0` instead of `halt`.
 - **A wider load right after `st .8L`/`.16L`/`.8H` to the same address gets the wrong value**: load-buffer forwarding ignores the access width, so the load receives the store's zero-extended value (e.g. `ld .32B` after `st .8L` of 0xAA gets `0x000000AA`). Memory itself is written correctly: the same load after the store has finished reads the right word (`document/errors.md` #17). Workaround: don't read wider than a partial store until it has finished.

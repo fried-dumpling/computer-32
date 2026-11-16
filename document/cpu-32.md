@@ -14,7 +14,7 @@
 | `cpu-32.dig` | 부품용 CPU입니다. `cpu-test.dig`에서 probe/LED와 메모리/IO 영역을 빼고, 모듈을 non-debug 버전으로 바꿨습니다. 외부 핀 35개가 있습니다. |
 | `computer-32.dig` | 시스템입니다. `cpu-test`의 메모리/IO 영역에 `cpu-32` 인스턴스 하나를 터널로 연결했습니다. |
 | `computer-32-test.dig` | 작업 중인 파일입니다. 지금은 `B_used` 터널에 구동이 없다는 오류로 로드되지 않습니다(이전 `computer-32.dig`로도 같은 오류). |
-| `*-debug.dig` ↔ non-debug | `id-manager`, `res-station`, `load-buffer`, `store-buffer`가 대상입니다. non-debug 버전은 debug 버전에서 probe와 디버그용 Out을 뺀 것입니다. |
+| `*-debug.dig` ↔ non-debug | `id-manager`, `res-station`, `load-buffer`, `store-buffer`가 대상입니다. non-debug 버전은 debug 버전에서 probe와 디버그용 Out을 뺀 것입니다. debug 버전은 `components/debugs/`에 있습니다(2026-11-08). |
 
 `tools/dsim/sync-nondebug.sh`는 debug 모듈에서 non-debug 모듈 4개를 다시 만들고, `cpu-test.dig`에서 `cpu-32.dig`와 `computer-32.dig`를 다시 만듭니다. 그다음 넷리스트를 비교합니다.
 
@@ -220,5 +220,5 @@ cpu-32.dig
 2. **임시 Ground 출력**: `INT_vstr`/`INT_pstr`/`INT_ret`, `MMU_*`, `CSH_*`.
 3. **안 쓰는 입력**: `INT_ker`, `INT_rqac`.
 4. **명령어 latch**: `I_D-_R` enable에 `I_valid`를 넣을지 정합니다(§7).
-5. **어디서도 쓰지 않는 `.dig`**: cpu-32, cpu-test, computer-32, computer-32-test, MMU-D 어디에서도 쓰지 않는 파일은 `components/legacy/`로 옮겼습니다(2026-10-31). `store-buffer8-debug`는 작업 중이라 남겼습니다. `RAS.dig`(return address stack)도 cpu-32에 인스턴스가 없어서 legacy에 있습니다.
+5. **어디서도 쓰지 않는 `.dig`**: cpu-32, cpu-test, computer-32, computer-32-test, MMU-D 어디에서도 쓰지 않는 파일은 `components/legacy/`로 옮겼습니다(2026-10-31). `store-buffer8-debug`는 작업 중이라 남겼습니다(2026-11-08에 `debugs/`로 옮김). `RAS.dig`(return address stack)도 cpu-32에 인스턴스가 없어서 legacy에 있습니다.
 6. **영역 이름**: 철자를 맞출 곳이 있습니다(`primeary`, `aribiter`, `kernal`).

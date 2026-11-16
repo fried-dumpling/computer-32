@@ -254,8 +254,8 @@ msg: 8, "Hi\n\0"            ; 48 69 0A 00 00 00 00 00
 
 | 명령어 | 문법 | 인코딩 |
 |---|---|---|
-| `interst` | `interst R, I8, <int>` | `78 R m (md\|id)`: md=`vec`면 `int_vec[id] = R + m`, md=`pri`면 `int_pri[id] = R + m` (m 0~255) |
-| `interld` | `interld R, <int>` | `79 R 00 (md\|id)`: `R = int_vec[id]` 또는 `int_pri[id]` |
+| `interst` | `interst R, I8, <int>` | `79 R m (md\|id)`: md=`vec`면 `int_vec[id] = R + m`, md=`pri`면 `int_pri[id] = R + m` (m 0~255) |
+| `interld` | `interld R, <int>` | `78 R 00 (md\|id)`: `R = int_vec[id]` 또는 `int_pri[id]` |
 | `ldexp` / `stexp` | `ldexp R, <ex>` | `7A/7B R 00 ex` |
 | `pctl` | `pctl enable` / `pctl disable` | `7C 00 00 01` / `7C 00 00 00` |
 | `getabs` | `getabs R1, R2` | `7D R1 R2 00` |
@@ -267,13 +267,13 @@ msg: 8, "Hi\n\0"            ; 48 69 0A 00 00 00 00 00
 | `<ex>` | ISA 이름 | 값 | `<cache>` | 값 |
 |---|---|---|---|---|
 | `cpuid` | ex-0 `cpu-id` | 0 | `L1I` | 0x01 |
-| `panicvec` | ex-1 `panic-vec` | 1 | `L1D` | 0x02 |
-| `istack` | ex-2 `istack` | 2 | `TLB` | 0x04 |
-| `intlevel` | ex-3 `int-level` | 3 | `L2` | 0x08 |
+| `istack` | ex-1 `istack` | 1 | `L1D` | 0x02 |
+| `intlevel` | ex-2 `int-level` | 2 | `TLB` | 0x04 |
+| `inttmplv` | ex-3 `int-tmplv` | 3 | `L2` | 0x08 |
 | `pagebase`, `pbase` | ex-4 `p-base` | 4 | `ALL` | 0x40 |
 | `plimit`, `pagelimit` | ex-5 `p-limit` | 5 | | |
 
-ex-6 – ex-11(값 6~11)는 예약이라 이름이 없습니다.
+ex-6 – ex-11(값 6~11)는 예약이라 이름이 없습니다. 2026-11-16 시트에서 `panic-vec`이 빠지고 `int-tmplv`가 생기면서 id가 바뀌었습니다(`panicvec`은 이제 `unexpected token` 오류).
 
 `<cache>`는 `|`로 여러 개를 합칠 수 있습니다: `inval R, 0, L1I | L1D`(id 0x03). 각 이름은 한 번에 하나씩만 쓰는 비트이고, 같은 이름을 두 번 써도 오류는 아닙니다.
 
@@ -283,9 +283,9 @@ ex-6 – ex-11(값 6~11)는 예약이라 이름이 없습니다.
 - `|` 뒤의 식에 `|`가 더 있으면 식 안의 OR로 계산됩니다(`pri | 2 | 1` → id 3).
 
 ```asm
-    interst gen[3].32B, 0x10, vec | 5     ; 78 18 10 05  int_vec[5] = gen[3] + 0x10
-    interst zero.32B, 7, pri | 63         ; 78 D0 07 BF  int_pri[63] = 7
-    interld gen[2].32B, vec | 0           ; 79 10 00 00
+    interst gen[3].32B, 0x10, vec | 5     ; 79 18 10 05  int_vec[5] = gen[3] + 0x10
+    interst zero.32B, 7, pri | 63         ; 79 D0 07 BF  int_pri[63] = 7
+    interld gen[2].32B, vec | 0           ; 78 10 00 00
 ```
 
 ### 예약어

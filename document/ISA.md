@@ -124,14 +124,15 @@
 | id | 이름 |
 |---|---|
 | ex-0 | `cpu-id` |
-| ex-1 | `panic-vec` |
-| ex-2 | `istack` |
-| ex-3 | `int-level` |
+| ex-1 | `istack` |
+| ex-2 | `int-level` |
+| ex-3 | `int-tmplv` |
 | ex-4 | `p-base` |
 | ex-5 | `p-limit` |
 | ex-6 – ex-11 | 예약 |
 
 - 시트가 2026-10-25에 ex-0부터로 번호를 바꿨습니다. 어셈블러 id(0~5)와 같습니다.
+- 2026-11-16 시트에서 `panic-vec`을 없애고 `int-tmplv`(ex-3)를 추가했습니다. `istack`은 ex-1, `int-level`은 ex-2로 옮겨졌습니다.
 - `int-level`은 5비트 `{mask, level[3:0]}`입니다(2.2절). 실제 값은 IPU에 있고, `ldexp`/`stexp`는 IPU로 가는 요청입니다.
 
 ## 2.2 인터럽트 프로토콜
@@ -326,8 +327,8 @@ IPU pop → level, mode 복원 (mask = 0)
 | 75 | `halt` | u.u | | | CPU 정지 |
 | 76 | `syscall` | u.u | | | 시스템 콜 트랩 |
 | 77 | `iret` | u.u | | | PC = mem[istack], istack += 4. IPU가 level과 mode를 복원(2.2절) |
-| 78 | `interst` | base | imm (0~255) | md\|id | md=0: int_vec[id] = base + imm, md=1: int_pri[id] = base + imm |
-| 79 | `interld` | dest | u.u | md\|id | md=0: dest = int_vec[id], md=1: dest = int_pri[id] |
+| 78 | `interld` | dest | u.u | md\|id | md=0: dest = int_vec[id], md=1: dest = int_pri[id] |
+| 79 | `interst` | base | imm (0~255) | md\|id | md=0: int_vec[id] = base + imm, md=1: int_pri[id] = base + imm |
 | 7A | `ldexp` | dest | u.u | id (EXT) | dest = ext[id] |
 | 7B | `stexp` | src | u.u | id (EXT) | ext[id] = src |
 | 7C | `pctl` | u.u | | en/dis | 페이징 켜기/끄기 |
@@ -338,7 +339,7 @@ IPU pop → level, mode 복원 (mask = 0)
 
 ### `interst` / `interld` (2026-10-26)
 
-인터럽트 테이블(`int_vec`/`int_pri`)에 쓰고(78) 읽습니다(79).
+인터럽트 테이블(`int_vec`/`int_pri`)에 쓰고(79) 읽습니다(78). 2026-11-14에 시트에서 두 opcode를 맞바꿨습니다(전에는 78 = `interst`, 79 = `interld`). `ldexp`(7A)/`stexp`(7B)처럼 짝수가 읽기, 홀수가 쓰기입니다.
 
 byte 3:
 
@@ -385,9 +386,9 @@ byte 3:
 | 항목 | 시트 | 어셈블러 |
 |---|---|---|
 | 이름 | `jp` / `jpi` / `break` | `jmp` / `ijmp` / `brk` (기존 소스 호환을 위해 유지) |
-| 확장 레지스터 이름 | `cpu-id` / `panic-vec` / `int-level` / `p-base` / `p-limit` | `cpuid` / `panicvec` / `intlevel` / `pagebase`(`pbase`) / `plimit`(`pagelimit`). `-`는 빼기 연산자라 이름에 못 씀. id는 ex-n = n(0~5)으로 같음 |
+| 확장 레지스터 이름 | `cpu-id` / `istack` / `int-level` / `int-tmplv` / `p-base` / `p-limit` | `cpuid` / `istack` / `intlevel` / `inttmplv` / `pagebase`(`pbase`) / `plimit`(`pagelimit`). `-`는 빼기 연산자라 이름에 못 씀. id는 ex-n = n(0~5)으로 같음 |
 | `rol` / `ror` | *rollleft* / *rollright* | 확인함(2026-11-05, dsim `program/test/rotate.asm`): 보통의 32비트 회전, 회전량은 mod 32(32 = 0, 36 = 4). 에뮬레이터도 같게 추가 |
 | ABI 별칭 | `at` / `kt0` / `kt1` / `addr` (`gen[21]`–`gen[24]`) | 없음. `gen[21]`–`gen[24]`로 써야 함 |
 | pseudo-instruction, 링커 veneer | `at` 예약 | 없음. 링커는 정해진 필드에 재배치 값만 패치함 |
 | `iret` | `istack` 기준 (2.2절) | 인코딩만 있음(77). 에뮬레이터는 인터럽트 명령을 지원하지 않음 |
-| `interst` / `interld` (2026-10-26) | 78 / 79, byte 3 = md(b7)\|id(b5:0) | `tools` 브랜치에 구현(2026-10-26, 미커밋, parser 버전 416): `interst R, m, vec\|pri \| id`, `interld R, vec\|pri \| id`. `bin/dasm.exe`는 아직 옛 빌드 |
+| `interst` / `interld` (2026-10-26) | 79 / 78 (2026-11-14에 맞바꿈), byte 3 = md(b7)\|id(b5:0) | `tools` 브랜치에 구현(2026-10-26, 미커밋, parser 버전 416): `interst R, m, vec\|pri \| id`, `interld R, vec\|pri \| id`. `bin/dasm.exe`는 아직 옛 빌드 |

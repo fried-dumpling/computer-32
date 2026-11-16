@@ -1,6 +1,6 @@
 # 회로 에러 기록
 
-INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-05) 중 dsim으로 찾은 회로 에러를 모아 둔 문서입니다. 비슷한 증상이 다시 나오면 여기서 먼저 찾아봅니다.
+INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-07) 중 dsim으로 찾은 회로 에러를 모아 둔 문서입니다. 비슷한 증상이 다시 나오면 여기서 먼저 찾아봅니다.
 
 > - 좌표(`Register@1460,2520` 등)와 half 번호는 당시 회로 기준입니다. 회로가 바뀌면 달라집니다.
 > - 상태: ✅ 고쳐짐(테스트 통과로 확인) · ⚠️ 확인 필요 · ❌ 남아 있음
@@ -20,21 +20,24 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-05) 중 dsim으로 찾은 회�
 | 8 | 11-03 | inst-wfile self flush | memtest `c`에서 load가 자기 자신을 기다림 | ✅ (self flush 구조 변경) |
 | 9 | 11-04 | id-manager valid/commit | boot에서 commit 포인터가 id를 건너뜀 | ✅ |
 | 10 | 11-04 | load-buffer `osf` | load-buffer가 차서 LDB busy | ✅ |
-| 11 | 11-04 | self flush된 load commit | 이전 값으로 commit될 수 있음 | ⚠️ |
+| 11 | 11-04 | self flush된 load commit | 이전 값으로 commit될 수 있음 | ✅ (11-07, regFile에 안 써서 값이 안 보임) |
 | 12 | 11-04 | load-buffer OLDD | memtest2 `a7`이 `7070` (정답 `7171`) | ✅ |
 | 13 | 11-04 | load-buffer 응답 매칭 | picalc `pop`이 다른 엔트리 값을 받음 | ✅ |
 | 14 | 11-04 | 버스 mid | store 응답이 load 데이터로 들어감 | ✅ (store 응답 끔) |
 | 15 | 11-04 | 프론트엔드 flush | calc `ret`이 0x40a00000으로 점프, picalc 끝자리 틀림 | ✅ (11-05 최종 수정, flushstall 통과) |
 | 16 | 11-02 | res-station.dig (non-debug) | `inst-wfile` 핀 연결이 밀림 | ❌ |
 | 17 | 11-05 | load-buffer forward 폭 | `st .8L` 직후 `ld .32B`가 `000000AA` (정답 `112233AA`) | ❌ |
-| — | — | 기존 알려진 문제 | `halt`가 분기보다 먼저 실행 | ⚠️ `knownbug`, `calc-halt`에서 재현 안 됨 (CLAUDE.md) |
+| 18 | 11-07 | `st.stack` base | issue가 밀린 `st.stack`이 더 젊은 pop/ret/push가 바꾼 stack을 주소로 씀 | ✅ (11-07, `st.stack`이 PCA 사용) |
+| — | 10-17 | 기존 알려진 문제 | `halt`가 분기보다 먼저 실행 | ✅ 재현 안 됨 (11-07 `haltbr`), CLAUDE.md에서 삭제 |
 
-2026-11-05 기준 runtests 13개 중 `knownbug`(k1~k3, 17번)만 DIFF이고 나머지는 모두 에뮬레이터와 같습니다.
+2026-11-07 기준 runtests 13개 중 `knownbug`(k1~k3, 17번)만 DIFF이고 나머지는 모두 에뮬레이터와 같습니다. `selfflush`(a~l), `haltbr`(H1~H10)도 모두 같습니다.
 
 회귀 테스트(`program/test/`, 설명은 `program/document/test.md`):
 - `flushstall`: 15번 (store K개 + nop N개 뒤 call/ret/jmp/분기 flush) → 모두 PASS (11-05 최종 수정 후)
 - `ldstmix`: 13·14번 (load/store 섞기, 연속 load, pointer chase) → 모두 PASS. store 응답을 다시 켜면 재확인
 - `knownbug`: 17번, 분기 직후 halt → DIFF가 정상 (k1~k3 FAIL, halt 문제는 이번엔 재현 안 됨)
+- `selfflush`: 11번, 18번 (self flush되는 load 패턴, `st.stack` 뒤 push/pop/ret) → 모두 PASS (11-07, runtests에는 아직 없음)
+- `haltbr`: halt 문제 (늦게 풀리는 taken 분기 바로 뒤 halt, H1~H10은 `#define H<n> 1`로 이미지마다) → 모두 PASS (11-07, runtests에는 아직 없음)
 
 ---
 
@@ -109,11 +112,17 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-05) 중 dsim으로 찾은 회�
   - M2: 응답(8550)이 `osf`가 켜지기(8554) 전에 도착해 다시는 지워지지 않음.
 - **고친 것:** load-buffer 수정(11-04 23:26 저장) 뒤 memtest 통과.
 
-## 11. self flush된 load가 이전 값으로 commit될 수 있음 (11-04) ⚠️
+## 11. self flush된 load가 이전 값으로 commit될 수 있음 (11-04) ✅ 값은 보이지 않음 (11-07)
 - **관찰:** self flush 뒤에도 load id의 완료 비트(`V1_inst`)가 남아 앞 store와 함께 commit됨(com2). 엔트리도 비워져 replay되지 않음.
-- **필요한 것:** self flush 때 load id의 완료 비트를 지우고, ROB 결과를 replay가 다시 덮어쓸 수 있어야 함.
-- **상태:** 이후 테스트는 모두 통과하지만, 이 경우가 생겼는데 값이 우연히 맞았는지는 확인하지 않았습니다.
 - 같은 dump에서 "ROB head id 5가 `DV=1`인데 완료가 안 됨"도 보였으나 원인은 안 봤습니다(이후 재현 안 됨).
+- **11-07 확인 (memtest `a`, half 8934~8960, zseed=1):** 실제로 생깁니다.
+  - LDB가 load id c에 옛 값 0을 씀 → 8940 self flush(`clr_id`=c, `FL_MEM_ID`=c, `MEM_FPC`=0x50 = load 자신의 PC) → 8944 com2로 c가 store b와 함께 commit.
+  - fetch가 0x50부터 다시 시작해 load가 **새 id d**로 다시 실행 → 8958 d가 0x110(정답)을 받고 8960 commit.
+  - 지금 self flush는 "load id replay"가 아니라 "load PC부터 다시 fetch"입니다. 옛 id c는 commit되지만 regFile에 쓰지 않습니다(probe R2는 c commit 때 그대로, d commit 때 0x110).
+  - dest = base인 경우(`selfflush` d)도 c commit 때 base가 유지되어, 다시 실행된 load가 맞는 base를 씁니다.
+- **테스트:** `program/test/selfflush.asm` a, b, c, d, e, h, i, k (16라운드, zseed 1~3) 모두 에뮬레이터와 같음.
+- **확인 안 한 것:** 옛 id c commit과 다시 fetch된 d 사이에 인터럽트가 들어오는 경우(정밀 상태에서 load를 건너뛸 수 있음), IO처럼 읽으면 상태가 바뀌는 주소의 load(두 번 읽힘).
+- **고칠 방향(필요하면):** self flush 때 load id 완료 비트 지우기. 지금은 결과에 영향이 없음.
 
 ## 12. flush 직후 OLDD 플래그가 다시 켜져 데이터 없이 출력 (11-04)
 - **증상:** memtest2 `a7`이 `00007070`(정답 `00007171`).
@@ -183,6 +192,24 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-05) 중 dsim으로 찾은 회�
 - **처음 잘못 본 것:** "store `D_MD`가 항상 0이라 4바이트를 쓴다". 10-18에 고친 옛 버그의 설명이 CLAUDE.md에 남아 있었고, 11-05 결과가 그 증상과 비슷해 같은 원인으로 봤습니다.
 - **고칠 방향:** store가 load 범위를 다 덮을 때만 forward하고, 아니면 store가 끝날 때까지 기다린 뒤 메모리에서 읽습니다. 또는 바이트 단위로 합칩니다.
 - **확인 안 한 것:** 같은 폭이나 더 좁은 load(`st .32B` 뒤 `ld .8L` 등)의 forward, 주소가 어긋난 경우(`st .8L` at +1 뒤 word load).
+
+## 18. `st.stack` base가 더 젊은 pop/ret/push의 stack을 씀 (11-07) ✅
+- **증상 (`selfflush`, zseed 1~3 모두 16/16 FAIL):**
+  - `g`: call 뒤 callee에서 늦은 data로 `st.stack gen2, 0`(반환 주소 덮어쓰기) ; `ret` → 옛 주소로 돌아감.
+  - `j`: `push zero` ; 늦은 data `st.stack gen2, 0` ; `pop gen1` → gen1이 옛 값 0.
+  - `l`: `set stack, stk_end-8` ; 늦은 data `st.stack gen2, 0` ; `push gen10` ; 루프 ; `ld.zero stk_end-8` → 옛 값. load가 근처에 없어도 생김.
+- **원인:** load 순서가 아니라 **store 주소**가 틀림. data가 늦어 issue가 밀린 `st.stack`이 dispatch 때가 아니라 issue 때(더 젊은 stack 변경이 반영된) stack을 읽음.
+  - store buffer 주소: g 0x8f8(정답 0x8f4, ret 뒤), j 0x9b8(정답 0x9b4, pop 뒤), l 0xa24(정답 0xa28, push 뒤).
+  - 주소가 틀리니 self flush도 나지 않음.
+  - g dump: 20508 LDB가 ret(id 8)에 옛 반환 주소 0x2ac → 20512 JPU가 0x2ac로 점프 → 20538에야 store(id 7) STB A=0x8f8.
+- **고친 것:** 사용자가 `st.stack`이 PCA를 쓰도록 수정(`regFile.dig` 포함, 11-07). `selfflush` a~l 모두 PASS, runtests 13개는 knownbug만 DIFF(예전과 같음), `haltbr` 모두 같음.
+- **확인 안 한 것:** issue가 밀린 `ld.stack`의 base, stack 외 SC 레지스터.
+
+## 기존 알려진 문제: `halt`가 분기보다 먼저 실행 (10-17) ✅ 재현 안 됨 (11-07)
+- **예전 증상:** not-taken으로 예측된 분기 바로 뒤 `halt`가 분기보다 먼저 실행돼 CPU가 멈춤. 그래서 프로그램을 `jmp.one pc.32B, 0`으로 끝냈음.
+- **테스트 `program/test/haltbr.asm` H1~H10:** 처음 실행이라 not-taken으로 예측되고(JPU_pred=3) 실제로는 taken인 분기 바로 뒤 halt. 분기 앞에 상수 cmp, 24단 addi chain, load, pointer chase, self flush되는 load, load한 카운터 루프, 늦은 taken 분기, load한 레지스터로 jmp.one, load 8개 진행 중, 먼 target. 10개 × zseed 1~3 모두 에뮬레이터와 같음. halt를 넣은 fill, picalc도 같음.
+- **이유 (dump H2/H4/H6):** wrong-path halt는 분기보다 먼저 issue되지만(H4: halt 0x30이 1024에 `CT_ISS_HALT`, 분기는 1074에 풀림) CPU는 멈추지 않음. halt가 commit 때 효과를 내는 구조라서(11-05 "trap/halt 뒤 명령 flush") issue 순서가 문제 되지 않음.
+- **남은 관찰:** flush 뒤에도 `hlt`=1, `HALT_PC`가 옛 halt 주소로 남음. 지금은 영향 없지만 인터럽트/`INT_HALT`에서 쓰면 확인 필요.
 
 ---
 
