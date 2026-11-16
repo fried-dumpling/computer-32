@@ -44,7 +44,6 @@ PROGRAMS = ["ext", "prec", "sled", "misp", "iret", "sys", "tbl"]
 
 # item -> why it fails today. Remove the entry when the item passes.
 XFAIL = {
-    "7a": "iret path not built (INT_ret only reaches a BitExtender in the IPU)",
     "8a": "the IPU does not answer INT_req (syscall); INT_rqac is Ground",
     "8b": "same as 8a",
 }
@@ -190,8 +189,8 @@ def t_ext(rep, pool, a):
     m = re.match(HEX * 7 + "E", r.text)
     got = [hx(x) for x in m.groups()] if m else None
     detail = f"output {r.text!r}"
-    rep.item("1a", "stexp/ldexp: istack panicvec intlevel (5 bits), cpuid stable",
-             bool(m) and got[2:5] == [0x12345670, 0x12345674, 0x18] and got[0] == got[1], detail)
+    rep.item("1a", "stexp/ldexp: istack, intlevel and inttmplv (lev b0-3, mask b4, ker b7), cpuid stable",
+             bool(m) and got[2:5] == [0x12345670, 0x98, 0x87] and got[0] == got[1], detail)
     rep.item("1b", "stexp/ldexp: pbase plimit", bool(m) and got[5:] == [0x12340000, 0x12345000], detail)
 
 
@@ -380,6 +379,8 @@ def main():
     ap.add_argument("-j", type=int, default=9)
     ap.add_argument("-seeds", default="1,2,3", help="zseed list for the prec sweep (others use the first)")
     ap.add_argument("-nobuild", action="store_true")
+    ap.add_argument("-snap", action="store_true",
+                    help="reuse the circuit copy in program/build/dsim/int/components instead of copying components/ again")
     ap.add_argument("groups", nargs="*", choices=[[], *PROGRAMS], default=[])
     a = ap.parse_args()
     a.seeds = [int(s) for s in a.seeds.split(",")]
@@ -390,9 +391,15 @@ def main():
             build(g)
     # run on a copy: saving a circuit in Digital during a sweep must not mix two circuits
     src = ROOT / "components"
-    print(f"circuit: {CIRCUIT} saved {datetime.fromtimestamp((src / CIRCUIT).stat().st_mtime):%Y-%m-%d %H:%M:%S}")
-    shutil.rmtree(SNAP, ignore_errors=True)
-    shutil.copytree(src, SNAP, ignore=lambda d, names: [n for n in names if Path(d, n).is_file() and not n.endswith(".dig")])
+    if a.snap:
+        if not (SNAP / CIRCUIT).exists():
+            raise SystemExit(f"-snap: no copy in {SNAP}")
+        print(f"circuit: snapshot in {SNAP.relative_to(ROOT)}, copied "
+              f"{datetime.fromtimestamp((SNAP / CIRCUIT).stat().st_mtime):%Y-%m-%d %H:%M:%S}")
+    else:
+        print(f"circuit: {CIRCUIT} saved {datetime.fromtimestamp((src / CIRCUIT).stat().st_mtime):%Y-%m-%d %H:%M:%S}")
+        shutil.rmtree(SNAP, ignore_errors=True)
+        shutil.copytree(src, SNAP, ignore=lambda d, names: [n for n in names if Path(d, n).is_file() and not n.endswith(".dig")])
     rep = Report()
     try:
         with ThreadPoolExecutor(a.j) as pool:
