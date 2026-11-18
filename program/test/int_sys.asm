@@ -2,8 +2,10 @@
 ;  int_sys.asm : syscall enters the handler and returns to the next word
 ;
 ;  syscall raises INT_req and the IPU must answer it (no IRQ pulse). the
-;  syscall vector id is not decided yet (ISA.md 2.2), so no int_vec is set
-;  and the handler is still at address 8.
+;  IPU reads the table entry on INT_id-_bus, which is 1 during syscall
+;  (id 0 is kept for panic / emergency use), so int_vec[1] = handler and
+;  int_pri[1] = 1 (a level 0 entry never raises INT_out). the handler is at
+;  address 8.
 ;  the return PC printed by the handler must be the word after syscall.
 ;
 ;  output : "L<after> AH<m-4> hBCE"
@@ -24,6 +26,9 @@ handler:                                ; address 8 = INT_vec
 main:
     INIT()
     INITIST()
+    set gen[1].32B, handler
+    interst gen[1].32B, 0, vec | 1
+    interst zero.32B, 1, pri | 1
     PUTC('L')
     set gen[1].32B, after
     PHEX()

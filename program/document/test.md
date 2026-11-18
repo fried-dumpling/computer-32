@@ -64,34 +64,75 @@ bash tools/dsim/runtests.sh flushstall ldstmix knownbug     ; 루트에서. 결�
 `tools/dsim/inttest.py`로 `components/computer-32-test.dig`(CPU + IPU)에서 돌립니다(2026-11-15부터. 그 전의 `runint.py`는 IPU 없는 `cpu-test.dig`에 `INT_in`/`INT_vec`/`INT_lev`를 직접 넣었고, 지웠습니다).
 
 ```
-python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [그룹...]     ; 루트에서. 그룹: ext prec sled misp iret sys tbl
+python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [-snap] [그룹...]     ; 루트에서. 그룹: ext prec sled misp flc iret iret2 iretpre sys sysprev sysirq nest wpsys sysmem user sys0 tbl
 ```
+
+- `-snap`: `components/`를 다시 복사하지 않고 지난 실행의 복사본(`program/build/dsim/int/components/`)을 씁니다. 회로를 고치는 중에 같은 회로로 다시 돌릴 때 씁니다.
 
 - 인터럽트는 IPU 입력선 `IRQ`(= 3, top-level In `I-in`의 bit 3)에 2 half 펄스를 넣어 만듭니다. IPU는 1 half 펄스도 잡습니다. 들어가는 프로그램은 `INTVEC()`(`int.hsm`)로 `int_vec[IRQ] = handler`, `int_pri[IRQ] = 1`을 씁니다. `int_pri`가 0인 선은 받지 않습니다.
 - 시작은 boot-sequencer(`-Dset=S=0,R=1,B_used=0,I-in=0 -Dat=6:R=0;10:S=1;16:S=0`)이고, 프로그램은 `-Drom`으로 boot ROM이 RAM에 복사합니다.
 - 인터럽트 없이 먼저 돌려 PC가 루프 주소에 닿는 half H를 찾고, 거기서부터 2 half 간격으로 펄스를 넣습니다. `I-in`이 오른 뒤 약 42 half에 IPU의 `acp`가 1 half 나오고, 그 4 half 뒤 PC가 핸들러가 됩니다.
 - 결과는 `PASS`, `FAIL`, `XFAIL`(지금 실패가 예상됨, 이유는 스크립트의 `XFAIL`), `XPASS`(예상과 달리 통과), `SKIP`(이번 실행에서 판단 불가)입니다. `FAIL`이나 `XPASS`가 있으면 종료 코드 1이고, `XPASS`가 나오면 `XFAIL`에서 그 항목을 지웁니다.
-- `components/`를 `program/build/dsim/int/components/`로 복사해 돌리므로 실행 중에 회로를 저장해도 됩니다. 출력은 같은 폴더의 `<프로그램>-z<seed>-<H>.sim`, `.delta`입니다. 전체 약 2분입니다.
+- `components/`를 `program/build/dsim/int/components/`로 복사해 돌리므로 실행 중에 회로를 저장해도 됩니다. 출력은 같은 폴더의 `<프로그램>-z<seed>-<H>b<bit>.sim`, `.delta`입니다. 전체 약 20분(-j 9)입니다. `sysirq`, `nest`, `iret2`, `flc`가 zseed마다 수백 번 돌기 때문이고, 빨리 보려면 `-seeds 1`이나 그룹을 줍니다.
 
 | 항목 | 프로그램 | 확인하는 것 |
 |---|---|---|
-| 1a, 1b | `int_ext` | `stexp`/`ldexp` 왕복. 1a: `istack`, `panicvec`, `intlevel`(5비트), `cpuid`. 1b: `pbase`, `plimit` |
+| 1a, 1b | `int_ext` | `stexp`/`ldexp` 왕복. 1a: `istack`, `intlevel`, `inttmplv`(lev b0-3, mask b4, ker b7만 저장: 0x5698 → 0x98, 0x5687 → 0x87), `cpuid`가 두 번 같은지. 1b: `pbase`, `plimit` |
 | 2 | `int_prec` | 루프 두 주기의 모든 위상에서 진입해 핸들러가 끝까지 도는지 |
 | 3a, 3b, 3c | `int_prec` | 점 개수와 `gen[5]`가 한 commit 지점인지(3a), 복귀 PC까지 맞는지(3b), 복귀 PC +4를 허용하고 맞는지(3c) |
 | 4 | `int_prec` | `istack -= 4; mem[istack] = 복귀 PC`, 원래 `istack` 칸은 그대로 |
 | 5 | `int_sled` | 복귀 PC = 첫 미commit 명령. `addi` 연속이라 `sled + 4*gen[5]`로 정확히 계산됩니다 |
 | 6a, 6b | `int_prec`, `int_sys` | `syscall`이 없으면 `INT_req`가 0, 있으면 1 |
 | 7a, 7b, 7c | `int_iret` | `iret` 뒤 프로그램이 이어지는지, `istack`과 `int-level`이 복원되는지 |
-| 8a, 8b | `int_sys` | `syscall`이 핸들러로 들어가고 복귀 PC가 다음 명령인지, 돌아와 `BC`를 출력하는지. IRQ 펄스 없이 IPU가 `INT_req`에 응답해야 합니다 |
+| 8a, 8b | `int_sys` | `syscall`이 핸들러로 들어가고 복귀 PC가 다음 명령인지, 돌아와 `BC`를 출력하는지. IRQ 펄스 없이 IPU가 `INT_req`에 응답해야 합니다. `syscall`은 id 1이므로 프로그램이 `int_vec[1]` = handler, `int_pri[1]` = 1을 씁니다(level 0이면 진입하지 않음). 출력 `L00000284 AH00000284 hBCE` |
 | 9 | `int_tbl` | `interst`/`interld` 왕복(`int_vec[3]`, `int_pri[3]`). 출력 `A00000105 00000009 E` |
 | 10a, 10b, 10c | `int_misp` | 번갈아 오분기하는 분기 주변 진입. 복귀 PC와 `gen[5..7]`이 정상 경로의 명령 경계인지(10a는 +4 허용, 10b는 정확히), 끝까지 도는지(10c) |
-| 11 | `int_misp` | Fl_INT와 Fl_JPU가 같은 half인 실행의 결과. 그런 실행이 없으면 `SKIP` |
+| 10d, 10e, 10f | `int_flc` | 10a~10c와 같은 검사. 분기 조건이 `st`/`ld`를 거쳐 늦게 결정됩니다(Fl_INT와 Fl_JPU를 겹치게 하려는 것). 루프 150회, zseed 전부 |
+| 11 | `int_misp`, `int_flc` | Fl_INT와 Fl_JPU가 같은 half인 실행의 결과(두 프로그램을 합쳐 판단). 그런 실행이 없으면 `SKIP`. 11-18 회로에서는 진입이 Fl_JPU로 flush하고(PC가 핸들러가 되기 2 half 전) Fl_INT는 한 번도 1이 되지 않아서, 지금 모양으로는 날 수 없습니다 |
 | 13 | `int_prec` | 핸들러 안의 `int-level`이 `{mask 1, level 1}` = 0x11 |
+| 14a | `int_sysprev` | `syscall` 앞 명령 12종(`st`, `set`, `addi`, `nop`, 오분기된 루프 끝 등)마다 복귀 PC가 다음 명령인지. `NPAD` 0~23(`.data` 길이 → boot 복사 시간)으로 24번 빌드합니다 |
+| 14b | `int_sysirq` | `syscall` 핸들러 안의 `int-level`이 `{mask 1, int_pri[1] = 1}` = 0x11 |
+| 14c, 14d | `int_sysprev` | 모든 `NPAD`에서 끝까지 도는지(14c), 끝에서 `istack` = ISTACK, `stack` = 0x3000인지(14d) |
+| 15a~15d | `int_sysirq` | `syscall`(id 1)과 IRQ(id 3)가 둘 다 level 1. `syscall` 앞 루프부터 핸들러 뒤까지 모든 위상에 IRQ 펄스. 끝까지 도는지(15a), 두 핸들러가 한 번씩 도는지 = IRQ가 없어지지 않는지(15b), IRQ가 `syscall` commit 전(R ≤ sc)이거나 `syscall` 핸들러의 `iret` 뒤에 들어가고 `syscall` 복귀 PC가 다음 명령인지(15c), IRQ 핸들러 level 0x11(15d). zseed 전부 |
+| 16a, 16b | `int_nest` | 낮은 IRQ(id 3, level 1) 핸들러가 `int-tmplv`를 저장하고 mask를 내린 동안(0x81) 높은 IRQ(id 4 = `I-in` bit 4, level 2)를 모든 위상에 넣습니다. 끝까지 도는지(16a). 높은 쪽이 mask 0 구간 안에서만 중첩되고(아니면 낮은 쪽 `iret` 뒤 main에서), level 0x12 / `int-tmplv` 0x01, 복원한 `int-tmplv`, 마지막 `istack`/`int-level`/`gen[5]`이 맞는지(16b). zseed 전부 |
+| 17a, 17b | `int_iret2` | 첫 IRQ의 핸들러 진입부터 `iret` 뒤까지 모든 위상에 둘째 IRQ. 끝까지 도는지(17a), 진입이 정확히 2번이고 두 복귀 PC가 main에 있는지, `istack`/`int-level`/`gen[5]`(17b). zseed 전부 |
+| 18 | `int_wpsys` | 항상 taken인 분기(조건이 load라 늦게 결정, BTB miss는 not taken 예측)의 fall-through에 `syscall`. `INT_req`가 0, 핸들러 진입 없음. 오경로에서 `syscall`을 fetch하지 않았으면 `SKIP` |
+| 19a, 19b, 19c | `int_sysmem` | `st` 바로 뒤, `ld` 바로 뒤 `syscall`. 복귀 PC(19a), 핸들러에서 본 메모리와 `gen[6]`: 앞 `st`/`ld`는 끝나고 뒤 `st`는 안 됨(19b), `syscall` 뒤 `ld`가 핸들러의 store를 보는지(19c) |
+| 20a, 20b, 20c | `int_user` | `iret`(`int-tmplv` = 0)으로 user에 들어감. user `syscall`이 들어가고 user로 돌아오는지(20a), 핸들러에서 `int-level` ker = 1, `int-tmplv` ker = 0(20b), user의 `stexp`가 trap하는지(20c, trap id는 미정이라 id 0으로 가정) |
+| 21a, 21b | `int_sys0` | `int_pri[1]` = 0인 `syscall`: 핸들러가 돌지 않는지(21a), 프로그램이 멈추지 않고 이어지는지(21b, 규칙 미정) |
+| 22 | `int_iretpre` | 핸들러 끝(`iret` 바로 앞) 8종(`st`, `nop`, `set`, `nop` 4개, `ld`, `ld ld` 등)을 따로 빌드(`C0`~`C7`). `syscall`과 IRQ로 한 번씩 들어가 둘 다 돌아오는지 |
+| (공통) | `int.hsm` | 핸들러는 `LOGK`/`LOGRET`/`LOGEXT`로 값을 메모리 로그(`LOG` 0x2800)에 붙입니다. ALU를 쓰지 않아 끼어든 코드의 flag가 그대로입니다. main이 끝에 `DUMPLOG`로 `G<값> ... g`를 출력합니다 |
 
 - 모든 실행에 `cpu-32`의 tunnel `PCS`(PC), `com1`, `com2`, `INT_req`, `Fl_INT`, `Fl_JPU` probe를 붙입니다(`-Dtap`).
 - 위상 sweep은 2 half 간격의 짝수 half(클럭 상승)만 봅니다.
 
-### 결과 (2026-11-15, `inttest.py`, `computer-32-test.dig` 00:12 저장본, `prec`는 zseed 1, 2, 3, 나머지는 1)
+### 결과 (2026-11-18, `cpu-32.dig` 01:14 저장본, 14번 이후 추가 뒤)
+
+PASS 32, XFAIL 11, SKIP 3, 종료 코드 0. 1a~13은 그대로 PASS. 새 항목:
+
+| 결과 | 항목 | 내용 |
+|---|---|---|
+| PASS | 10d~10f, 14c, 15a, 15d, 16a, 17a, 17b, 18, 20a, 21a | `iret` 주변 둘째 IRQ(183회), 오경로 `syscall`(849번 fetch, `INT_req` 0), 늦은 분기 주변 진입(168회) |
+| XFAIL | 14a | `errors.md` 25번. `syscall` 복귀 PC가 다음 명령 + 4(케이스 5, 10 = 오분기 루프 끝 직후). `syscall`의 clr이 trap-wait 뒤에 오면 FT는 이미 멈춘 상태에서 hold(`D_FF@-200,1220`, D = clr & !wait)가 IAR을 한 번 더 진행시키고, decode가 받지 못한 그 명령을 재시작이 덮어씀 |
+| XFAIL | 14b, 20b | `errors.md` 27번. `syscall` 핸들러의 `int-level`이 0x10(level 0). 진입이 `ker`를 켜지 않음 |
+| XFAIL | 14d | `errors.md` 26번. 끝에서 `istack` = 0x3004(24개 NPAD 모두). `istack` ±4와 `stack`이 `addsub-4c32@2700,-180`을 같이 쓰고, `iret`의 +4가 Fl_JPU clr과 겹치면 `Mux@2620,-200`이 `CT_SC-_FD`를 받음 |
+| XFAIL | 15b | `errors.md` 29번. `syscall`의 `INT_req` 2~14 half 전의 IRQ 펄스가 사라짐(33회, seed 3개 모두, `S`만 실행) |
+| XFAIL | 15c | `errors.md` 25번. IRQ가 `syscall` 자리(R = sc)에서 들어간 뒤 다시 실행된 `syscall`의 복귀 PC가 + 4(H=17936, 3회). 14a와 같은 모양 |
+| XFAIL | 16b | 11-18 (`cpu-32.dig` 13:07 저장본) 재실행: `errors.md` 28번(진입 때 `int-tmplv` 미기록)은 더 이상 안 나타남. 남은 18개는 mask를 다시 켜는 곳 주변: `close`(`stexp` 0x91, 0x1d8) 몇 반주기 전의 high 펄스가 그 뒤 1-3 명령에서 진입(R = 0x1dc..0x1e4). 회로 문제인지 테스트 창 문제인지 미정 |
+| XFAIL | 19a(19b, 19c SKIP) | `errors.md` 30번. 둘째 `syscall`의 `iret`이 첫 복귀 PC(0x320)로 갔다가 stall |
+| XFAIL | 20c | 권한 검사 미배선. user의 `stexp istack`이 실행되어 다음 `syscall`이 0x1230에 push |
+| XFAIL | 21b | `int_pri[1]` = 0인 `syscall`에서 stall(규칙 미정) |
+| XFAIL | 22 | `errors.md` 31번. `ld ; ld ; iret`(C5, C6)에서 `iret`이 돌아오지 않음: `TRAP_IRET`의 driver(`Driver@340,4080..4560`)가 dispatch 제어 버스를 모는 같은 사이클에 다음 명령이 dispatch되어 decoder driver(`Driver@1540,-1820` / `-1900`)도 `CT_FU-_WR` / `CT_FU-_INST`를 몰고, 그 뒤 클럭만 바뀜. C4는 그 사이클에 halt-frontend = 1이라 통과. `int_nest`의 level 2 핸들러는 그래서 `iret` 앞에 dummy `st`를 둠 |
+| SKIP | 11 | 206회 모두 Fl_INT가 0. 진입은 Fl_JPU로 flush(PC가 핸들러가 되기 2 half 전)하므로 이 항목은 지금 모양으로는 날 수 없음 |
+
+- 14c는 `int_sysprev`의 이전 배치(핸들러가 `istack`을 로그하기 전, NPAD 0~7)에서 NPAD 0~3이 첫 `iret`에서 stall했지만, 지금 배치로는 NPAD 0~23 모두 통과합니다.
+- `int_sysirq`, `int_nest`는 `syscall`/IRQ 수락 RS_FF 경쟁(`errors.md` 24번) 때문에 zseed 1, 2, 3으로 돌립니다. 결과는 seed마다 같았습니다.
+
+### 결과 (2026-11-18, `cpu-32.dig` 01:14 저장본, 14번 이전)
+
+PASS 20(1a~10c, 13), SKIP 1(11: 38 위상 중 Fl_INT와 Fl_JPU가 겹친 실행 없음). `XFAIL`은 비어 있습니다. `int_sys`는 따로 zseed 1~24 × tap 2종 48회 모두 같은 출력이었습니다(수락 RS_FF의 S=R=1 경쟁, `document/errors.md` 24번, 이 고쳐진 뒤). 7a~7c, 8a, 8b가 통과하기까지의 회로 버그는 `errors.md` 19~24번입니다.
+
+### 이전 결과 (2026-11-15, `inttest.py`, `computer-32-test.dig` 00:12 저장본, `prec`는 zseed 1, 2, 3, 나머지는 1)
 
 | 결과 | 항목 |
 |---|---|
