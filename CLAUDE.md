@@ -108,7 +108,7 @@ ldexp <reg>, <reg_ex>                ; load from an extended/special register
 stexp <reg>, <reg_ex>                ; store to an extended/special register
 ```
 
-`reg_ex` (only reachable via `ldexp`/`stexp`, not the normal `reg.mode` form): `istack` (interrupt stack pointer), `panicvec` (panic/fault vector), `cpuid`.
+`reg_ex` (only reachable via `ldexp`/`stexp`, not the normal `reg.mode` form): `cpuid` (ex-0), `istack` (ex-1, interrupt stack pointer), `intlevel` (ex-2), `inttmplv` (ex-3, level saved on entry, restored by `iret`), `pbase` (ex-4), `plimit` (ex-5). `panicvec` was removed (2026-11-16 sheet). `syscall` uses `interst` id 1; id 0 is reserved for panic/emergency use.
 
 ### Misc
 
