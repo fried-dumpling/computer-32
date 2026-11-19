@@ -375,11 +375,6 @@
       <pos x="680" y="0"/>
     </visualElement>
     <visualElement>
-      <elementName>Not</elementName>
-      <elementAttributes/>
-      <pos x="680" y="20"/>
-    </visualElement>
-    <visualElement>
       <elementName>In</elementName>
       <elementAttributes>
         <entry>
@@ -404,10 +399,10 @@
       <elementAttributes>
         <entry>
           <string>NetName</string>
-          <string>full</string>
+          <string>free</string>
         </entry>
       </elementAttributes>
-      <pos x="740" y="20"/>
+      <pos x="680" y="20"/>
     </visualElement>
     <visualElement>
       <elementName>Tunnel</elementName>
@@ -534,7 +529,7 @@
         </entry>
         <entry>
           <string>NetName</string>
-          <string>full</string>
+          <string>free</string>
         </entry>
       </elementAttributes>
       <pos x="120" y="-260"/>
@@ -544,7 +539,7 @@
       <elementAttributes>
         <entry>
           <string>Label</string>
-          <string>full</string>
+          <string>free</string>
         </entry>
       </elementAttributes>
       <pos x="140" y="-260"/>
@@ -15038,10 +15033,6 @@
     <wire>
       <p1 x="660" y="20"/>
       <p2 x="680" y="20"/>
-    </wire>
-    <wire>
-      <p1 x="720" y="20"/>
-      <p2 x="740" y="20"/>
     </wire>
     <wire>
       <p1 x="1240" y="20"/>

@@ -1,7 +1,7 @@
 ; =====================================================================
 ;  memtest2.asm : narrows down the hang of memtest 'a' (st then ld)
 ;
-;  build (in program/) :  dasm test/memtest2.asm -o memtest2.o
+;  build (in program/) :  dasm test/memory/memtest2.asm -o memtest2.o
 ;                         dlnk memtest2.o -o run.txt
 ;
 ;  output : <test> <value read in hex>, one shot each (no loops) except

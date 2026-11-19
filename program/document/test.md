@@ -1,6 +1,6 @@
 # test — 회로 검증용 프로그램
 
-`program/test/`. Digital 회로(`components/cpu-test.dig`)의 버그를 좁히려고 만든 작은 프로그램들입니다. 에뮬레이터용 테스트가 아니라 회로에서 돌려 보는 용도입니다. 각 파일 맨 위 주석에 테스트 내용, 키 입력, 예상 값, 당시 결과가 자세히 있습니다.
+`program/test/`. 파일이 많은 묶음은 하위 폴더에 있습니다: `interrupt/`(`int.hsm`, `int_*.asm`), `memory/`(`memtest*.asm`, `ldstmix.asm`, `selfflush.asm`). 나머지는 `program/test/` 바로 아래에 있습니다. Digital 회로(`components/cpu-test.dig`)의 버그를 좁히려고 만든 작은 프로그램들입니다. 에뮬레이터용 테스트가 아니라 회로에서 돌려 보는 용도입니다. 각 파일 맨 위 주석에 테스트 내용, 키 입력, 예상 값, 당시 결과가 자세히 있습니다.
 
 ## 빌드 / 실행
 
@@ -11,7 +11,7 @@ dlnk fill.o -o ../boot/rom.bin
 ```
 
 - `fp_str2f` 등을 쓰는 테스트(`memtest8`, `selftest`)는 `dasm floatingpoint/float.asm -o float.o`를 만들어 함께 링크합니다(테스트 오브젝트를 먼저).
-- 파일 주석에는 `-o run.txt`로 되어 있습니다. 예전에 `cpu-32 test.dig`(지금 `cpu-test.dig`)의 preload program file로 바로 넣던 방식입니다. 지금 회로는 boot ROM이 `boot/rom.bin`을 RAM으로 복사해서 실행하므로, `boot/rom.bin`으로 링크합니다(루트 `CLAUDE.md`의 "Running on the circuit").
+- 파일 주석에는 `-o run.txt`로 되어 있습니다. 예전에 `cpu-32 test.dig`(지금 `legacy/cpu-test.dig`)의 preload program file로 바로 넣던 방식입니다. 지금 회로는 boot ROM이 `boot/rom.bin`을 RAM으로 복사해서 실행하므로, `boot/rom.bin`으로 링크합니다(루트 `CLAUDE.md`의 "Running on the circuit").
 - 헤드리스로 돌리려면 `tools/dsim`의 `Sim`을 씁니다(`tools/dsim/README.md`). 프로그램 인자에 `-`를 주면 ROM 파일을 그대로 씁니다.
 - 대부분 결과를 터미널에 `<글자> <값>` 형식으로 출력합니다. 글자를 테스트 **전에** 출력하므로, 멈추거나 재시작하면 마지막 글자가 문제의 테스트입니다.
 
@@ -20,24 +20,24 @@ dlnk fill.o -o ../boot/rom.bin
 | 파일 | 확인하는 것 | 입력 / 출력 |
 |---|---|---|
 | `fill.asm` | GraphicCard(`0x8000000`, 160×90, word 1개 = 픽셀 1개)를 `RGB(0,0,0)`(0x8000)으로 채움 | 입력 없음. 화면 전체가 칠해지면 성공 |
-| `memtest.asm` | store → load 순서 | `<글자> <오류 수 hex>`(00000000 = 정상), 각 테스트를 `ROUNDS`번 반복 |
-| `memtest2.asm` | memtest `a`(st 후 ld)가 멈추는 원인 좁히기 | `<테스트> <읽은 값 hex>`, 대부분 한 번씩 |
-| `memtest3.asm` | 루프 안의 `st X ; ld X` 중 어느 부분이 멈추는지 | 키 1..9로 테스트 하나씩, 예상 값 00000088 |
-| `memtest4.asm` | flush된 wrong-path store가 정상 경로 load에 보이는지 | 키 1..7. id-manager 점유도 함께 관찰 |
-| `memtest5.asm` | 더 젊은 store가 오래된 load를 막는지, ld/st 주소 비교 비트 | 키를 누르면 8 × (ld X ; st X+OFF), `ok` |
-| `memtest6.asm` | ld X 뒤에 주소가 늦게 나오는 push(M4.csv 교착) | 키 1.., 예상 합 00000088 |
-| `memtest7.asm` | flush하는 분기가 id F일 때 id-manager epoch 복원 | 키 7, 8, a, b. 16라운드 중 멈추는 라운드 확인 |
-| `memtest8.asm` | `fp_str2f` 안의 calc 재시작 구간(call → 짧은 ret) | 키 1..9, a..m. 결과와 SP 출력 (`float.o` 필요) |
+| `memory/memtest.asm` | store → load 순서 | `<글자> <오류 수 hex>`(00000000 = 정상), 각 테스트를 `ROUNDS`번 반복 |
+| `memory/memtest2.asm` | memtest `a`(st 후 ld)가 멈추는 원인 좁히기 | `<테스트> <읽은 값 hex>`, 대부분 한 번씩 |
+| `memory/memtest3.asm` | 루프 안의 `st X ; ld X` 중 어느 부분이 멈추는지 | 키 1..9로 테스트 하나씩, 예상 값 00000088 |
+| `memory/memtest4.asm` | flush된 wrong-path store가 정상 경로 load에 보이는지 | 키 1..7. id-manager 점유도 함께 관찰 |
+| `memory/memtest5.asm` | 더 젊은 store가 오래된 load를 막는지, ld/st 주소 비교 비트 | 키를 누르면 8 × (ld X ; st X+OFF), `ok` |
+| `memory/memtest6.asm` | ld X 뒤에 주소가 늦게 나오는 push(M4.csv 교착) | 키 1.., 예상 합 00000088 |
+| `memory/memtest7.asm` | flush하는 분기가 id F일 때 id-manager epoch 복원 | 키 7, 8, a, b. 16라운드 중 멈추는 라운드 확인 |
+| `memory/memtest8.asm` | `fp_str2f` 안의 calc 재시작 구간(call → 짧은 ret) | 키 1..9, a..m. 결과와 SP 출력 (`float.o` 필요) |
 | `selftest.asm` | calc가 쓰는 명령들이 회로에서 맞게 도는지 | `<글자> <o\|x\|?> <값 hex>` (`float.o` 필요) |
 | `flushstall.asm` | store가 버스를 잡은 동안 오는 call/jmp/분기/ret flush (FT stage의 옛 fetch가 살아남는 버그, calc_nh `2*3-1`) | 입력 없음. `<케이스> PASS` / `FAIL <결과 hex>` |
-| `ldstmix.asm` | 밀린 load 여러 개와 store를 섞었을 때 load 값 (bus controller mid 겹침 버그) | 입력 없음. `m1`..`m6` `PASS` / `FAIL <오류 수 hex>` |
+| `memory/ldstmix.asm` | 밀린 load 여러 개와 store를 섞었을 때 load 값 (bus controller mid 겹침 버그) | 입력 없음. `m1`..`m6` `PASS` / `FAIL <오류 수 hex>` |
 | `rotate.asm` | `rol`/`roli`/`ror`/`rori` (X = 0x12345678, 회전량 0~36) | 입력 없음. `<케이스> <결과 hex>`, 에뮬레이터와 비교 |
 | `knownbug.asm` | 루트 `CLAUDE.md`의 알려진 회로 문제: `st .8L/.16L/.8H`, 분기 바로 뒤 `halt` | 입력 없음. 고쳐질 때까지 DIFF가 정상 |
-| `selfflush.asm` | 늦은 store를 앞지른 load의 self flush(`document/errors.md` 11번): 일반 load, dest = base, 의존 load, `pop`, `ret`, `st.stack` 뒤 stack 변경 | 입력 없음. `<글자> <오류 수 hex>`, 에뮬레이터와 비교. 2026-11-07: 처음엔 `g`, `j`, `l` FAIL(`stack` base store가 더 젊은 pop/ret/push가 바꾼 stack을 씀). `st.stack`이 PCA를 쓰도록 고친 뒤 모두 PASS(zseed 1~3) |
+| `memory/selfflush.asm` | 늦은 store를 앞지른 load의 self flush(`document/errors.md` 11번): 일반 load, dest = base, 의존 load, `pop`, `ret`, `st.stack` 뒤 stack 변경 | 입력 없음. `<글자> <오류 수 hex>`, 에뮬레이터와 비교. 2026-11-07: 처음엔 `g`, `j`, `l` FAIL(`stack` base store가 더 젊은 pop/ret/push가 바꾼 stack을 씀). `st.stack`이 PCA를 쓰도록 고친 뒤 모두 PASS(zseed 1~3) |
 | `haltbr.asm` | 늦게 풀리는 not-taken 예측 분기 바로 뒤 `halt` (H1..H10) | 이미지마다 `#define H<n> 1`을 앞에 붙여 빌드. `AB`(H6은 `A123`)가 정상. 2026-11-07: 10개 × zseed 1~3 모두 정상 |
-| `int_*.asm` (`int.hsm`) | 인터럽트 진입, 복귀, `syscall`, `interst`/`interld`, 확장 레지스터 | 입력 없음. `tools/dsim/inttest.py`로 실행. 아래 "인터럽트 회귀 테스트" |
+| `interrupt/int_*.asm` (`interrupt/int.hsm`) | 인터럽트 진입, 복귀, `syscall`, `interst`/`interld`, 확장 레지스터 | 입력 없음. `tools/dsim/inttest.py`로 실행. 아래 "인터럽트 회귀 테스트" |
 
-`M4.o`, `M7.o`, `fill.o`는 예전 빌드 결과입니다.
+`M4.o`, `M7.o`, `fill.o`, `memtest2.o`, `selftest.o`는 예전 빌드 결과입니다(커밋 안 됨). 하위 폴더의 파일은 `dasm test/memory/memtest.asm -o memtest.o`처럼 빌드합니다.
 
 ## 회귀 테스트 (`flushstall`, `ldstmix`, `knownbug`)
 
@@ -69,7 +69,7 @@ python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [-snap] [그룹...
 
 - `-snap`: `components/`를 다시 복사하지 않고 지난 실행의 복사본(`program/build/dsim/int/components/`)을 씁니다. 회로를 고치는 중에 같은 회로로 다시 돌릴 때 씁니다.
 
-- 인터럽트는 IPU 입력선 `IRQ`(= 3, top-level In `I-in`의 bit 3)에 2 half 펄스를 넣어 만듭니다. IPU는 1 half 펄스도 잡습니다. 들어가는 프로그램은 `INTVEC()`(`int.hsm`)로 `int_vec[IRQ] = handler`, `int_pri[IRQ] = 1`을 씁니다. `int_pri`가 0인 선은 받지 않습니다.
+- 인터럽트는 IPU 입력선 `IRQ`(= 3, top-level In `I-in`의 bit 3)에 2 half 펄스를 넣어 만듭니다. `computer-32-test.dig`의 장치 latch `RS-64`(S = `I-in`, R = `I-acp`, Q = `I-act`)가 그 선을 acp가 올 때까지 high로 잡아 IPU에 줍니다(11-19 규칙: IRQ 선은 acp까지 high, `errors.md` 35, 38번). `I-act`가 이미 1이거나 acp가 오는 edge에 들어온 펄스는 무시될 수 있습니다. 들어가는 프로그램은 `INTVEC()`(`int.hsm`)로 `int_vec[IRQ] = handler`, `int_pri[IRQ] = 1`을 씁니다. `int_pri`가 0인 선은 받지 않습니다.
 - 시작은 boot-sequencer(`-Dset=S=0,R=1,B_used=0,I-in=0 -Dat=6:R=0;10:S=1;16:S=0`)이고, 프로그램은 `-Drom`으로 boot ROM이 RAM에 복사합니다.
 - 인터럽트 없이 먼저 돌려 PC가 루프 주소에 닿는 half H를 찾고, 거기서부터 2 half 간격으로 펄스를 넣습니다. `I-in`이 오른 뒤 약 42 half에 IPU의 `acp`가 1 half 나오고, 그 4 half 뒤 PC가 핸들러가 됩니다.
 - 결과는 `PASS`, `FAIL`, `XFAIL`(지금 실패가 예상됨, 이유는 스크립트의 `XFAIL`), `XPASS`(예상과 달리 통과), `SKIP`(이번 실행에서 판단 불가)입니다. `FAIL`이나 `XPASS`가 있으면 종료 코드 1이고, `XPASS`가 나오면 `XFAIL`에서 그 항목을 지웁니다.
@@ -87,24 +87,38 @@ python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [-snap] [그룹...
 | 8a, 8b | `int_sys` | `syscall`이 핸들러로 들어가고 복귀 PC가 다음 명령인지, 돌아와 `BC`를 출력하는지. IRQ 펄스 없이 IPU가 `INT_req`에 응답해야 합니다. `syscall`은 id 1이므로 프로그램이 `int_vec[1]` = handler, `int_pri[1]` = 1을 씁니다(level 0이면 진입하지 않음). 출력 `L00000284 AH00000284 hBCE` |
 | 9 | `int_tbl` | `interst`/`interld` 왕복(`int_vec[3]`, `int_pri[3]`). 출력 `A00000105 00000009 E` |
 | 10a, 10b, 10c | `int_misp` | 번갈아 오분기하는 분기 주변 진입. 복귀 PC와 `gen[5..7]`이 정상 경로의 명령 경계인지(10a는 +4 허용, 10b는 정확히), 끝까지 도는지(10c) |
-| 10d, 10e, 10f | `int_flc` | 10a~10c와 같은 검사. 분기 조건이 `st`/`ld`를 거쳐 늦게 결정됩니다(Fl_INT와 Fl_JPU를 겹치게 하려는 것). 루프 150회, zseed 전부 |
-| 11 | `int_misp`, `int_flc` | Fl_INT와 Fl_JPU가 같은 half인 실행의 결과(두 프로그램을 합쳐 판단). 그런 실행이 없으면 `SKIP`. 11-18 회로에서는 진입이 Fl_JPU로 flush하고(PC가 핸들러가 되기 2 half 전) Fl_INT는 한 번도 1이 되지 않아서, 지금 모양으로는 날 수 없습니다 |
+| 10d, 10e, 10f | `int_flc` | 10a~10c와 같은 검사. 분기 조건이 `st`/`ld`를 거쳐 늦게 결정됩니다(원래 Fl_INT와 Fl_JPU를 겹치게 하려는 것. Fl_INT는 없앨 예정이라 11번 항목은 11-19에 뺐습니다). 루프 150회, zseed 전부 |
 | 13 | `int_prec` | 핸들러 안의 `int-level`이 `{mask 1, level 1}` = 0x11 |
 | 14a | `int_sysprev` | `syscall` 앞 명령 12종(`st`, `set`, `addi`, `nop`, 오분기된 루프 끝 등)마다 복귀 PC가 다음 명령인지. `NPAD` 0~23(`.data` 길이 → boot 복사 시간)으로 24번 빌드합니다 |
 | 14b | `int_sysirq` | `syscall` 핸들러 안의 `int-level`이 `{mask 1, int_pri[1] = 1}` = 0x11 |
 | 14c, 14d | `int_sysprev` | 모든 `NPAD`에서 끝까지 도는지(14c), 끝에서 `istack` = ISTACK, `stack` = 0x3000인지(14d) |
 | 15a~15d | `int_sysirq` | `syscall`(id 1)과 IRQ(id 3)가 둘 다 level 1. `syscall` 앞 루프부터 핸들러 뒤까지 모든 위상에 IRQ 펄스. 끝까지 도는지(15a), 두 핸들러가 한 번씩 도는지 = IRQ가 없어지지 않는지(15b), IRQ가 `syscall` commit 전(R ≤ sc)이거나 `syscall` 핸들러의 `iret` 뒤에 들어가고 `syscall` 복귀 PC가 다음 명령인지(15c), IRQ 핸들러 level 0x11(15d). zseed 전부 |
 | 16a, 16b | `int_nest` | 낮은 IRQ(id 3, level 1) 핸들러가 `int-tmplv`를 저장하고 mask를 내린 동안(0x81) 높은 IRQ(id 4 = `I-in` bit 4, level 2)를 모든 위상에 넣습니다. 끝까지 도는지(16a). 높은 쪽이 mask 0 구간 안에서만 중첩되고(아니면 낮은 쪽 `iret` 뒤 main에서), level 0x12 / `int-tmplv` 0x01, 복원한 `int-tmplv`, 마지막 `istack`/`int-level`/`gen[5]`이 맞는지(16b). zseed 전부 |
-| 17a, 17b | `int_iret2` | 첫 IRQ의 핸들러 진입부터 `iret` 뒤까지 모든 위상에 둘째 IRQ. 끝까지 도는지(17a), 진입이 정확히 2번이고 두 복귀 PC가 main에 있는지, `istack`/`int-level`/`gen[5]`(17b). zseed 전부 |
+| 17a, 17b | `int_iret2` | 첫 IRQ의 핸들러 진입부터 `iret` 뒤까지 모든 위상에 둘째 IRQ. 끝까지 도는지(17a), 진입이 정확히 2번이고 두 복귀 PC가 main에 있는지, `istack`/`int-level`/`gen[5]`(17b). 둘째 펄스를 잡는 edge 직전 half(H2−1)에 그 선의 `I-act`나 `I-acp`가 1이면 장치 latch가 펄스를 무시할 수 있어서(S=R=1, seed에 따라 다름) 1번 또는 2번을 허용합니다. zseed 전부 |
 | 18 | `int_wpsys` | 항상 taken인 분기(조건이 load라 늦게 결정, BTB miss는 not taken 예측)의 fall-through에 `syscall`. `INT_req`가 0, 핸들러 진입 없음. 오경로에서 `syscall`을 fetch하지 않았으면 `SKIP` |
 | 19a, 19b, 19c | `int_sysmem` | `st` 바로 뒤, `ld` 바로 뒤 `syscall`. 복귀 PC(19a), 핸들러에서 본 메모리와 `gen[6]`: 앞 `st`/`ld`는 끝나고 뒤 `st`는 안 됨(19b), `syscall` 뒤 `ld`가 핸들러의 store를 보는지(19c) |
 | 20a, 20b, 20c | `int_user` | `iret`(`int-tmplv` = 0)으로 user에 들어감. user `syscall`이 들어가고 user로 돌아오는지(20a), 핸들러에서 `int-level` ker = 1, `int-tmplv` ker = 0(20b), user의 `stexp`가 trap하는지(20c, trap id는 미정이라 id 0으로 가정) |
-| 21a, 21b | `int_sys0` | `int_pri[1]` = 0인 `syscall`: 핸들러가 돌지 않는지(21a), 프로그램이 멈추지 않고 이어지는지(21b, 규칙 미정) |
+| 21a, 21b | `int_sys0` | `int_pri[1]` = 0인 `syscall`: 핸들러가 돌지 않는지(21a), id 0으로 한 번 진입하고(복귀 PC = `syscall` 다음 word, `int-level` 0x9f) `iret` 뒤 끝까지 도는지(21b, 11-19 결정, `ISA.md` 2.2 "고정 id"). 프로그램이 `int_vec[0]`에 handler를 둡니다. 출력 `APBEG<R> 0000009F g` |
 | 22 | `int_iretpre` | 핸들러 끝(`iret` 바로 앞) 8종(`st`, `nop`, `set`, `nop` 4개, `ld`, `ld ld` 등)을 따로 빌드(`C0`~`C7`). `syscall`과 IRQ로 한 번씩 들어가 둘 다 돌아오는지 |
 | (공통) | `int.hsm` | 핸들러는 `LOGK`/`LOGRET`/`LOGEXT`로 값을 메모리 로그(`LOG` 0x2800)에 붙입니다. ALU를 쓰지 않아 끼어든 코드의 flag가 그대로입니다. main이 끝에 `DUMPLOG`로 `G<값> ... g`를 출력합니다 |
 
-- 모든 실행에 `cpu-32`의 tunnel `PCS`(PC), `com1`, `com2`, `INT_req`, `Fl_INT`, `Fl_JPU` probe를 붙입니다(`-Dtap`).
+- 모든 실행에 `cpu-32`의 tunnel `PCS`(PC), `com1`, `com2`, `INT_req` probe를 붙입니다(`-Dtap`). 17b는 top-level probe `I-act`, `I-acp`도 기록합니다.
 - 위상 sweep은 2 half 간격의 짝수 half(클럭 상승)만 봅니다.
+
+### 결과 (2026-11-19, `cpu-32.dig` 23:00 저장본, `IPU-test.dig` 13:35, `computer-32-test.dig` 14:20)
+
+PASS 43, XFAIL 2, 종료 코드 0.
+
+- 11-18의 XFAIL(14a, 14b, 14d, 15b, 15c, 16b, 19a~c, 21b, 22)은 모두 PASS가 되어 `XFAIL`에서 뺐습니다. 고친 회로 버그는 `errors.md` 25~38번에 있습니다.
+- 16b: 높은 IRQ가 낮은 핸들러의 mask 0 구간 안에서 중첩된 경우가 175회, 낮은 쪽 `iret` 뒤에 들어간 경우가 66회입니다.
+- 17b: 둘째 펄스 3개가 `I-act|I-acp` 중에 들어왔습니다.
+- 21b: 출력 `APBEG000000B8 0000009F g`(R = `syscall`+4, `int-level` 0x9f).
+- 11번(SKIP)은 Fl_INT를 없앨 예정이라 항목을 지웠습니다.
+
+| 결과 | 항목 | 내용 |
+|---|---|---|
+| XFAIL | 20b | 진입이 `ker`를 켜지 않습니다. CPU가 ker를 `INT_lev` bit 4에서 가져옵니다. kernel 브랜치에서 다른 exception과 같이 구현합니다 |
+| XFAIL | 20c | 권한 검사가 배선되지 않았습니다. user의 `stexp istack`이 실행되어 다음 `syscall`이 0x1230에 push합니다 |
 
 ### 결과 (2026-11-18, `cpu-32.dig` 01:14 저장본, 14번 이후 추가 뒤)
 

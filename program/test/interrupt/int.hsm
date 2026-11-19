@@ -1,5 +1,5 @@
 ; =====================================================================
-;  int.hsm : shared macros of the interrupt tests (program/test/int_*.asm)
+;  int.hsm : shared macros of the interrupt tests (program/test/interrupt/int_*.asm)
 ;  run them with tools/dsim/inttest.py on components/computer-32-test.dig.
 ;  the emulator has no interrupts.
 ;

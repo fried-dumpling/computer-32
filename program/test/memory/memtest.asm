@@ -1,7 +1,7 @@
 ; =====================================================================
 ;  memtest.asm : store -> load ordering tests for the circuit
 ;
-;  build (in program/) :  dasm test/memtest.asm -o memtest.o
+;  build (in program/) :  dasm test/memory/memtest.asm -o memtest.o
 ;                         dlnk memtest.o -o run.txt
 ;
 ;  output : <letter> <error count in hex>   (00000000 = ok)

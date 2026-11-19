@@ -1,7 +1,7 @@
 ; =====================================================================
 ;  memtest7.asm : id-manager epoch restore when a flushing branch has id F
 ;
-;  build (in program/) :  dasm test/memtest7.asm -o memtest7.o
+;  build (in program/) :  dasm test/memory/memtest7.asm -o memtest7.o
 ;                         dlnk memtest7.o -o run.txt
 ;
 ;  hypothesis (log/compare/deadlock-investigation.md, M4-7.csv rows

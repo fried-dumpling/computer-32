@@ -10,15 +10,13 @@
 
 | 파일 | 역할 |
 |---|---|
-| `cpu-test.dig` | 개발용 CPU입니다. 실제로 고치는 원본이고, probe/LED와 debug 모듈(`*-debug.dig`)을 씁니다. 왼쪽(x < -1200)에 메모리/IO가 붙어 있어 이 파일 하나로 dsim에서 실행됩니다. |
-| `cpu-32.dig` | 부품용 CPU입니다. `cpu-test.dig`에서 probe/LED와 메모리/IO 영역을 빼고, 모듈을 non-debug 버전으로 바꿨습니다. 외부 핀 35개가 있습니다. |
-| `computer-32.dig` | 시스템입니다. `cpu-test`의 메모리/IO 영역에 `cpu-32` 인스턴스 하나를 터널로 연결했습니다. |
-| `computer-32-test.dig` | 작업 중인 파일입니다. 지금은 `B_used` 터널에 구동이 없다는 오류로 로드되지 않습니다(이전 `computer-32.dig`로도 같은 오류). |
+| `cpu-32.dig` | CPU입니다. 지금 직접 고치는 원본입니다. probe/LED가 없고 non-debug 모듈을 씁니다. 처음(10-25)에는 `cpu-test.dig`에서 probe/LED와 메모리/IO 영역을 빼서 만들었습니다. |
+| `computer-32-test.dig` | 테스트용 시스템입니다. `cpu-32` + `IPU-test` + 메모리/IO이고, dsim(`runtests.sh`, `inttest.py`)이 기본으로 돌리는 회로입니다(2026-11-08부터). |
+| `computer-32.dig` | 시스템입니다. `cpu-test`의 메모리/IO 영역에 `cpu-32` 인스턴스 하나를 터널로 연결해 만들었습니다(10-25). |
+| `legacy/cpu-test.dig` | 예전 개발용 CPU입니다(probe/LED, debug 모듈, 왼쪽 x < -1200에 메모리/IO). 2026-11-19에 `legacy/`로 옮겼습니다. `legacy/`에서는 `components/`의 모듈을 찾지 못하므로 열려면 `components/`로 다시 꺼내야 합니다. |
 | `*-debug.dig` ↔ non-debug | `id-manager`, `res-station`, `load-buffer`, `store-buffer`가 대상입니다. non-debug 버전은 debug 버전에서 probe와 디버그용 Out을 뺀 것입니다. debug 버전은 `components/debugs/`에 있습니다(2026-11-08). |
 
-`tools/dsim/sync-nondebug.sh`는 debug 모듈에서 non-debug 모듈 4개를 다시 만들고, `cpu-test.dig`에서 `cpu-32.dig`와 `computer-32.dig`를 다시 만듭니다. 그다음 넷리스트를 비교합니다.
-
-**주의 (2026-10-26)**: `cpu-32.dig`(10-25 23:50)와 `computer-32.dig`(23:51)는 생성된 뒤 직접 수정되었습니다(아래 §3, §4). 지금 `sync-nondebug.sh`를 실행하면 이 수정이 사라집니다. `cpu-test.dig`에도 같은 변경을 넣거나, 스크립트에서 이 두 파일을 만드는 단계를 빼야 합니다(§9).
+예전에는 `tools/dsim/sync-nondebug.sh`가 debug 모듈에서 non-debug 모듈 4개를, `cpu-test.dig`에서 `cpu-32.dig`와 `computer-32.dig`를 다시 만들었습니다. `cpu-32.dig`를 직접 고치게 되면서(10-25부터) 쓰지 않게 되어 2026-11-19에 그 도구와 함께 지웠습니다. debug ↔ non-debug 모듈은 이제 손으로 맞춥니다.
 
 ## 2. 규모
 
@@ -105,7 +103,7 @@ pin 좌표는 `cpu-32` 모양 안의 위치(0..320)입니다. "내부"는 cpu-32
   ```
   java -Dset=E=0,run=0,boot=1 -Dat="10:E=1,boot=0,run=1" -cp "$J;build" Sim ../../components/computer-32.dig - ""
   ```
-- **cpu-test**: 같은 세 신호를 내부 RS_FF_AS가 만듭니다. `RS_FF_AS`@-660,-1600의 Q가 `E`이고 ~Q가 `boot`(넷 `B`)입니다. `RS_FF_AS`@-660,-1540의 Q가 `run`입니다. 그래서 `-Dset=E=1,run=1`만 주면 되고, 클럭은 DipSwitch mux(-580,-1640)로 고릅니다.
+- **cpu-test** (지금 `legacy/`): 같은 세 신호를 내부 RS_FF_AS가 만듭니다. `RS_FF_AS`@-660,-1600의 Q가 `E`이고 ~Q가 `boot`(넷 `B`)입니다. `RS_FF_AS`@-660,-1540의 Q가 `run`입니다. 그래서 `-Dset=E=1,run=1`만 주면 되고, 클럭은 DipSwitch mux(-580,-1640)로 고릅니다.
 
 ## 5. 회로 영역
 
@@ -185,7 +183,7 @@ cpu-32.dig
 - bus16-demux.dig x7, bus16x2-demux.dig x5
 ```
 
-- cpu-32에서 쓰는 파일은 50개이고, `cpu-test`는 여기에 debug 모듈 4개와 `ram-test`, `rom-test`를 더 씁니다.
+- cpu-32에서 쓰는 파일은 50개이고, `cpu-test`(지금 `legacy/`)는 여기에 debug 모듈 4개와 `ram-test`, `rom-test`를 더 씁니다.
 - `bus16-demux`의 `bus`, `id-manager`의 `S1_inst`/`S2_inst`/`E_inst` 같은 핀은 3-state In입니다. 넷만 보면 구동원이 PullDown뿐인 것처럼 보이지만, 하위 회로 안의 Driver가 구동합니다(예: `V1_inst`). 넷을 분석할 때 주의해야 합니다.
 
 ## 7. 알려진 동작과 문제
@@ -213,10 +211,7 @@ cpu-32.dig
 
 ## 9. 정리할 때 볼 것
 
-1. **cpu-test와 cpu-32 맞추기**: 시작 순서(§4)와 클럭 mux가 두 파일에서 다릅니다.
-   - 한쪽으로 정한 뒤 `sync-nondebug.sh`의 cpu-32/computer-32 단계를 맞춰야 합니다.
-   - cpu-test 쪽을 고친다면, 핀 `E`/`run`/`boot`를 RS_FF_AS 대신 In으로 바꾸면 sync 결과가 지금의 cpu-32와 같아집니다.
-   - 이 경우 `set_dip.py` 단계는 필요 없어집니다.
+1. ~~cpu-test와 cpu-32 맞추기~~: cpu-32를 원본으로 정했습니다. cpu-test는 `legacy/`로, sync 도구는 삭제(2026-11-19).
 2. **임시 Ground 출력**: `INT_vstr`/`INT_pstr`/`INT_ret`, `MMU_*`, `CSH_*`.
 3. **안 쓰는 입력**: `INT_ker`, `INT_rqac`.
 4. **명령어 latch**: `I_D-_R` enable에 `I_valid`를 넣을지 정합니다(§7).

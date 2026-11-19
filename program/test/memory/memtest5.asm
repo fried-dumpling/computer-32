@@ -2,7 +2,7 @@
 ;  memtest5.asm : does a YOUNGER store block an older load? which address
 ;                bits does the load/store match compare?
 ;
-;  build (in program/) :  dasm test/memtest5.asm -o memtest5.o
+;  build (in program/) :  dasm test/memory/memtest5.asm -o memtest5.o
 ;                         dlnk memtest5.o -o run.txt
 ;
 ;  found in log/M4.csv : the load "ld [0x2D0]" never got its data after the

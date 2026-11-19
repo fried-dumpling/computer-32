@@ -2,7 +2,7 @@
 ;  memtest6.asm : ld X followed by a PUSH whose address is ready late
 ;                (the M4.csv deadlock : ld [0x2D0] then call -> st [0x3D0])
 ;
-;  build (in program/) :  dasm test/memtest6.asm -o memtest6.o
+;  build (in program/) :  dasm test/memory/memtest6.asm -o memtest6.o
 ;                         dlnk memtest6.o -o run.txt
 ;
 ;  memtest5 (ld X ; st X+OFF with the address ready at once) passed for

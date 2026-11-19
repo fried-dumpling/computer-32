@@ -2,7 +2,7 @@
 ;  selfflush.asm : loads that pass an older store to the same address
 ;                  (self flush, document/errors.md #11)
 ;
-;  build (in program/) :  dasm test/selfflush.asm -o selfflush.o
+;  build (in program/) :  dasm test/memory/selfflush.asm -o selfflush.o
 ;                         dlnk selfflush.o -o ../boot/rom.bin
 ;  run    : tools/dsim/runtests.sh selfflush  (compares with the emulator)
 ;

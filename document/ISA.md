@@ -170,8 +170,15 @@
 ### 고정 id (2026-11-18)
 
 - `syscall`은 id 1입니다. `syscall`이 `INT_req`를 올리는 동안 CPU가 `INT_id-_bus` = 1을 냅니다. IPU는 그 칸의 `int_vec`/`int_pri`를 읽어 벡터와 level을 정합니다.
-  - 그래서 커널은 `syscall`을 쓰기 전에 `interst R, 0, vec | 1`, `interst zero.32B, L, pri | 1`(L ≥ 1)을 해 둬야 합니다. `int_pri[1]` = 0이면 IPU가 `INT_out`을 올리지 않아 `syscall`이 진입하지 못합니다.
-- id 0은 panic이나 그와 비슷한 비상용으로 남겨 둡니다(`panic-vec` 대신). 진입 규칙은 미정입니다(아래 "미정").
+  - 그래서 커널은 `syscall`을 쓰기 전에 `interst R, 0, vec | 1`, `interst zero.32B, L, pri | 1`(L ≥ 1)을 해 둬야 합니다.
+- id 0은 panic이나 그와 비슷한 비상용으로 남겨 둡니다(`panic-vec` 대신).
+- **level 0 칸으로 요청하면 id 0으로 진입합니다** (2026-11-19 결정). 예를 들어 `int_pri[1]` = 0인 채로 `syscall`을 하면 다음과 같이 됩니다.
+  - IPU는 그 칸을 쓰지 않고 level 31과 `int_vec[0]`을 냅니다.
+  - CPU는 `int-level` = 0x9f(ker 1, mask 1, lev 0xf)로 `int_vec[0]`에 진입합니다.
+  - 복귀 PC는 보통 `syscall`처럼 `syscall` 다음 word입니다. `iret`하면 그 자리로 돌아갑니다.
+  - 그래서 커널은 `int_vec[0]`을 반드시 설정해야 합니다. 설정하지 않으면 리셋값 0, 즉 주소 0으로 갑니다.
+  - 테스트는 `int_sys0` 21a/21b입니다.
+- id 0으로 들어가는 그 밖의 경로(mask = 1일 때의 동기 예외 등)는 미정입니다(아래 "미정").
 - 외부 IRQ 선이 어떤 id를 쓰는지(테스트는 id 3)와 atomic abort 등 다른 동기 예외의 id는 미정입니다.
 
 ### 권한 검사 (회로 상태, 2026-11-18)
@@ -230,7 +237,7 @@ int-level = int-tmplv        ; level, mask, mode(ker) 복원
 
 - atomic abort 등 동기 예외용 고정 id 대역. `syscall`은 id 1, id 0은 비상용으로 정해짐("고정 id"). `syscall`의 level은 `int_pri[1]`로 커널이 정함. `syscall`의 user 분류는 2026-11-16 시트로 정해짐(1절)
 - `cache`와 `atom`을 user로 옮길지(보류)
-- 동기 예외(fault, `syscall`)는 미룰 수 없습니다. 그래서 mask와 상관없이 처리하는 규칙이 필요합니다. 전에는 mask = 1인 상태에서 생기면 `panic-vec`(double fault)으로 가자는 제안이었는데, 시트에서 `panic-vec`이 없어져 다른 규칙이 필요합니다. id 0을 이 용도로 남겨 두었습니다(2026-11-18). id 0으로 어떻게 진입하는지(mask와 상관없이 강제 진입하는지)가 남았습니다.
+- 동기 예외(fault, `syscall`)는 미룰 수 없습니다. 그래서 mask와 상관없이 처리하는 규칙이 필요합니다. 전에는 mask = 1인 상태에서 생기면 `panic-vec`(double fault)으로 가자는 제안이었는데, 시트에서 `panic-vec`이 없어져 다른 규칙이 필요합니다. id 0을 이 용도로 남겨 두었습니다(2026-11-18). level 0 칸 요청이 id 0(level 31)으로 진입하는 것은 정해졌습니다(2026-11-19, "고정 id"). mask = 1인 상태의 동기 예외가 id 0으로 어떻게 진입하는지(mask와 상관없이 강제 진입하는지)는 남았습니다.
 - `int-prev`(이전 mode/level, 읽기 전용 EXT)는 `int-tmplv`가 같은 역할을 하므로 필요 없어 보입니다. syscall 핸들러는 `int-tmplv`의 `ker`로 호출한 쪽이 user였는지 알 수 있습니다.
 - 문맥 교환: `int-tmplv`를 `stexp`로 쓸 수 있으므로, 돌아갈 태스크의 mode와 level을 바꿀 수 있습니다. 전에는 IPU 스택 때문에 user 태스크끼리만 바꿀 수 있었습니다.
 
