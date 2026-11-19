@@ -29,8 +29,8 @@ def dis(w):
     if op in NONE: return n
     if op in (0x1E,0x1F): return f'{n} {r(a)}'
     # interst R, m, vec|pri | id ; interld R, vec|pri | id  (byte 3 = md (bit 7, 1 = pri) | id (bit 5:0))
-    if op==0x78: return f'{n} {r(a)}, {b}, {"pri" if c&0x80 else "vec"} | {c&0x3F}'
-    if op==0x79: return f'{n} {r(a)}, {"pri" if c&0x80 else "vec"} | {c&0x3F}'
+    if op==0x79: return f'{n} {r(a)}, {b}, {"pri" if c&0x80 else "vec"} | {c&0x3F}'   # interst
+    if op==0x78: return f'{n} {r(a)}, {"pri" if c&0x80 else "vec"} | {c&0x3F}'        # interld
     if op in (0x7A,0x7B): return f'{n} {r(a)}, {EXT.get(c,f"ext{c}")}'
     if op in (0x7C,0x7F): return f'{n} {c}'
     if op==0x7E: return f'{"flush" if c&0x80 else "inval"} {r(a)}, {b-256 if b&0x80 else b}, {c&0x7F:#x}'
