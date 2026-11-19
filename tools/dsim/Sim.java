@@ -17,6 +17,9 @@
 //   stopRestart=1  stop shortly after a restart is detected (default 1)
 //   stall=N        stop when PC, com1 and com2 (stallCols=a,b,...) keep their value N halves (default 2000, 0 = off)
 //   idle=N         stop after N halves without terminal output (default 0 = off)
+//   maxOut=N       stop when the terminal output reaches N characters (default 0 = off; a restart loop)
+//   maxRepeat=N    stop when the last N output characters are all the same (default 0 = off; "AAAA...")
+//   limitSkip=abc  characters maxOut and maxRepeat ignore (e.g. "." for a loop that prints dots until an IRQ)
 //   tap=top;f.dig;f.dig:net=label,net  Probe on every Tunnel net of those circuits (label T_<net> for top,
 //                  f/<net> otherwise), or only on the listed nets (=label renames it, e.g. PCS=PC)
 //   probe=f.dig@x,y=name;...  extra Probe on an unnamed net point (f = top or a subcircuit file)
@@ -27,6 +30,12 @@
 //   hash=file      write one hash of all signals per half cycle ("half hash"), to find where two runs diverge
 //   lines=1       keys is a '|' separated list of lines; one whole line + \n is fed per prompt
 //   rom=file       ROMs that load boot/rom.bin (in romCircuit, default rom-test.dig) load this file instead
+//
+// server mode : java -cp "Digital.jar;build" Sim -server
+//   one run per stdin line: "RUN\t<outfile>\t<k=v>\t...\t--\t<circuit>\t<program>\t<keys>\t<maxHalf>"
+//   (the options above as k=v, then the usual arguments; tab separated). the run's stdout goes to <outfile>,
+//   the answer on stdout is "OK" or "ERR <msg>" (stack trace on stderr). the loaded circuit is kept while the
+//   circuit file, its mtime and dip/tap/probe/pinprobe stay the same; every run builds a new model from it.
 import de.neemann.digital.cli.CircuitLoader;
 import de.neemann.digital.core.*;
 import de.neemann.digital.core.element.Keys;
@@ -39,12 +48,52 @@ import java.io.*;
 import java.util.*;
 
 public class Sim {
-    public static void main(String[] a) throws Exception {
-        String dig = a[0], prog = a[1], keys = a[2].replace("\\n", "\n");
-        boolean lines = System.getProperty("lines") != null;
-        String[] items = keys.isEmpty() ? new String[0] : lines ? keys.split("\\|") : keys.split("");
-        long maxHalf = a.length > 3 ? Long.parseLong(a[3]) : 2_000_000;
+    static final String[] OPTS = {"dip", "set", "at", "csv", "csvFrom", "csvKey", "banner", "stopRestart", "stall",
+            "stallCols", "idle", "maxOut", "maxRepeat", "limitSkip", "tap", "probe", "pinprobe", "cols", "zseed", "delta", "hash", "lines", "rom", "romCircuit"};
 
+    public static void main(String[] a) throws Exception {
+        if (a.length > 0 && a[0].equals("-server")) { server(); return; }
+        run(a, load(a[0]));
+    }
+
+    // -server : one run per stdin line (see the header), answer "OK" / "ERR <msg>" on stdout
+    static void server() throws IOException {
+        PrintStream reply = System.out;
+        BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+        String key = null;
+        CircuitLoader cl = null;
+        for (String line; (line = in.readLine()) != null; ) {
+            String[] f = line.split("\t", -1);
+            if (!f[0].equals("RUN") || f.length < 3) { reply.println("ERR bad request"); reply.flush(); continue; }
+            for (String o : OPTS) System.clearProperty(o);
+            int i = 2;
+            for (; i < f.length && !f[i].equals("--"); i++) {
+                int e = f[i].indexOf('=');
+                System.setProperty(f[i].substring(0, e), f[i].substring(e + 1));
+            }
+            String[] args = Arrays.copyOfRange(f, Math.min(i + 1, f.length), f.length);
+            try (PrintStream out = new PrintStream(new BufferedOutputStream(new FileOutputStream(f[1])), false)) {
+                System.setOut(out);
+                File dig = new File(args[0]);
+                StringBuilder k = new StringBuilder(dig.getAbsolutePath()).append('|').append(dig.lastModified());
+                for (String o : new String[]{"dip", "tap", "probe", "pinprobe"}) k.append('|').append(System.getProperty(o));
+                if (!k.toString().equals(key)) { key = null; cl = null; ROM_ORIG.clear(); cl = load(args[0]); key = k.toString(); }
+                run(args, cl);
+                out.flush();
+                System.setOut(reply);
+                reply.println("OK");
+            } catch (Throwable t) {
+                System.setOut(reply);
+                t.printStackTrace();
+                reply.println("ERR " + String.valueOf(t).replace('\n', ' ').replace('\r', ' '));
+                key = null;     // a failed load may have left the circuit half changed
+            }
+            reply.flush();
+        }
+    }
+
+    // load the circuit and apply the options that change it (dip, tap, probe, pinprobe)
+    static CircuitLoader load(String dig) throws Exception {
         CircuitLoader cl = new CircuitLoader(new File(dig));
         Set<String> dips = new LinkedHashSet<>(Arrays.asList(System.getProperty("dip", "-560,-1640").split(";")));
         dips.remove("");
@@ -140,8 +189,18 @@ public class Sim {
                         .setShapeFactory(cl.getShapeFactory()));
             }
 
+        return cl;
+    }
+
+    static void run(String[] a, CircuitLoader cl) throws Exception {
+        String prog = a[1], keys = a[2].replace("\\n", "\n");
+        boolean lines = System.getProperty("lines") != null;
+        String[] items = keys.isEmpty() ? new String[0] : lines ? keys.split("\\|") : keys.split("");
+        long maxHalf = a.length > 3 ? Long.parseLong(a[3]) : 2_000_000;
+
         // rom=file  : ROMs whose data file is boot/rom.bin read this file instead (romCircuit=rom-test.dig),
-        // so runs with different programs can go at the same time
+        // so runs with different programs can go at the same time. ROM_ORIG keeps each ROM's own file, so a
+        // later run on the same loaded circuit (-server) still finds it
         String rom = System.getProperty("rom");
         if (rom != null) {
             File romFile = new File(rom).getAbsoluteFile();
@@ -150,7 +209,7 @@ public class Sim {
                     cl.getLibrary().getElementType(System.getProperty("romCircuit", "rom-test.dig"))).getCircuit();
             int n = 0;
             for (VisualElement ve : ci.getElements()) {
-                File f = ve.getElementAttributes().get(Keys.LAST_DATA_FILE);
+                File f = ROM_ORIG.computeIfAbsent(ve, v -> v.getElementAttributes().get(Keys.LAST_DATA_FILE));
                 if (f != null && f.getName().equals("rom.bin")) {
                     ve.getElementAttributes().set(Keys.LAST_DATA_FILE, romFile);
                     n++;
@@ -159,7 +218,9 @@ public class Sim {
             if (n == 0) throw new IllegalArgumentException("no ROM with rom.bin in " + System.getProperty("romCircuit", "rom-test.dig"));
         }
 
+        long tm0 = System.nanoTime();
         Model m = cl.createModel();
+        long tm1 = System.nanoTime();
         if (!prog.equals("-"))      // "-" : ROMs load their own files (autoReload)
             new ProgramMemoryLoader(new File(prog), true).preInit(m);
 
@@ -186,6 +247,7 @@ public class Sim {
 
         String zseed = System.getProperty("zseed");
         if (zseed != null) System.err.println("zseed: " + seedHighZ(m, zseed) + " values");
+        long tm2 = System.nanoTime();
         m.init();
         for (String kv : System.getProperty("set", "E=1,run=1").split(",")) {
             if (kv.isEmpty()) continue;     // set= : no top-level inputs (e.g. E/run are DipSwitches)
@@ -228,6 +290,11 @@ public class Sim {
         // (halt, deadlock); idle : stop after this many halves without terminal output (e.g. jmp $ at the end)
         long stall = Long.parseLong(System.getProperty("stall", "2000"));
         long idle = Long.parseLong(System.getProperty("idle", "0"));
+        int maxOut = Integer.parseInt(System.getProperty("maxOut", "0"));
+        int maxRepeat = Integer.parseInt(System.getProperty("maxRepeat", "0"));
+        String limitSkip = System.getProperty("limitSkip", "");
+        int repeat = 0, counted = 0;
+        char lastC = 0;
         List<ObservableValue> watch = new ArrayList<>();
         Set<String> watchNames = new LinkedHashSet<>(Arrays.asList(System.getProperty("stallCols", "PC,com1,com2").split(",")));
         for (Signal s : m.getSignals()) if (watchNames.contains(s.getName())) watch.add(s.getValue());
@@ -288,7 +355,18 @@ public class Sim {
                 System.out.print("\n[RESTART at half " + h + "]\n");
             }
             if (stopRestart && restartAt >= 0 && h > restartAt + 200) { stop = " restart"; break; }
-            if (out.length() != outLen) { outLen = out.length(); lastOut = h; }
+            if (out.length() != outLen) {
+                for (int i = outLen; i < out.length(); i++) {
+                    char ch = out.charAt(i);
+                    if (limitSkip.indexOf(ch) >= 0) continue;
+                    counted++;
+                    repeat = ch == lastC ? repeat + 1 : 1;
+                    lastC = ch;
+                }
+                outLen = out.length(); lastOut = h;
+                if (maxOut > 0 && counted >= maxOut) { stop = " maxOut " + maxOut; break; }
+                if (maxRepeat > 0 && repeat >= maxRepeat) { stop = " maxRepeat " + maxRepeat; break; }
+            }
             if (idle > 0 && h - lastOut >= idle) { stop = " idle " + idle; break; }
             if (stall > 0 && !watch.isEmpty()) {
                 long x = 0xcbf29ce484222325L;
@@ -298,6 +376,8 @@ public class Sim {
                 else if (h - lastChange >= stall) { stop = " stall " + stall; break; }
             }
         }
+        System.err.printf("[time model=%.2fs seed=%.2fs sim=%.2fs halves=%d]%n", (tm1 - tm0) / 1e9,
+                (tm2 - tm1) / 1e9, (System.currentTimeMillis() - t0) / 1e3, h);
         if (csv != null) csv.close();
         if (hash != null) hash.close();
         if (delta != null) delta.close();
@@ -305,6 +385,8 @@ public class Sim {
                 + (restartAt >= 0 ? " RESTART@" + restartAt : "")
                 + (pcSig != null ? " PC=" + fmt(pcSig) : "") + (stop.isEmpty() ? "" : " stop:" + stop) + "]");
     }
+
+    static final Map<VisualElement, File> ROM_ORIG = new IdentityHashMap<>();
 
     static boolean endsWith(StringBuilder s, String suffix) {
         int n = s.length() - suffix.length();

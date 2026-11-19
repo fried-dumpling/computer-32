@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """Interrupt regression tests on components/computer-32-test.dig (CPU + IPU).
 
-  python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [group...]
+  python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [-snap] [-full] [-nolimit] [-stall N]
+                               [-oneshot] [group...]
   group : ext prec sled misp flc iret iret2 sys sysprev sysirq nest wpsys sysmem user sys0 tbl
           (default all). Output: program/build/dsim/int/
 
@@ -21,13 +22,17 @@ import shutil
 import statistics
 import subprocess
 import sys
+import threading
+import atexit
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PROG = ROOT / "program"
-OUT = PROG / "build" / "dsim" / "int"
+# INTTEST_OUT: another folder next to int/ (same depth: the variant wrappers include ../../../test/...),
+# so a second run does not clash with one in int/
+OUT = PROG / "build" / "dsim" / os.environ.get("INTTEST_OUT", "int")
 DSIM = ROOT / "tools" / "dsim"
 SNAP = OUT / "components"
 CIRCUIT = "computer-32-test.dig"
@@ -38,6 +43,13 @@ IRQ2 = 4                    # int.hsm IRQ2 (nested tests)
 PULSE = 2                   # halves I-in bit IRQ stays high (the IPU latches a 1-half pulse)
 ISTACK, SENT = 0x2000, 0x5A5A5A5A
 MAX_HALF = 400000
+STALL = 2000                # -Dstall: PC unchanged this many halves = stop (the programs end in jmp $). the
+                            # longest PC gap in a normal run was 36 halves (11-19); it was 6000 before
+# early stops (-nolimit turns them off). normal outputs are at most ~210 characters and print "L" once
+# (2026-11-19, ~2000 runs); a restart prints "L" again (banner), a loop on one handler repeats one character
+LIMITS = True
+MAX_OUT, MAX_REPEAT = 1000, 100     # dots are not counted: the loops print them until an IRQ comes
+NO_BANNER = {"ext", "sysprev", "sys0", "tbl", "wpsys"}     # these do not start with "L"
 # boot sequencer start (S/R), then the boot ROM copies the -Drom image to RAM
 START = "6:R=0;10:S=1;16:S=0"
 TAP = "cpu-32.dig:PCS=PC,com1,com2,INT_req=INT_req,Fl_INT=Fl_INT,Fl_JPU=Fl_JPU"
@@ -154,19 +166,81 @@ def sim(name, seed=1, h=None, cols=None, tag=None, pulses=None):
         pulses = [] if h is None else [(h, IRQ)]
     tag = tag or f"{name}-z{seed}-" + ("none" if not pulses else "-".join(f"{p}b{b}" for p, b in pulses))
     at = at_string(pulses)
-    opts = ["-Ddip=", f"-Dzseed={seed}", f"-Drom={OUT / f'int_{name}.bin'}", "-Dstall=6000", "-Didle=20000",
+    opts = ["-Ddip=", f"-Dzseed={seed}", f"-Drom={OUT / f'int_{name}.bin'}", f"-Dstall={STALL}", "-Didle=20000",
             "-Dset=S=0,R=1,B_used=0,I-in=0", f"-Dat={at}", f"-Dtap={TAP}"]
+    if LIMITS:      # a restart loop or a handler entered over and over: stop early instead of at MAX_HALF
+        opts += [f"-DmaxOut={MAX_OUT}", f"-DmaxRepeat={MAX_REPEAT}", "-DlimitSkip=."]
+        if name.split("_")[0] not in NO_BANNER:
+            opts += ["-Dbanner=L"]
     delta = None
     if cols:
         delta = OUT / f"{tag}.delta"
         opts += [f"-Dcols={','.join(cols)}", f"-Ddelta={delta}"]
-    cmd = ["java", *opts, "-cp", f"{JAR};{DSIM / 'build'}", "Sim", str(SNAP / CIRCUIT), "-", "", str(MAX_HALF)]
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=DSIM)
-    if "[half=" not in p.stdout:
-        raise RuntimeError(f"Sim failed for {tag}:\n{p.stderr[-2000:]}")
-    (OUT / f"{tag}.sim").write_text(p.stdout)
-    text, tail = p.stdout.rsplit("[half=", 1)
-    return Run(name, seed, h, text.replace("\n", ""), tail, delta, tag)
+    args = [str(SNAP / CIRCUIT), "-", "", str(MAX_HALF)]
+    simfile = OUT / f"{tag}.sim"
+    if ONESHOT:
+        p = subprocess.run(["java", *opts, "-cp", CP, "Sim", *args], capture_output=True, text=True,
+                           timeout=900, cwd=DSIM)
+        stdout, err = p.stdout, p.stderr[-2000:]
+        simfile.write_text(stdout)
+    else:
+        err = worker().run(simfile, opts, args)
+        stdout = simfile.read_text() if simfile.exists() else ""
+    if "[half=" not in stdout:
+        raise RuntimeError(f"Sim failed for {tag}:\n{err}")
+    text, tail = stdout.rsplit("[half=", 1)
+    text = re.sub(r"\[RESTART at half \d+\]", "", text.replace("\n", ""))   # Sim's note, not program output
+    return Run(name, seed, h, text, tail, delta, tag)
+
+
+CP = f"{JAR};{DSIM / 'build'}"
+ONESHOT = False             # -oneshot : one java process per run (the old way)
+_local = threading.local()
+_workers = []
+
+
+class Worker:
+    """A resident 'Sim -server' JVM: the circuit is loaded once, every run builds a new model."""
+
+    def __init__(self):
+        self.log = open(OUT / f"worker-{len(_workers)}.log", "w")
+        self.p = subprocess.Popen(["java", "-cp", CP, "Sim", "-server"], cwd=DSIM, text=True,
+                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.log)
+
+    def run(self, simfile, opts, args):
+        """'' when the run finished, else the error"""
+        fields = ["RUN", str(simfile)] + [o[2:] for o in opts] + ["--"] + args
+        assert not any("\t" in f or "\n" in f for f in fields)
+        if simfile.exists():
+            simfile.unlink()
+        self.p.stdin.write("\t".join(fields) + "\n")
+        self.p.stdin.flush()
+        ans = self.p.stdout.readline().strip()
+        if not ans:
+            return f"worker exited ({self.p.poll()}), see {self.log.name}"
+        return "" if ans == "OK" else ans
+
+    def close(self):
+        try:
+            self.p.stdin.close()
+            self.p.wait(30)
+        except Exception:
+            self.p.kill()
+        self.log.close()
+
+
+def worker():
+    w = getattr(_local, "w", None)
+    if w is None or w.p.poll() is not None:
+        w = _local.w = Worker()
+        _workers.append(w)
+    return w
+
+
+@atexit.register
+def _close_workers():
+    for w in _workers:
+        w.close()
 
 
 def read_delta(path):
@@ -197,6 +271,26 @@ def high_spans(changes, end=10 ** 9):
 
 def overlap(a, b):
     return [(max(x[0], y[0]), min(x[1], y[1])) for x in a for y in b if max(x[0], y[0]) < min(x[1], y[1])]
+
+
+FULL = False                # -full: every even half for every seed instead of sweep()
+SPARSE = 6                  # step outside the dense windows; 6 is not a divisor of the 16-half loop periods,
+                            # so the samples still hit every even phase
+
+
+def sweep(lo, hi, dense, first, w=24, step=None):
+    """Pulse halves in [lo, hi). Every even half within w of an event in dense; elsewhere every step
+    (default SPARSE) halves, and only for the first seed (first=True). With FULL, every even half.
+    11-19 baseline (1500 sweep runs, seeds 1-3): no half gave a different output for another seed."""
+    lo &= ~1
+    if FULL:
+        return list(range(lo, hi, 2))
+    out = set()
+    for e in dense:
+        out.update(h for h in range((e - w) & ~1, e + w + 1, 2) if lo <= h < hi)
+    if first:
+        out.update(range(lo, hi, step or SPARSE))
+    return sorted(out)
 
 
 def calibrate(name, seed):
@@ -537,7 +631,7 @@ def t_sysirq(rep, pool, a):
         lo, hi = (hits[0] - 40) & ~1, rise[0] + 200
         print(f"sysirq z{z}: sc={sc:#x} INT_req at {rise[0]}, H {lo}..{hi}", flush=True)
         info[z] = (sc, main_, after, r)
-        jobs += [(z, h) for h in range(lo, hi, 2)]
+        jobs += [(z, h) for h in sweep(lo, hi, [lo + 24, rise[0] - 20, rise[0] + 60], z == a.seeds[0], 40)]
     runs = list(pool.map(lambda j: sim("sysirq", j[0], j[1]), jobs))
     cal = [info[z][3] for z in a.seeds]
     # 14b: syscall level, from the runs without a pulse
@@ -595,11 +689,12 @@ def t_nest(rep, pool, a):
         entry, hc = first_hit(dl, 8, h1), None
         if entry is not None:
             hc = first_hit(dl, close, entry)
+            ho = first_hit(dl, open_, entry) or entry
         if entry is None or hc is None:
             raise RuntimeError(f"nest z{z}: the low IRQ alone did not reach close ({lo.text!r})")
         info[z] = (loop, open_, close, main_)
         print(f"nest z{z}: low at {h1}, handler {entry}..close {hc}", flush=True)
-        jobs += [(z, h1, h) for h in range(entry & ~1, hc + 40, 2)]
+        jobs += [(z, h1, h) for h in sweep(entry, hc + 40, [entry, ho, hc, hc + 16], z == a.seeds[0])]
     runs = list(pool.map(lambda j: sim("nest", j[0], pulses=[(j[1], IRQ), (j[2], IRQ2)],
                                        tag=f"nest-z{j[0]}-{j[1]}-{j[2]}"), jobs))
     final = re.compile(r"E" + HEX * 3 + r"G")
@@ -663,7 +758,7 @@ def t_iret2(rep, pool, a):
             raise RuntimeError(f"iret2 z{z}: one IRQ did not reach iret ({one.text!r})")
         info[z] = main_
         print(f"iret2 z{z}: first IRQ at {h1}, entry {entry}, iret fetched {hi}", flush=True)
-        jobs += [(z, h1, h) for h in range(entry & ~1, hi + 100, 2)]
+        jobs += [(z, h1, h) for h in sweep(entry, hi + 100, [hi], z == a.seeds[0], 24, 2)]
     runs = list(pool.map(lambda j: sim("iret2", j[0], pulses=[(j[1], IRQ), (j[2], IRQ)],
                                        tag=f"iret2-z{j[0]}-{j[1]}-{j[2]}"), jobs))
     final = re.compile(r"E" + HEX * 3 + r"G")
@@ -758,18 +853,45 @@ TESTS = {"ext": t_ext, "prec": t_prec, "sled": t_sled, "misp": t_misp, "flc": t_
          "wpsys": t_wpsys, "sysmem": t_sysmem, "user": t_user, "sys0": t_sys0, "tbl": t_tbl}
 
 
+def lock_out():
+    """Two runs in OUT clash (shared .sim files, -snap copy), so refuse to start while another one holds it."""
+    lock = OUT / "inttest.lock"
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        pid = lock.read_text().strip() or "?"
+        alive = pid.isdigit() and subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True,
+                                                 text=True).stdout.count(pid) > 0
+        if alive:
+            raise SystemExit(f"another inttest.py (pid {pid}) is using {OUT}; wait for it to end")
+        lock.unlink()           # left by a run that was killed
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    os.write(fd, str(os.getpid()).encode())
+    os.close(fd)
+    atexit.register(lambda: lock.unlink(missing_ok=True))
+
+
 def main():
+    global ONESHOT, LIMITS, STALL, FULL
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-j", type=int, default=9)
     ap.add_argument("-seeds", default="1,2,3", help="zseed list for the prec sweep (others use the first)")
     ap.add_argument("-nobuild", action="store_true")
     ap.add_argument("-snap", action="store_true",
                     help="reuse the circuit copy in program/build/dsim/int/components instead of copying components/ again")
+    ap.add_argument("-nolimit", action="store_true", help="no early stop on restart / long or repeated output")
+    ap.add_argument("-full", action="store_true",
+                    help="sysirq/nest/iret2: every even half for every seed (default: dense only near the events)")
+    ap.add_argument("-stall", type=int, default=STALL, help=f"halves without progress that end a run (default {STALL})")
+    ap.add_argument("-oneshot", action="store_true",
+                    help="start java for every run instead of keeping one resident Sim -server per thread")
     ap.add_argument("groups", nargs="*", choices=[[], *PROGRAMS], default=[])
     a = ap.parse_args()
+    ONESHOT, LIMITS, STALL, FULL = a.oneshot, not a.nolimit, a.stall, a.full
     a.seeds = [int(s) for s in a.seeds.split(",")]
     groups = a.groups or PROGRAMS
     OUT.mkdir(parents=True, exist_ok=True)
+    lock_out()
     if not a.nobuild:
         for g in groups:
             build(g)

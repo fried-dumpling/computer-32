@@ -45,6 +45,17 @@ java [옵션] -cp "$J;build" Sim <circuit.dig> <program.bin> <keys> [maxHalfCycl
 java -Dtap=top -Dcsv=t3.csv -DcsvKey=3 -cp "$J;build" Sim "../../components/cpu-test.dig" - "123"
 ```
 
+### 상주 모드 (`-server`)
+
+```
+java -cp "$J;build" Sim -server
+```
+
+- JVM을 띄운 채로 stdin 한 줄마다 실행을 한 번 합니다: `RUN<TAB>출력파일<TAB>옵션=값<TAB>...<TAB>--<TAB>회로<TAB>프로그램<TAB>키<TAB>maxHalf`(옵션은 위 `-D` 옵션에서 `-D`를 뺀 것). 그 실행의 stdout은 출력 파일로 가고, stdout에는 `OK`나 `ERR <메시지>`를 답합니다(stack trace는 stderr).
+- 불러온 회로는 회로 파일, 그 mtime, `dip`/`tap`/`probe`/`pinprobe`가 같으면 재사용합니다. 실행마다 새 model을 만들므로 이전 실행의 상태는 남지 않습니다(같은 `zseed`면 한 번씩 띄운 실행과 출력이 같음, 2026-11-19 확인).
+- `maxOut=N`, `maxRepeat=N`, `limitSkip=문자들`: 출력이 N자가 되거나 같은 글자가 N번 이어지면 멈춥니다(`limitSkip`의 글자는 세지 않음). 다시 시작하거나 한 핸들러를 계속 도는 실행을 일찍 끝내는 용도입니다.
+- 실행마다 stderr에 `[time model=.. seed=.. sim=.. halves=..]`를 씁니다. `computer-32-test.dig`에서 JVM 시작 + 회로 로딩이 1회 약 3-5초, 이후 model 생성은 0.1초 정도입니다.
+
 ## runtests.sh : 회귀 테스트
 
 ```
@@ -63,12 +74,18 @@ bash tools/dsim/runtests.sh [-j N] [-nobuild] [-c 회로.dig] [이름...]
 ## inttest.py : 인터럽트 회귀 테스트
 
 ```
-python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [그룹...]
+python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [-snap] [-full] [-nolimit] [-stall N] [-oneshot] [그룹...]
 ```
 
 - `computer-32-test.dig`(CPU + IPU)에서 `program/test/int_*.asm`을 돌려 `document/ISA.md` 2.2절로 계산한 값과 비교합니다(에뮬레이터에 인터럽트가 없음). 항목, 방법, 최근 결과는 `program/document/test.md`에 있습니다.
 - 인터럽트는 top-level In `I-in`의 bit `IRQ`(3)에 넣는 2 half 펄스입니다(`-Dat=H:I-in=8;H+2:I-in=0`). 시작은 boot-sequencer S/R입니다.
 - 지금 실패가 예상되는 항목은 스크립트의 `XFAIL`에 이유와 함께 있습니다.
+- 스레드마다 `Sim -server`를 하나 띄워 두고 실행을 보냅니다(worker 로그 `program/build/dsim/int/worker-N.log`). `-oneshot`은 예전처럼 실행마다 java를 새로 띄웁니다. `iret2` + `prec`(231회, `-j 9`) 기준 255초에서 59초로 줄었고 결과는 같았습니다(2026-11-19).
+- 같은 `program/build/dsim/int`에서 두 개를 동시에 돌리면 서로 `.sim` 파일과 회로 복사본을 덮어쓰므로, 시작할 때 `inttest.lock`(pid)을 만들고 다른 실행이 살아 있으면 멈춥니다. 강제로 끝난 실행이 남긴 lock은 pid가 없으면 지웁니다. 다른 폴더에서 돌리려면 `INTTEST_OUT=int-x`(`program/build/dsim/` 아래 이름)를 줍니다.
+- 기본 실행은 2026-11-19부터 다음처럼 줄였습니다. 같은 회로 복사본에서 예전 방식(`-full -nolimit -stall 6000`, 약 1,650회, `-j 6` 1770초)과 비교해 45개 항목의 결과가 모두 같았고 1,079회에 231초가 걸렸습니다(`sysirq` 630→377, `nest` 492→247, `iret2` 189→115).
+  - `sysirq`, `nest`, `iret2`: 이벤트 근처만 2 half마다, 나머지는 6 half마다(16 half 루프의 모든 위상에 걸림) 첫 seed에서만 펄스를 넣습니다. 이벤트는 `sysirq`가 루프 시작, INT_req 상승, 그 뒤 60 half(±40), `nest`가 진입, `open`, `close`, `close`+16(±24), `iret2`가 iret fetch(±24)이고, `iret2`는 첫 seed에서 범위 전체를 돕니다. 비교 실행 1,500회에서 seed가 다르다고 결과가 달라진 펄스 위치는 없었습니다. `-full`은 예전처럼 모든 위치, 모든 seed입니다.
+  - 조기 종료(`-nolimit`로 끔): 다시 시작하는 프로그램(`L`이 두 번, Sim `banner`), `.`을 뺀 출력이 1000자(`maxOut`), 같은 글자 100번(`maxRepeat`, `limitSkip=.`). 정상 출력은 210자 이하이고 `L`을 한 번만 찍습니다. 전에는 이런 실행이 400000 half(약 20초)까지 돌았습니다.
+  - `-stall` 기본 2000(전에는 6000). 정상 실행에서 PC가 가장 오래 그대로였던 구간은 36 half입니다.
 
 ## NetQuery : 넷 조회
 
