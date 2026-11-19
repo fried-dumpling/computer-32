@@ -130,4 +130,5 @@ tools/
 - 사용자가 `assembler.hpp`/`linker.hpp`를 대화 밖에서 동시에 고치는 경우가 많았습니다. 편집 직전에 다시 읽습니다. 사용자가 써 둔 스켈레톤(필드·함수 이름)은 그대로 따르고, 타입·이름을 바꿔야 하면 먼저 말합니다.
 - 백슬래시가 든 스크립트는 bash heredoc/sed 대신 파일로 만들어 실행합니다(이스케이프가 한 단계 사라진 적이 있음).
 - 빌드와 회귀 확인은 묻지 않고 해도 됩니다. 배포(`bin/` 교체)와 커밋은 요청이 있을 때만.
+- 브랜치(2026-11-19): 도구(dsim/dasm/dlnk/hexdump/emu) 수정이 오래 걸리거나 큰 작업일 때, 회로와 상관없는 최적화·정리일 때, 회로 영향이 적어 다른 브랜치에도 merge할 때는 `tools` 브랜치에서 작업하고 필요한 브랜치(`interrupt`, `dev` 등)로 merge합니다. 지금 고치는 회로에 딸린 사소한 수정(probe, 넷 이름, 오늘 회로 수정을 시험하는 데 필요한 고침)만 현재 브랜치에서 합니다. worktree가 필요하면 상위 폴더의 `computer-32-2nd`, `computer-32-3rd`(빈 폴더 = 비어 있는 자리)를 씁니다. 다른 곳에 worktree를 만들지 않습니다. 자세한 건 CLAUDE.md "Rebuilding Tools".
 - 문법·인코딩·옵션을 바꾸면 `document/SYNTAX.md`도 같이 고칩니다. ISA 시트(`document/ISA-32.xlsx` → `ISA.md`)가 opcode·필드의 기준입니다.

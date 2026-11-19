@@ -6,7 +6,7 @@
 // keys     : one key is fed each time the program prints "> " (\n allowed)
 // options (-Dname=value, before Sim) :
 //   dip=x,y;f.dig@x,y  DipSwitches turned on before the model is built: x,y in the top circuit,
-//                  f.dig@x,y in subcircuit f (default -560,-1640 = cpu-test clock mux select -> Clock;
+//                  f.dig@x,y in subcircuit f (default -560,-1640 = clock mux select of the old cpu-test.dig;
 //                  "dip=" turns none on). A position without a DipSwitch is an error.
 //   set=E=1,run=1  top-level inputs ("set=" : none)
 //   at=H:k=v,...;H:k=v  change top-level inputs at half cycle H (e.g. at=0:E=0,boot=1;10:E=1,boot=0)

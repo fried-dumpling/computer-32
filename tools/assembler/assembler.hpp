@@ -59,7 +59,7 @@ namespace assembler {
 			flush, inval,
 			atom,
 
-			cpuid, panicvec, istack, intlevel, pagebase, plimit,
+			cpuid, istack, intlevel, inttmplv, pagebase, plimit,
 			enable, disable,
 			L1D, L1I, TLB, L2, ALL,
 			vec, pri,
@@ -186,9 +186,9 @@ namespace assembler {
 				{ "atom", TokenType::atom },
 
 				{ "istack", TokenType::istack },
-				{ "panicvec", TokenType::panicvec },
 				{ "cpuid", TokenType::cpuid },
 				{ "intlevel", TokenType::intlevel },
+				{ "inttmplv", TokenType::inttmplv },
 				{ "pagebase", TokenType::pagebase },
 				{ "pbase", TokenType::pagebase },
 				{ "plimit", TokenType::plimit },
@@ -362,9 +362,9 @@ namespace assembler {
 			{ TokenType::atom, "atom" },
 
 			{ TokenType::istack, "istack" },
-			{ TokenType::panicvec, "panicvec" },
 			{ TokenType::cpuid, "cpuid" },
 			{ TokenType::intlevel, "intlevel" },
+			{ TokenType::inttmplv, "inttmplv" },
 			{ TokenType::pagebase, "pagebase" },
 			{ TokenType::plimit, "plimit" },
 			{ TokenType::enable, "enable" },
@@ -1505,9 +1505,9 @@ namespace assembler {
 			{ { NT::intruction, AT::instruction_CACHE, -1}, { { TT::inval, true, false }, { NT::reg, true, false }, { TT::comma, false, false }, { NT::immidate8, true, false }, { TT::comma, false, false }, { NT::cacheid, true, false } } },
 
 			{ { NT::reg_ex, AT::reg_ex, -1}, { { TT::istack, true, false } } },
-			{ { NT::reg_ex, AT::reg_ex, -1}, { { TT::panicvec, true, false } } },
 			{ { NT::reg_ex, AT::reg_ex, -1}, { { TT::cpuid, true, false } } },
 			{ { NT::reg_ex, AT::reg_ex, -1}, { { TT::intlevel, true, false } } },
+			{ { NT::reg_ex, AT::reg_ex, -1}, { { TT::inttmplv, true, false } } },
 			{ { NT::reg_ex, AT::reg_ex, -1}, { { TT::pagebase, true, false } } },
 			{ { NT::reg_ex, AT::reg_ex, -1}, { { TT::plimit, true, false } } },
 
@@ -2099,9 +2099,9 @@ namespace assembler {
 
 			std::map<TokenType, u32> regExBase = {
 				{ TokenType::cpuid, 0x0 },
-				{ TokenType::panicvec, 0x1 },
-				{ TokenType::istack, 0x2 },
-				{ TokenType::intlevel, 0x3 },
+				{ TokenType::istack, 0x1 },
+				{ TokenType::intlevel, 0x2 },
+				{ TokenType::inttmplv, 0x3 },
 				{ TokenType::pagebase, 0x4 },
 				{ TokenType::plimit, 0x5 }
 			};
@@ -3059,7 +3059,7 @@ namespace assembler {
 		}
 	}
 
-	const unsigned long long version = 416;
+	const unsigned long long version = 417;
 
 	namespace cache {
 		using u64 = unsigned __int64;

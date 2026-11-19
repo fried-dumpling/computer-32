@@ -11,7 +11,7 @@ with the emulator. An item in XFAIL is expected to fail today: it prints XFAIL w
 fails and XPASS once it passes. The exit code is 1 on FAIL or XPASS (then remove the entry).
 
 An interrupt is a 2-half pulse on IPU line IRQ (top-level In "I-in"). The programs set
-int_vec[IRQ] = handler and int_pri[IRQ] = 1 with INTVEC() (program/test/int.hsm).
+int_vec[IRQ] = handler and int_pri[IRQ] = 1 with INTVEC() (program/test/interrupt/int.hsm).
 The pulse half H is never fixed: each program first runs without a pulse, and H is taken
 from the half where PC reaches the program's loop (it prints the address as L<hex>).
 """
@@ -30,7 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PROG = ROOT / "program"
-# INTTEST_OUT: another folder next to int/ (same depth: the variant wrappers include ../../../test/...),
+# INTTEST_OUT: another folder next to int/ (same depth: the variant wrappers include ../../../test/interrupt/...),
 # so a second run does not clash with one in int/
 OUT = PROG / "build" / "dsim" / os.environ.get("INTTEST_OUT", "int")
 DSIM = ROOT / "tools" / "dsim"
@@ -52,7 +52,7 @@ MAX_OUT, MAX_REPEAT = 1000, 100     # dots are not counted: the loops print them
 NO_BANNER = {"ext", "sysprev", "sys0", "tbl", "wpsys"}     # these do not start with "L"
 # boot sequencer start (S/R), then the boot ROM copies the -Drom image to RAM
 START = "6:R=0;10:S=1;16:S=0"
-TAP = "cpu-32.dig:PCS=PC,com1,com2,INT_req=INT_req,Fl_INT=Fl_INT,Fl_JPU=Fl_JPU"
+TAP = "cpu-32.dig:PCS=PC,com1,com2,INT_req=INT_req"
 
 PROGRAMS = ["ext", "prec", "sled", "misp", "flc", "iret", "iret2", "iretpre", "sys", "sysprev", "sysirq",
             "nest", "wpsys", "sysmem", "user", "sys0", "tbl"]
@@ -66,29 +66,9 @@ IRETPRE = ["st", "nop", "set", "4 nops", "ld", "ld ld (int_nest)", "ld ld", "st 
 
 # item -> why it fails today. Remove the entry when the item passes.
 XFAIL = {
-    "14a": "errors.md #25. 11-18: the word after syscall is lost when the syscall's clr comes after trap-wait: "
-           "FT is already stopped, the hold (D_FF@-200,1220 D = clr & !wait) forces one IAR step, decode "
-           "cannot take it and the restart overwrites it; int-pc then latches PCS_DC = next + 4",
-    "14b": "errors.md #27. 11-18: int-level in the syscall handler is 0x10 (level 0), int_pri[1] = 1",
-    "14d": "errors.md #26. 11-18: istack +-4 and stack share addsub-4c32@2700,-180; when an iret's istack +4 meets "
-           "a Fl_JPU clr, Mux@2620,-200 (sel = clr) takes CT_SC-_FD and istack = stack = 0x3004",
-    "15b": "errors.md #29. 11-18: an IRQ pulse 2-14 halves before the syscall's INT_req is never taken (only the "
-           "syscall handler runs), all seeds",
-    "15c": "errors.md #25. 11-18: IRQ entered at the syscall (R = sc), then the syscall's R = next + 4 (same as 14a)",
-    "16b": "11-18 (cpu-32 13:07): #28 (int-tmplv not written on entry) no longer shows; 18 runs around the remask "
-           "fail: a high pulse a few halves before 'close' (stexp 0x91) is entered 1-3 words after it (R = "
-           "0x1dc..0x1e4). circuit or test window: not decided yet",
-    "19a": "errors.md #30. 11-18: the 2nd syscall's iret jumps to the 1st return PC (0x320) and then stalls",
-    "19b": "errors.md #30. same stall as 19a",
-    "19c": "errors.md #30. same stall as 19a",
     "20b": "errors.md #27. 11-18: entry does not set ker (int-level 0x10 in the handler)",
     "20c": "privilege check not wired: ISS_kernel has no consumer, DP_ker is a PullDown "
            "(the trap id is also not decided; the test assumes id 0)",
-    "21b": "11-18: syscall with a level 0 entry stalls (nothing decided for this case)",
-    "22": "errors.md #31. 11-18: iret never returns after 'ld ; ld' (C5, C6, syscall entry): TRAP_IRET's drivers "
-          "(Driver@340,4080..4560) drive the dispatch control bus while a younger instruction dispatches in the "
-          "same cycle (Driver@1540,-1820/-1900 on CT_FU-_WR/INST), then everything freezes. C4 passes because "
-          "halt-frontend = 1 in that cycle",
 }
 
 
@@ -101,11 +81,11 @@ def tool(*cmd):
 def build(name):
     obj = OUT / f"int_{name}.o"
     image = OUT / f"int_{name}.bin"
-    tool(ROOT / "bin" / "dasm.exe", PROG / "test" / f"int_{name}.asm", "-o", obj)
+    tool(ROOT / "bin" / "dasm.exe", PROG / "test" / "interrupt" / f"int_{name}.asm", "-o", obj)
     tool(ROOT / "bin" / "dlnk.exe", obj, "-o", image)
     for tag, define in VARIANTS.get(name, {}).items():
         v = f"int_{name}_{tag}"
-        (OUT / f"{v}.asm").write_text(f"#define {define}\n#include<../../../test/int_{name}.asm>\n")
+        (OUT / f"{v}.asm").write_text(f"#define {define}\n#include<../../../test/interrupt/int_{name}.asm>\n")
         tool(ROOT / "bin" / "dasm.exe", OUT / f"{v}.asm", "-o", OUT / f"{v}.o")
         tool(ROOT / "bin" / "dlnk.exe", OUT / f"{v}.o", "-o", OUT / f"{v}.bin")
 
@@ -255,6 +235,16 @@ def read_delta(path):
     return out
 
 
+def value_at(changes, h, default="0"):
+    """Value of a delta signal at half h (the last change at or before h)."""
+    v = default
+    for t, x in changes:
+        if t > h:
+            break
+        v = x
+    return v if v != "Z" else "0"
+
+
 def high_spans(changes, end=10 ** 9):
     spans, start = [], None
     for h, v in changes:
@@ -267,10 +257,6 @@ def high_spans(changes, end=10 ** 9):
     if start is not None:
         spans.append((start, end))
     return spans
-
-
-def overlap(a, b):
-    return [(max(x[0], y[0]), min(x[1], y[1])) for x in a for y in b if max(x[0], y[0]) < min(x[1], y[1])]
 
 
 FULL = False                # -full: every even half for every seed instead of sweep()
@@ -325,7 +311,6 @@ def pushed(m4, m0):
 class Report:
     def __init__(self):
         self.rows = []
-        self.clash = []     # (program, runs, [(where, ok)]) for item 11
 
     def item(self, key, text, ok, detail=""):
         """ok: True, False, None = could not be judged in this run"""
@@ -467,24 +452,16 @@ def t_misp(rep, pool, a, name="misp", keys=("10a", "10b", "10c"), states=None, s
         span = 2 * (hits[len(hits) // 2 + 2] - hits[len(hits) // 2])
         base = hits[len(hits) // 2] & ~1
         print(f"{name} z{z}: loop={addr:#x} pattern={span // 2} halves, H from {base}", flush=True)
-        cols = ["Fl_INT", "Fl_JPU", "PC"]
-        runs += list(pool.map(lambda h: sim(name, z, h, cols=cols), range(base, base + span, 2)))
-    done, stalled, both, fl_int = [], [], [], 0
+        runs += list(pool.map(lambda h: sim(name, z, h), range(base, base + span, 2)))
+    done, stalled = [], []
     for r in runs:
         m = ENTRY_M.match(r.text)
-        d = read_delta(r.delta)
-        clash = overlap(high_spans(d["Fl_INT"]), high_spans(d["Fl_JPU"]))
-        f = None
         if m:
             f = {"g5": hx(m.group(3)), "g6": hx(m.group(4)), "g7": hx(m.group(5)), "ist": hx(m.group(6)),
                  "m4": hx(m.group(7)), "m0": hx(m.group(8)), "lv": hx(m.group(9)), "loop": hx(m.group(1))}
             done.append((r, f))
         else:
             stalled.append(r.where())
-        if clash:
-            both.append((r, f))
-        if high_spans(d["Fl_INT"]):
-            fl_int += 1
 
     def inside(f, shift=0):
         off = pushed(f["m4"], f["m0"]) - shift - f["loop"]
@@ -499,31 +476,10 @@ def t_misp(rep, pool, a, name="misp", keys=("10a", "10b", "10c"), states=None, s
              f"{len(bad)}/{len(done)} wrong" if bad else "")
     rep.item(keys[2], f"{what}: entry at every phase reaches the end of the handler ({len(runs)} runs)", not stalled,
              f"{len(stalled)} stalled: " + brief(stalled, 8) if stalled else "")
-    # item 11 is judged in main() over int_misp and int_flc together
-    rep.clash.append((name, len(runs), [(r.where() + ("" if f else " stalled"), bool(f and (inside(f) or inside(f, 4))))
-                                        for r, f in both], fl_int))
 
 
 def t_flc(rep, pool, a):
     t_misp(rep, pool, a, "flc", ("10d", "10e", "10f"), misp_states(6, 150), a.seeds)
-
-
-def clash_item(rep):
-    if not rep.clash:
-        return
-    runs = sum(c[1] for c in rep.clash)
-    hit = [(f"{c[0]} {w}", ok) for c in rep.clash for w, ok in c[2]]
-    progs = "+".join(c[0] for c in rep.clash)
-    if hit:
-        bad = [w for w, ok in hit if not ok]
-        rep.item("11", f"Fl_INT and Fl_JPU in the same half ({len(hit)} of {runs} runs in {progs} hit it)",
-                 not bad, brief(bad) if bad else brief((w for w, _ in hit), 4))
-    elif not any(c[3] for c in rep.clash):
-        # 11-18: an entry shows Fl_JPU 2 halves before PC = handler; Fl_INT stayed 0 in every run
-        rep.item("11", "Fl_INT and Fl_JPU in the same half", None,
-                 f"Fl_INT was never high in {runs} runs of {progs} (entries flush through Fl_JPU now)")
-    else:
-        rep.item("11", "Fl_INT and Fl_JPU in the same half", None, f"no run hit it in {runs} phases of {progs}")
 
 
 def t_iret(rep, pool, a):
@@ -759,27 +715,37 @@ def t_iret2(rep, pool, a):
         info[z] = main_
         print(f"iret2 z{z}: first IRQ at {h1}, entry {entry}, iret fetched {hi}", flush=True)
         jobs += [(z, h1, h) for h in sweep(entry, hi + 100, [hi], z == a.seeds[0], 24, 2)]
-    runs = list(pool.map(lambda j: sim("iret2", j[0], pulses=[(j[1], IRQ), (j[2], IRQ)],
+    runs = list(pool.map(lambda j: sim("iret2", j[0], pulses=[(j[1], IRQ), (j[2], IRQ)], cols=["I-act", "I-acp"],
                                        tag=f"iret2-z{j[0]}-{j[1]}-{j[2]}"), jobs))
     final = re.compile(r"E" + HEX * 3 + r"G")
-    stalled, wrong = [], []
+    stalled, wrong, ignored = [], [], 0
     for r in runs:
         m, log = final.search(r.text), glog(r.text)
-        where = f"z{r.seed}/H2={r.tag.split('-')[-1]}"
+        h2 = int(r.tag.split('-')[-1])
+        where = f"z{r.seed}/H2={h2}"
         if not m or log is None:
             stalled.append(f"{where} PC={r.pc}")
             continue
+        # the test device latch (RS-64 in computer-32-test) ignores a pulse whose sampling edge (half H2)
+        # still sees INT-act or INT-acp for that line. at the acp edge itself S = R = 1 and the RS_FF
+        # result follows the seed, so a busy pulse may give 1 or 2 entries
+        d = read_delta(r.delta)
+        busy = any(int(value_at(d[c], h2 - 1), 16) >> IRQ & 1 for c in ("I-act", "I-acp"))
+        want = (1, 2) if busy else (2,)
+        ignored += busy
         g5, ist, lv, n = hx(m.group(1)), hx(m.group(2)), hx(m.group(3)), r.text.count("I")
-        if n != 2 or len(log) != 2:
-            wrong.append(f"{where} {n} entries")
+        if n not in want or len(log) != n:
+            wrong.append(f"{where} {n} entries (want {'/'.join(map(str, want))})")
         elif (g5, r.text.count("."), ist, lv5(lv)) != (60, 60, ISTACK, 0):
             wrong.append(f"{where} gen5={g5} istack={ist:#x} level={lv:#x}")
         elif min(log) < info[r.seed]:
             wrong.append(f"{where} R={log[0]:#x},{log[1]:#x} (one is in the handler)")
     rep.item("17a", f"2nd IRQ around iret: the program finishes ({len(runs)} runs)", not stalled,
              f"{len(stalled)} stalled: " + brief(stalled, 4) if stalled else "")
-    rep.item("17b", "2nd IRQ around iret: 2 entries, both return PCs in main, istack and int-level back, gen5 = 60",
-             not wrong if runs else None, f"{len(wrong)} wrong: " + brief(wrong, 3) if wrong else "")
+    rep.item("17b", "2nd IRQ around iret: 2 entries (1 or 2 if the pulse comes while I-act|I-acp), both return PCs "
+             "in main, istack and int-level back, gen5 = 60",
+             not wrong if runs else None,
+             (f"{len(wrong)} wrong: " + brief(wrong, 3) if wrong else "") + f" ({ignored} pulses during act|acp)")
 
 
 def t_wpsys(rep, pool, a):
@@ -844,8 +810,13 @@ def t_sys0(rep, pool, a):
     r = sim("sys0", a.seeds[0])
     rep.item("21a", "syscall with int_pri[1] = 0: the handler does not run", "S" not in r.text,
              f"output {r.text!r}")
-    rep.item("21b", "syscall with int_pri[1] = 0: the program goes on (does not hang)", r.text.endswith("BE"),
-             f"output {r.text!r}, stop [{r.tail.strip()}]")
+    sc = op_addrs("sys0", 0x76)[0]
+    log = glog(r.text)
+    ok = (r.text.count("P") == 1 and "BE" in r.text and log is not None and len(log) == 2
+          and log[0] == sc + 4 and log[1] == 0x9f)
+    rep.item("21b", "syscall with int_pri[1] = 0: enters id 0 once, R = next word, int-level 0x9f, "
+             "iret returns and the program finishes", ok,
+             f"want R={sc + 4:#x}, output {r.text[:60]!r}, stop [{r.tail.strip()}]")
 
 
 TESTS = {"ext": t_ext, "prec": t_prec, "sled": t_sled, "misp": t_misp, "flc": t_flc, "iret": t_iret,
@@ -911,7 +882,6 @@ def main():
         with ThreadPoolExecutor(a.j) as pool:
             for g in groups:
                 TESTS[g](rep, pool, a)
-        clash_item(rep)
     except RuntimeError as e:
         rep.show()
         sys.exit(f"stopped: {e}")
