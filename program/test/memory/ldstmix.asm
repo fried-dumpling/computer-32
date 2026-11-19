@@ -1,7 +1,7 @@
 ; =====================================================================
 ;  ldstmix.asm : many outstanding loads mixed with stores
 ;
-;  build (in program/) :  dasm test/ldstmix.asm -o ldstmix.o
+;  build (in program/) :  dasm test/memory/ldstmix.asm -o ldstmix.o
 ;                         dlnk ldstmix.o -o ../boot/rom.bin
 ;  run    : tools/dsim/runtests.sh ldstmix  (compares with the emulator)
 ;

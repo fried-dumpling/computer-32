@@ -1,7 +1,8 @@
 #!/bin/bash
-# runtests.sh [-j N] [-nobuild] [name...]
-#   Builds the test programs, runs them on components/cpu-test.dig in parallel (each with -Drom=...,
+# runtests.sh [-j N] [-nobuild] [-c circuit.dig] [name...]
+#   Builds the test programs, runs them on components/<circuit> in parallel (each with -Drom=...,
 #   so boot/rom.bin is not touched) and compares the terminal output with the emulator.
+#   circuit : default computer-32-test.dig (or $DSIM_CIRCUIT).
 #   name : only these tests (default all). Output: program/build/dsim/<name>.sim / .emu
 #   Run from git-bash. Needs Sim compiled into build/ (see README.md).
 cd "$(dirname "$0")"
@@ -10,13 +11,22 @@ R=$(cd ../.. && pwd -W)
 P="$R/program"; O="$P/build/dsim"; mkdir -p "$O"
 J=${DIGITAL_JAR:-"D:/Users/taeh5/Digital/Digital 0.31/Digital.jar"}
 JOBS=9; BUILD=1
+CIRC=${DSIM_CIRCUIT:-computer-32-test.dig}
 while [ $# -gt 0 ]; do
   case $1 in
     -j) JOBS=$2; shift 2 ;;
     -nobuild) BUILD=0; shift ;;
+    -c) CIRC=$2; shift 2 ;;
     *) break ;;
   esac
 done
+# Sim options per circuit. computer-32-test: E and run are DipSwitches on the top (no top In),
+# cpu-32 has no probes, so the stall check (PC, com1, com2) taps those nets of cpu-32.
+case $CIRC in
+  computer-32-test.dig) COPT='-Ddip=-780,580;-780,620 -Dset= -Dtap=cpu-32.dig:PCS=PC,com1,com2' ;;
+  *) COPT= ;;   # other circuits: Sim defaults (clock DipSwitch -560,-1640, set=E=1,run=1)
+esac
+echo "circuit: components/$CIRC"
 
 # name|bin|zseed|keys (Sim, '|' between lines)|emulator keys ('\n' between lines)|Sim options
 T=(
@@ -55,11 +65,11 @@ asm() {
 }
 if [ $BUILD = 1 ]; then
   asm "$P/test/selftest.asm" selftest.bin "$P/floatingpoint/float.asm"
-  asm "$P/test/memtest.asm" memtest.bin
-  asm "$P/test/memtest2.asm" memtest2.bin
+  asm "$P/test/memory/memtest.asm" memtest.bin
+  asm "$P/test/memory/memtest2.asm" memtest2.bin
   asm "$P/test/fill.asm" fill_nh.bin
   asm "$P/test/flushstall.asm" flushstall.bin
-  asm "$P/test/ldstmix.asm" ldstmix.bin
+  asm "$P/test/memory/ldstmix.asm" ldstmix.bin
   asm "$P/test/knownbug.asm" knownbug.bin
   asm "$P/test/rotate.asm" rotate.bin
   asm "$P/calc/calc.asm" calc.bin "$P/floatingpoint/float.asm" "$P/io/io.asm"
@@ -69,7 +79,7 @@ fi
 
 run() { # name bin seed keys emukeys options
   local n=$1 b=$2 z=$3 k=$4 ek=$5 x=$6 r
-  timeout 900 java -Dzseed=$z -Drom="$O/$b.bin" $x -cp "$J;$D/build" Sim "$R/components/cpu-test.dig" - "$k" 4000000 2>&1 \
+  timeout 900 java -Dzseed=$z -Drom="$O/$b.bin" $COPT $x -cp "$J;$D/build" Sim "$R/components/$CIRC" - "$k" 4000000 2>&1 \
     | grep -v -E "WARNING|Importer|zseed" > "$O/$n.sim"
   python "$R/tools/emu/isa32emu.py" "$O/$b.bin" "$(printf "$ek")" > "$O/$n.emu" 2>&1
   if diff <(grep -v '^\[half' "$O/$n.sim" | sed '/^$/d') <(sed -e '/^\[/,$d' -e '/^$/d' "$O/$n.emu") > /dev/null

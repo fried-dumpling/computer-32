@@ -1,7 +1,7 @@
 ; =====================================================================
 ;  memtest3.asm : which part of "st X ; ld X in a loop" hangs (memtest2 L2)
 ;
-;  build (in program/) :  dasm test/memtest3.asm -o memtest3.o
+;  build (in program/) :  dasm test/memory/memtest3.asm -o memtest3.o
 ;                         dlnk memtest3.o -o run.txt
 ;
 ;  press a key 1..9 to run one test. it prints "<key> <result in hex>"

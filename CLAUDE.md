@@ -51,11 +51,18 @@ Strict by default:
 
 ### Headless circuit simulator (dsim)
 
-`tools/dsim/` runs `components/cpu-test.dig` without the GUI using `Digital.jar` (key input, terminal output, probe/tunnel CSV dumps, net queries). See `tools/dsim/README.md`. Pass `-` as the program to let the ROMs load their own files (`boot/boot.bin`, `boot/rom.bin`), which is what the current circuit needs (it has no ROM flagged as program memory).
+`tools/dsim/` runs `components/computer-32-test.dig` (cpu-32 + IPU + memory/IO) without the GUI using `Digital.jar` (key input, terminal output, probe/tunnel CSV dumps, net queries). See `tools/dsim/README.md`. Pass `-` as the program to let the ROMs load their own files (`boot/boot.bin`, `boot/rom.bin`), which is what the current circuit needs (it has no ROM flagged as program memory).
 
 ### Rebuilding Tools
 
 Source is in `tools/assembler/`, `tools/linker/`, `tools/common/` (shared headers, included as `../common/`) and `tools/hexdump/` (C++). This is the former `assembler-linker` repo, merged with its history (2026-10-22). Build with `tools/build-asm.cmd`, `build-lnk.cmd`, `build-hex.cmd` (MinGW `g++ -std=c++17`), which write `bin/dasm.exe`, `bin/dlnk.exe`, `bin/hexdump.exe`. Run the build scripts from PowerShell (git-bash `cmd //c` mangles the quoting). Old regression sources: `program/archive/*.txt`. Full assembler/linker syntax, CLI options and error messages: `document/SYNTAX.md`. Internals (pipelines, object format, relocation, name mangling, CLI conventions, known limits, working rules): `document/toolchain.md`. The parser table is cached in `bin/dasm_table.bin`; after changing lexer rules, grammar or the token/AST enums, bump `version` in `assembler.hpp` (`cache` namespace) so it is rebuilt — a stale table silently runs the old grammar. When the grammar, encoding or options change, update `document/SYNTAX.md` too. Building and checking is fine without asking; replacing `bin/` executables and committing only on request.
+
+**Which branch for tool changes** (dsim, dasm, dlnk, hexdump, emu, test scripts): work on the `tools` branch, then merge `tools` into the branches that need it (e.g. `interrupt`, `dev`), when the change
+- takes long or is a larger project,
+- is an optimization or cleanup unrelated to the circuit (speed, options, refactoring), or
+- depends little on the circuit work and will be merged into other branches too.
+
+Only small changes tied to the circuit being worked on (a probe, a new net name, a fix needed to test today's circuit edit) go directly on the current work branch. Never switch the branch of this folder for tool work; keep the current branch's uncommitted circuit files untouched. A one-off commit can be built without a checkout (temporary `GIT_INDEX_FILE` + `commit-tree`). When a checkout is needed (longer tool work, building and testing on `tools`, resolving a merge), use the sibling folders `../computer-32-2nd` and `../computer-32-3rd` as worktree slots: an empty folder is free, `git worktree add ../computer-32-2nd tools` (or 3rd if 2nd is in use; `git worktree list` shows which). Don't create worktrees elsewhere. When finished, `git worktree remove` it and recreate the empty folder.
 
 ## ISA-32 Assembly Syntax
 
@@ -108,7 +115,7 @@ ldexp <reg>, <reg_ex>                ; load from an extended/special register
 stexp <reg>, <reg_ex>                ; store to an extended/special register
 ```
 
-`reg_ex` (only reachable via `ldexp`/`stexp`, not the normal `reg.mode` form): `istack` (interrupt stack pointer), `panicvec` (panic/fault vector), `cpuid`.
+`reg_ex` (only reachable via `ldexp`/`stexp`, not the normal `reg.mode` form): `cpuid` (ex-0), `istack` (ex-1, interrupt stack pointer), `intlevel` (ex-2), `inttmplv` (ex-3, level saved on entry, restored by `iret`), `pbase` (ex-4), `plimit` (ex-5). `panicvec` was removed (2026-11-16 sheet). `syscall` uses `interst` id 1; id 0 is reserved for panic/emergency use.
 
 ### Misc
 
@@ -149,11 +156,11 @@ Opcode table is in `tools/assembler/assembler.hpp` (`instructionBase` map).
 
 ## CPU Microarchitecture (Digital circuits in `components/`)
 
-Circuits that nothing references (old versions, unused helpers, `RAS`, `SC-buff`, `BTB-buff`, ...) are in `components/legacy/`; Digital still finds them by file name.
+Circuits that nothing references (old versions, unused helpers, `RAS`, `SC-buff`, `BTB-buff`, ...) are in `components/legacy/`; Digital still finds them by file name. Debug modules (`*-debug.dig`) and old test circuits are in `components/debugs/`. Digital only searches the opened circuit's folder and its subfolders, so a circuit in a subfolder cannot use modules in `components/` (opening `debugs/res-station-debug.dig` on its own loses its subcircuits). The old development CPU `cpu-test.dig` (probes, debug modules, its own memory/IO) is in `legacy/` since 2026-11-19 and has to be moved back to `components/` to open; `cpu-32.dig` is edited directly. Debug and non-debug modules are kept in step by hand (the `sync-nondebug.sh` tools were removed).
 
-- **`computer-32.dig`** — top-level system (CPU + memory + IO)
+- **`computer-32.dig`** — top-level system (CPU + memory + IO); **`computer-32-test.dig`** — test system (cpu-32 + `IPU-test.dig` + memory/IO), the circuit dsim runs
   - Structure snapshot of `cpu-32.dig` (pins, start sequence, regions, module tree, unfinished nets, cleanup list): `document/cpu-32.md`.
-- **`cpu-32.dig`** / **`cpu-test.dig`** — main CPU: fetch, decode, dispatch, execute, commit pipeline (test variant has extra probes)
+- **`cpu-32.dig`** — main CPU: fetch, decode, dispatch, execute, commit pipeline
 - **`res-station.dig`** (+ `res-station-debug.dig`) — reservation station (instruction window size 16)
 - **`ROB-gen.dig`** — reorder buffer for in-order commit; **`ROB-FL.dig`**, **`ROB-PC.dig`**, **`ROB-SC.dig`** — per-field ROB submodules (flags, PC, side-channel data); **`ROB-INT.dig`** — separate, smaller ROB dedicated to interrupt/trap entries
 - **`regFile.dig`** — speculative register file with renaming (was `regFile4`; older versions `regFile1`..`regFile3` are in `legacy/`)
@@ -183,7 +190,7 @@ Instruction semantics, flags and ABI: `document/ISA.md`. Assembler syntax: `docu
 | `io/` | keyboard / terminal library (`io.hsm` / `io.asm`) + emulator tests |
 | `calc/` | float expression calculator (uses floatingpoint + io) |
 | `picalc/` | π digits with BBP (uses io) |
-| `test/` | small programs for debugging the circuit (memtest*, selftest, fill) |
+| `test/` | small programs for debugging the circuit: `interrupt/` (int_*.asm + int.hsm, run by `tools/dsim/inttest.py`), `memory/` (memtest*, ldstmix, selfflush), and selftest, fill, flushstall, rotate, knownbug, haltbr at the top; list in `program/document/test.md` |
 | `archive/` | older `.txt` programs (e.g. `add_terminal.txt`, `prime_terminal.txt`) |
 | `build/` | scratch build outputs |
 
@@ -208,7 +215,7 @@ Instruction semantics, flags and ABI: `document/ISA.md`. Assembler syntax: `docu
 
 ### Running on the circuit
 
-`components/cpu-test.dig` starts in the boot ROM (`boot/boot.bin`, source `boot/src/boot.asm`). The boot loader reads the image in `boot/rom.bin` (loaded by `rom-test.dig`, autoReload) at ROM `0xFC000000`: word 0 = start address, word 1 = length in bytes, then the program. It copies the program to RAM at 0 and jumps to the start address. So link with the default header straight into the ROM file:
+`components/computer-32-test.dig` starts in the boot ROM (`boot/boot.bin`, source `boot/src/boot.asm`). The boot loader reads the image in `boot/rom.bin` (loaded by `rom-test.dig`, autoReload) at ROM `0xFC000000`: word 0 = start address, word 1 = length in bytes, then the program. It copies the program to RAM at 0 and jumps to the start address. So link with the default header straight into the ROM file:
 
 ```
 dlnk main.o lib.o -o ../boot/rom.bin      ; from program/
@@ -222,5 +229,4 @@ Memory map (`boot/src/boot.asm`): RAM `0x00000000-0x03FFFFFF`, keyboard/terminal
 
 Past circuit bugs found with dsim (symptom, cause, fix, status): `document/errors.md`. Check it first when a similar symptom shows up.
 
-- **`halt` runs before an older branch resolves** (2026-10-17, dsim). When a branch is predicted not taken and `halt` follows it, `halt` is issued and stops the CPU while the branch still waits in the reservation station, so the misprediction is never recovered. `calc`, `picalc` and `test/fill` all have `halt` right after a branch and stop at once. Workaround: end with `jmp.one pc.32B, 0` instead of `halt`.
 - **A wider load right after `st .8L`/`.16L`/`.8H` to the same address gets the wrong value**: load-buffer forwarding ignores the access width, so the load receives the store's zero-extended value (e.g. `ld .32B` after `st .8L` of 0xAA gets `0x000000AA`). Memory itself is written correctly: the same load after the store has finished reads the right word (`document/errors.md` #17). Workaround: don't read wider than a partial store until it has finished.

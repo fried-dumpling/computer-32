@@ -1351,7 +1351,7 @@
         </entry>
         <entry>
           <string>NetName</string>
-          <string>SCS</string>
+          <string>SCA</string>
         </entry>
       </elementAttributes>
       <pos x="2540" y="2360"/>
@@ -1965,7 +1965,7 @@
         </entry>
         <entry>
           <string>NetName</string>
-          <string>SCS</string>
+          <string>SCA</string>
         </entry>
       </elementAttributes>
       <pos x="2720" y="2360"/>
