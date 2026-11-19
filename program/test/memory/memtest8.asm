@@ -1,7 +1,7 @@
 ; =====================================================================
 ;  memtest8.asm : calc restart window in fp_str2f (call -> quick ret)
 ;
-;  build (in program/) :  dasm test/memtest8.asm -o memtest8.o
+;  build (in program/) :  dasm test/memory/memtest8.asm -o memtest8.o
 ;                         dasm floatingpoint/float.asm -o float.o
 ;                         dlnk memtest8.o float.o -o run.txt
 ;
@@ -65,7 +65,7 @@
 ;  is a failure.
 ;  the first test that fails tells which part of the window is enough.
 ; =====================================================================
-#include<../floatingpoint/float.hsm>
+#include<../../floatingpoint/float.hsm>
 
 #define IO_BASE 0x4000000
 #define KEY_IN 0

@@ -8,10 +8,10 @@
 
 | 영역 | 상태 | 비고 |
 |---|---|---|
-| 어셈블러 | 거의 완료 | `#include`, `#ifdef`, `#ifndef` 구현됨 (`document/SYNTAX.md` §include/ifdef). 확장 레지스터 ex-1 – ex-6 전부 지원. `interst`/`interld`와 11-05 버그 수정 3건은 `tools` 브랜치 쪽 (아래 "부속별 정리 1") |
+| 어셈블러 | 거의 완료 | `#include`, `#ifdef`, `#ifndef` 구현됨 (`document/SYNTAX.md` §include/ifdef). 확장 레지스터 ex-0 – ex-5 전부 지원(2026-11-16 시트). `interst`/`interld`, 11-05 버그 수정 3건 반영, `bin/dasm.exe` 교체됨. ABI 별칭과 `jp`/`jpi`/`break`는 미정 (아래 "다음 목표 3") |
 | 링커 | 동작 | 다중 오브젝트 링크, 8바이트 헤더 / `-raw` / `-start`. jmp 축소 최적화는 미구현 (선택 사항) |
 | ISA 정리 | 완료 | `ISA.md`, `assembler.hpp`에 NMI / trap-flag 흔적 없음 |
-| 인터럽트 | 진행 중 | `syscall`/`iret`/`interst`/`interld`/`ldexp`/`stexp`, `ROB-INT.dig` 배선 중. halt 뒤 명령 문제는 11-05 selftest로 해결 확인, `syscall`은 미확인 |
+| 인터럽트 | 진행 중 | IRQ 진입, `iret`, `syscall`(id 1), `interst`/`interld`, `ldexp`/`stexp`가 CPU + IPU에서 동작 (`inttest` PASS 43, XFAIL 2, 11-19). XFAIL은 20b/20c(권한 검사·ker, kernel 브랜치). level 0 칸 요청은 id 0으로 진입(21b) |
 | 메모리 (ld/st buffer) | 대부분 해결 | queue → age matrix 전환 완료 (6b8b02b). outstanding 요청 (e9e045d, buff-outstanding). 남은 버그는 아래 "회로 에러" |
 | 메모리 바이트 주소 / 리틀엔디안 | 다시 확인 필요 | ld/st 폭, `set` 모드 회로 확인 (2026-10-18). 메모리 쓰기는 맞음(11-06 다시 읽어 확인). `st .8L/.16L/.8H` 직후 더 넓은 load가 받는 forward 값만 틀림(`errors.md` 17번) |
 | 외부 RAM / ROM, boot-sequence | 동작 | boot ROM → 외부 ROM의 프로그램을 RAM으로 복사 → 실행. add_terminal, io_harness, calc, picalc 회로에서 통과 (2026-10-18) |
@@ -52,10 +52,21 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 동작은 완료(아래 완료 탭). 남은 일:
 - [~] reset 시퀀스: reset PC = boot ROM은 동작. 파이프라인·ROB·RAS·BTB 초기화는 따로 확인 안 함
   - [~] 부트 코드 `boot/src/boot.asm` → `boot/boot.bin`
-    - [ ] stack / istack 설정, `interst`(vec/pri)·`panicvec` 설정
+    - [ ] stack / istack 설정, `interst`(vec/pri) 설정 (`panicvec`은 시트에서 없어짐, 2026-11-16)
 
 ### 3. ISA ↔ 툴 맞추기 (`ISA.md` 6절)
 - [ ] floatingpoint 테스트(`fp_test.py`)는 에뮬레이터 전용 — 회로에서 돌릴 방법 검토 (calc로 간접 확인만 됨)
+
+#### ISA 시트 동기화 (2026-11-18, 11-16 저장본 기준)
+`ISA.md`의 1절(권한), 2절(ABI 이름, EXT), 4절(flag), 2.2절(`int-tmplv`), 6절은 고쳤습니다. 남은 일:
+- [ ] 시트 G67 오타 수정: `md-id = md<<3 | id` → md는 bit 7(`md<<7 | id`). 어셈블러와 회로는 이미 bit 7
+- [ ] 어셈블러 ABI 별칭 추가 여부: `lret`/`hret`(gen[0]/[1]), `at`(gen[21]), `kt0`/`kt1`(gen[22]/[23]), `addr`(gen[24])
+  - lexer 키워드라 cache version을 올려야 함. 예약어가 되므로 `program/`의 라벨·`#define` 이름과 겹치는지 먼저 확인
+- [ ] 어셈블러 `jp`/`jpi`/`break`(시트 이름) 별칭 추가 여부. 지금은 `jmp`/`ijmp`/`brk`만. 라벨 충돌 위험으로 보류 중
+- [ ] `ISA.md` 2.2절 나머지: 중첩 ISR에서 `int-tmplv` 저장/복원 순서와 ISR 예제, 진입 때 하드웨어가 `ker`/mask를 어떻게 정하는지, `iret`이 IPU 응답을 기다려야 하는지
+- [ ] `panic-vec` 대신 mask = 1일 때 동기 예외(double fault) 처리 규칙
+- [x] `syscall`이 user가 됨(76): 회로 디코드는 75–FF를 묶지 않고 명령별로 `ISS_kernel`을 냄. 76은 0 (11-18 확인)
+- [ ] 7D(`getabs`)/7E(`flush`/`inval`)/7F(`atom`)는 회로에서 kernel이 아님. `ISA.md` 1절 "77–FF kernel"과 다름 — 회로에 넣을지, 문서를 고칠지 결정 (`cache`/`atom` user 여부 보류와 같이)
 
 ### 4. Git / 저장소 정리
 병합과 문서 정리는 완료(아래 완료 탭). 남은 일:
@@ -78,8 +89,7 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
   - assembler: 크기가 4의 배수가 아닌 allocate 뒤의 데이터/라벨을 맞춤
   - `iotools::Terminal`에 값 생략 옵션 파싱 추가 필요
 - [ ] 데이터 배치 한계: 4바이트보다 큰 allocate에 재배치 값이 들어가면 첫 워드만 패치됨, 크기가 4의 배수가 아니면 뒤 데이터가 정렬되지 않음
-- [ ] `tools` 브랜치 정리: b8ff089(`interst`/`interld`, push됨)와 11-05 버그 수정 3건(3b5217f, 미push)을 `computer`에 merge → `bin/dasm.exe` 교체. 지금 `bin/dasm.exe`는 아직 `intervec`/`interpri`
-- [ ] ISA 남은 확인 (`ISA.md` 6절): 캐시 md 비트 방향(flush=1로 가정), `jp`/`jpi`/`break` 이름 (라벨 충돌 위험으로 별칭 보류)
+- [ ] ISA 이름·별칭: `jp`/`jpi`/`break`, ABI 별칭 — "다음 목표 3"의 "ISA 시트 동기화"
 - [ ] (보류) LALR 파서가 테이블 충돌을 조용히 묻음 — `branch`, `factorial_norec`, `prime_old`(`program/archive`) parse 실패, 잘못된 소스가 엉뚱한 위치에서 실패
 
 선택 사항 (처음부터 구현하지 않기로 함):
@@ -91,20 +101,25 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 #### 인터럽트
 
 ##### 해야 할 일
-- [~] `iret`
-- [~] `syscall` — IPU가 해당 인터럽트를 가져갈 때까지 다른 인터럽트를 모두 마스크
-- [ ] 외부 IPU 연결 (CPU에 인터럽트 구현하려면 필요)
+- [x] `iret` — `inttest` 7a~7c PASS (11-16, `errors.md` 19~22)
+- [~] `syscall` — 진입·복귀는 8a, 8b PASS (11-18, id 1, `errors.md` 23~24). "IPU가 가져갈 때까지 다른 인터럽트 마스크"는 테스트 없음
+- [x] 외부 IPU 연결 — `computer-32-test.dig`(CPU + `IPU-test.dig`)에서 IRQ, `syscall`, `interst`/`interld` 동작
+- [ ] 권한 검사 배선 (kernel 브랜치에서 다른 exception과 함께, 20b/20c): `ISS_kernel` → `DP_ker`(dispatch로 전달), `privilege-fault`를 TRAP으로 (지금은 LED만, `ISA.md` 2.2 "권한 검사")
+- [~] id 0(panic/비상용) 진입 규칙과 회로 — level 0 칸 요청은 IPU가 id 0(level 31, `int-level` 0x9f, 복귀 PC = 다음 word)으로 바꿔 진입 (11-19, 21b PASS, `ISA.md` 2.2 "고정 id"). mask = 1일 때 동기 예외의 id 0 진입은 남음 (kernel 브랜치)
+- [ ] 인터럽트 테스트에서 나온 버그 고치기 (`errors.md` 25~31): fetch hold(반환 PC +4), 공용 stack 가산기 mux, 진입 때 `int-level`/`int-tmplv`, `syscall` 직전 IRQ 유실, 연속 `syscall`의 `iret`, `ld ; ld ; iret` stall
+- [x] level 0 칸으로 `syscall`했을 때의 동작 정하기 — id 0으로 진입, R = `syscall` 다음 word (11-19, `int_sys0`에 id 0 handler 추가, 21b PASS)
+- [x] 인터럽트 테스트 추가 (tools 세션에 요청, 11-18) — `inttest.py` 10d~10f, 14a~22 (`int_sysprev`, `int_sysirq`, `int_nest`, `int_iret2`, `int_iretpre`, `int_wpsys`, `int_sysmem`, `int_flc`, `int_user`, `int_sys0`). 결과와 XFAIL 원인은 `program/document/test.md`. 11번은 Fl_INT가 쓰이지 않아 SKIP: `syscall` 대기 중 IRQ, 중첩(`int-tmplv` 저장/복원), `iret` 주변 IRQ, 오분기 경로의 `syscall`, ld/st 직후 `syscall`, 11번(Fl_INT/Fl_JPU 같은 half)이 실제로 나는 프로그램, user mode `syscall`과 권한 trap, `int_pri[1]` = 0인 `syscall`
 - [~] CLR(flush) priority 정리 — 예전 안은 JPU / MEM-FL > ERR(TRAP) > INT, 새 안(`todo.txt` "## flush")은 **ECLR > INT > JPU/MEM**
   - 영역: dispatch(issue, disp) / process(JPU·MEM: disp~commit) / commit(INT: com2, ECLR: com1~com2)
   - id 나이: issue > disp > processing > com2 > com1 (위가 새 것)
   - 작업 중 (미커밋): `flush-mux`에 `E_acp`, `id-manager-debug`에 `eclr` 출력, 새 `components/inst-sfcomp.dig`(A/B id·ep 비교 → `A_new`, `B_eq`)
 ##### TRAP 재구성 후속 (2026-10-23, forward-test에서 가져옴)
 forward-test의 TRAP 처리, exld/st 디코드(BLOCK·UMM 추가), `Fl_INT` → com1, `flush-mux`(trap 입력 제거, `clr_sel` 4비트), `id-manager-debug`, `regFile4`를 dev로 가져옴. 이전 회로는 `components/legacy/flush-mux-old.dig`, `components/legacy/trap-ref-old.dig`(dev 508f47c의 TRAP 블록).
-- [ ] `syscall` 뒤 명령이 지워지는지 확인 (halt는 11-05 해결, 완료 탭). 테스트 프로그램 없음
+- [x] `syscall` 뒤 명령이 지워지는지 확인 — `int_sys` 출력 `L… AH… hBCE`: `syscall` 뒤 `B`가 핸들러보다 먼저 나오지 않고 복귀 뒤 한 번만 나옴 (11-18)
 - [ ] `runtests.sh`의 `_nh` 우회와 knownbug 주석 정리, `selfflush`/`haltbr`를 T 배열에 넣을지 결정 — halt 문제는 재현 안 됨, CLAUDE.md에서 삭제함 (11-07)
 - [ ] `id-manager-debug` ECLR 우선순위: 두 commit 슬롯 모두 에러면 com2를 고르고 com1 commit을 막음 (dev는 com1 우선). 의도 확인
-- [ ] `Fl_INT`가 com1 기준으로 바뀜 — 인터럽트 flush id/ep가 맞는지 확인
-- [ ] syscall / iret / trap 회귀 테스트 프로그램 작성
+- [x] `Fl_INT`가 com1 기준으로 바뀜 — 인터럽트 flush id/ep가 맞는지 확인 (`inttest` 3a/3b/5 정밀 진입 PASS)
+- [x] syscall / iret / trap 회귀 테스트 프로그램 작성 — `program/test/interrupt/int_*.asm` + `tools/dsim/inttest.py`. 추가 케이스는 위 "인터럽트 테스트 추가"
 
 ##### 문제: 인터럽트 수락과 trap이 동시에 발생
 - 둘은 동시에 실행될 수 없음 → 수락을 되돌리거나 trap을 취소해야 함
@@ -125,21 +140,21 @@ CPU 쪽:
 2. trap 실행
 3. commit 시 인터럽트 언마스크
 
-##### `iret` 동작 (2026-10-25 결정, `ISA.md` 2.2절)
+##### `iret` 동작 (2026-10-25 결정, 2026-11-16 시트로 변경, `ISA.md` 2.2절)
 - `PC = mem[istack]; istack += 4`
-- IPU에 pop 요청 → IPU가 `{이전 level, 이전 mode}` 복원, mask = 0
-- 직렬화: commit에 도달한 뒤 실행하고, IPU 응답(req/ack)까지 fetch를 멈춤. 그다음 새 PC에서 다시 시작(오분기 flush와 같음)
+- `int-level = int-tmplv` (level, mask, `ker` 복원). 전의 "IPU pop → `{이전 level, 이전 mode}`" 방식은 없어짐
+- 직렬화: commit에 도달한 뒤 실행하고, 새 PC에서 다시 시작(오분기 flush와 같음)
 
 ##### 결정 사항 (2026-10-25)
-- `int-level` = 5비트 `{mask, level[3:0]}`, 수락 조건은 `{0, 요청 level} > {mask, 현재 level}` 비교 하나. 실제 레지스터는 IPU에 있음
+- `int-level` = `{mask, level[3:0]}`, 수락 조건은 `{0, 요청 level} > {mask, 현재 level}` 비교 하나. 2026-11-16 시트에서 `ker`(bit 7)가 추가됨
 - 진입 시 mask = 1 (ISR이 `kt0`에 `stack`을 저장하고 `stexp stack, istack` 할 때까지 중첩 금지). 해제는 소프트웨어가 함
-- 복귀 level/mode는 IPU 내부 스택(16칸)이 저장. 하드웨어가 메모리에 push하는 것은 PC 1 word(istack)뿐
+- 복귀 level/mode: (2026-10-25) IPU 내부 스택(16칸) → (2026-11-16 시트) `int-tmplv` 한 칸. 진입 때 `int-tmplv = int-level`, `iret`에서 되돌림. 하드웨어가 메모리에 push하는 것은 PC 1 word(istack)뿐
 - flag는 하드웨어가 저장하지 않음. `mov`/`ldexp`/`stexp`/`push`/`pop`이 flag를 바꾸지 않으므로 ISR이 `push flag` 하면 충분
 - ABI: `at` = `gen[21]`(1개), `kt0`/`kt1` = `gen[22]`/`gen[23]`
-- [ ] IPU: level/mask 레지스터, `{level, mode}` 16칸 스택, `iret` pop req/ack, `ldexp`/`stexp int-level` 경로
+- [ ] IPU: level/mask 레지스터, `ldexp`/`stexp int-level` 경로. (`{level, mode}` 16칸 스택과 `iret` pop req/ack은 `int-tmplv` 방식으로 바뀌어 필요 없는지 확인)
 - [ ] CPU: mode 사본(디코드 권한 검사), `iret` 직렬화, 진입 시 istack push
-- [ ] (2026-10-26) `interst`(79)/`interld`(78) (2026-11-14에 78/79에서 맞바꿈), byte 3 = md(b7: vec=0, pri=1)|id(b5:0), 값 = `R[base] + imm` (`ISA.md` 5절). 어셈블러: `tools` 브랜치에 구현(`interst R, m, vec | id`, `interld R, pri | id`, pseudo-mnemonic 없음, `SYNTAX.md` 갱신, 미커밋). `bin/dasm.exe` 교체와 커밋 남음. 회로: IPU의 vec/pri 쓰기·읽기 경로, `interld` 직렬화
-- [ ] 미정: `syscall` user 분류와 level/벡터, `cache`/`atom` user 여부(보류), mask = 1일 때 동기 예외 → `panic-vec`, `int-prev` EXT
+- [ ] (2026-10-26) `interst`(79)/`interld`(78) (2026-11-14에 78/79에서 맞바꿈), byte 3 = md(b7: vec=0, pri=1)|id(b5:0), 값 = `R[base] + imm` (`ISA.md` 5절). 어셈블러는 완료(`interst R, m, vec | id`, `interld R, pri | id`, pseudo-mnemonic 없음, `bin/dasm.exe` 교체됨). 회로: IPU의 vec/pri 쓰기·읽기 경로, `interld` 직렬화
+- [ ] 미정: ~~`syscall`의 level/벡터~~ (11-18: id 1, level은 `int_pri[1]`, id 0은 비상용), `cache`/`atom` user 여부(보류), mask = 1일 때 동기 예외 규칙(`panic-vec`은 없어짐). `int-prev` EXT는 `int-tmplv`로 대신할 수 있어 보임
 
 ##### 인터럽트 처리 흐름
 1. **인터럽트 신호**
@@ -174,7 +189,7 @@ CPU 쪽:
 - [ ] 11번 후속(선택): self flush된 옛 load id가 commit됨(값은 regFile에 안 써서 안 보임). 옛 id commit과 다시 fetch된 load 사이 인터럽트, IO 주소 load(두 번 읽힘)는 확인 안 함
 - [ ] 18번 후속: issue가 밀린 `ld.stack` base, stack 외 SC 레지스터 확인
 - [ ] halt 후속: flush 뒤에도 `hlt`/`HALT_PC`가 옛 값으로 남음 — 인터럽트/`INT_HALT`에서 쓰면 확인
-- [ ] 16번: `res-station.dig`(non-debug, cpu-32.dig가 씀) `inst-wfile` 핀 연결이 밀림 — `res-station-debug.dig`에 맞추거나 `sync-nondebug.sh`
+- [ ] 16번: `res-station.dig`(non-debug, cpu-32.dig가 씀) `inst-wfile` 핀 연결이 밀림 — `res-station-debug.dig`에 손으로 맞춤(`sync-nondebug.sh`는 11-19 삭제)
 - [ ] 14번 후속: store 응답을 끈 상태. 다시 켜려면 load-buffer 응답 조건에 `D_LD` AND 또는 mid 레지스터 앞 mux, 그 뒤 `ldstmix` 재확인
 - [ ] load-buffer forward가 폭을 보지 않음(`knownbug` k1~k3, `errors.md` 17번): store가 load 범위를 다 덮을 때만 forward하고, 아니면 store가 끝난 뒤 메모리에서 읽거나 바이트를 합치기
 
@@ -212,7 +227,7 @@ CPU 쪽:
 끝난 일과 설계 기록입니다. 원문 `fin?(fixed?)` 아래 항목(해결됨 / 설계 기록)도 여기로 옮겼습니다.
 
 ## 2026-10-24 ~ 11-07
-- [x] 회로 에러 11번 확인(값이 안 보임), 18번(`st.stack` base가 더 젊은 stack 값) 수정 — `st.stack`이 PCA 사용 (11-07, `program/test/selfflush.asm`)
+- [x] 회로 에러 11번 확인(값이 안 보임), 18번(`st.stack` base가 더 젊은 stack 값) 수정 — `st.stack`이 PCA 사용 (11-07, `program/test/memory/selfflush.asm`)
 - [x] `halt`가 분기보다 먼저 실행되는 문제 재현 안 됨 — `program/test/haltbr.asm` H1~H10, CLAUDE.md에서 삭제 (11-07)
 - [x] 회로 에러 15번 최종 수정 — `flushstall` 모두 PASS (11-05)
 - [x] CPU 전체를 한 클럭 에지로 (bf78b59). 실행 유닛을 `C_ct` → `C_dt`, 키보드 클럭 glitch 수정

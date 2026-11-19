@@ -2,7 +2,7 @@
 # runtests.sh [-j N] [-nobuild] [-c circuit.dig] [name...]
 #   Builds the test programs, runs them on components/<circuit> in parallel (each with -Drom=...,
 #   so boot/rom.bin is not touched) and compares the terminal output with the emulator.
-#   circuit : default computer-32-test.dig (or $DSIM_CIRCUIT); cpu-test.dig still works.
+#   circuit : default computer-32-test.dig (or $DSIM_CIRCUIT).
 #   name : only these tests (default all). Output: program/build/dsim/<name>.sim / .emu
 #   Run from git-bash. Needs Sim compiled into build/ (see README.md).
 cd "$(dirname "$0")"
@@ -24,7 +24,7 @@ done
 # cpu-32 has no probes, so the stall check (PC, com1, com2) taps those nets of cpu-32.
 case $CIRC in
   computer-32-test.dig) COPT='-Ddip=-780,580;-780,620 -Dset= -Dtap=cpu-32.dig:PCS=PC,com1,com2' ;;
-  *) COPT= ;;   # cpu-test.dig: Sim defaults (clock DipSwitch -560,-1640, set=E=1,run=1, probes in the circuit)
+  *) COPT= ;;   # other circuits: Sim defaults (clock DipSwitch -560,-1640, set=E=1,run=1)
 esac
 echo "circuit: components/$CIRC"
 
@@ -65,11 +65,11 @@ asm() {
 }
 if [ $BUILD = 1 ]; then
   asm "$P/test/selftest.asm" selftest.bin "$P/floatingpoint/float.asm"
-  asm "$P/test/memtest.asm" memtest.bin
-  asm "$P/test/memtest2.asm" memtest2.bin
+  asm "$P/test/memory/memtest.asm" memtest.bin
+  asm "$P/test/memory/memtest2.asm" memtest2.bin
   asm "$P/test/fill.asm" fill_nh.bin
   asm "$P/test/flushstall.asm" flushstall.bin
-  asm "$P/test/ldstmix.asm" ldstmix.bin
+  asm "$P/test/memory/ldstmix.asm" ldstmix.bin
   asm "$P/test/knownbug.asm" knownbug.bin
   asm "$P/test/rotate.asm" rotate.bin
   asm "$P/calc/calc.asm" calc.bin "$P/floatingpoint/float.asm" "$P/io/io.asm"

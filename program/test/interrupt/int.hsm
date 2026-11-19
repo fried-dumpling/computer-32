@@ -1,5 +1,5 @@
 ; =====================================================================
-;  int.hsm : shared macros of the interrupt tests (program/test/int_*.asm)
+;  int.hsm : shared macros of the interrupt tests (program/test/interrupt/int_*.asm)
 ;  run them with tools/dsim/inttest.py on components/computer-32-test.dig.
 ;  the emulator has no interrupts.
 ;
@@ -93,6 +93,84 @@
     ld.zero gen[1].32B, ISTACK
     PHEX()
     ldexp gen[1].32B, intlevel
+    PHEX()
+#end
+
+; ---------------------------------------------------------------------
+;  handler log. a linked list of LOGN entries {value, next} at LOG, LOGP =
+;  next free entry. a handler appends with LOGK (value in gen[22]), using
+;  only gen[22], gen[23], ld/st/ldexp/mov/set: no ALU, so the flags of the
+;  interrupted code survive. main prints it at the end with DUMPLOG:
+;  "G<v> <v> ... g".
+; ---------------------------------------------------------------------
+#define IRQ2 4                  ; second I-in bit (nested tests)
+#define IRQ2_LEV 2
+#define LOGP 0x27F0
+#define LOG 0x2800
+#define LOGN 32
+
+#macro LOGINIT 0
+    set gen[1].32B, LOG
+    st.zero gen[1].32B, LOGP
+##lp:
+    mov gen[2].32B, gen[1].32B
+    addi gen[2].32B, 8
+    st.gen[1] gen[2].32B, 4
+    mov gen[1].32B, gen[2].32B
+    cmpi gen[1].32B, LOG+8*LOGN
+    ijmp.zero zero.32B, ##lp
+#end
+
+#macro LOGK 0
+    ld.zero gen[23].32B, LOGP
+    st.gen[23] gen[22].32B, 0
+    ld.gen[23] gen[23].32B, 4
+    st.zero gen[23].32B, LOGP
+#end
+
+; append mem[istack] (the return PC right after entry)
+#macro LOGRET 0
+    ldexp gen[22].32B, istack
+    ld.gen[22] gen[22].32B, 0
+    LOGK()
+#end
+
+#macro LOGEXT 1
+    ldexp gen[22].32B, #1
+    LOGK()
+#end
+
+#macro LOGREG 1
+    mov gen[22].32B, #1
+    LOGK()
+#end
+
+; int_vec[#2] = #1, int_pri[#2] = #3 (uses gen[1])
+#macro SETVEC 3
+    set gen[1].32B, #1
+    interst gen[1].32B, 0, vec | #2
+    interst zero.32B, #3, pri | #2
+#end
+
+; print the log (uses gen[1], gen[2], gen[18], gen[19], gen[20])
+#macro DUMPLOG 0
+    PUTC('G')
+    set gen[19].32B, LOG
+##lp:
+    ld.zero gen[2].32B, LOGP
+    cmp gen[19].32B, gen[2].32B
+    jmp.zero zero.32B, ##end
+    ld.gen[19] gen[1].32B, 0
+    PHEX()
+    addi gen[19].32B, 8
+    jmp.one zero.32B, ##lp
+##end:
+    PUTC('g')
+#end
+
+; print label addresses: "L<#1> "
+#macro PADDR 1
+    set gen[1].32B, #1
     PHEX()
 #end
 

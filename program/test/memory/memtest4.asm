@@ -1,7 +1,7 @@
 ; =====================================================================
 ;  memtest4.asm : flushed wrong-path store vs. a correct-path load
 ;
-;  build (in program/) :  dasm test/memtest4.asm -o memtest4.o
+;  build (in program/) :  dasm test/memory/memtest4.asm -o memtest4.o
 ;                         dlnk memtest4.o -o run.txt
 ;
 ;  press a key 1..7 to run one test, it prints "<key> <value>" and

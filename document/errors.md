@@ -28,6 +28,26 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-07) 중 dsim으로 찾은 회�
 | 16 | 11-02 | res-station.dig (non-debug) | `inst-wfile` 핀 연결이 밀림 | ❌ |
 | 17 | 11-05 | load-buffer forward 폭 | `st .8L` 직후 `ld .32B`가 `000000AA` (정답 `112233AA`) | ❌ |
 | 18 | 11-07 | `st.stack` base | issue가 밀린 `st.stack`이 더 젊은 pop/ret/push가 바꾼 stack을 주소로 씀 | ✅ (11-07, `st.stack`이 PCA 사용) |
+| 19 | 11-16 | TRAP `iret` load id | `iret`의 load가 돌아오지 않음 (`Ii` 뒤 stall) | ✅ |
+| 20 | 11-16 | `iret` commit ECLR | `iret`이 0x178이 아니라 자기 PC+4(0x1c)로 감 | ✅ |
+| 21 | 11-16 | BTB 학습 | 인터럽트 없이 fetch가 핸들러로 들어감 | ✅ |
+| 22 | 11-16 | `int-level` / `int-tmplv` 쓰기 | `iret` 뒤 `int-level`이 복원되지 않음 | ✅ |
+| 23 | 11-17 | IPU `INT_req` 응답 | `syscall` 뒤 `L00000278 A`에서 stall | ✅ |
+| 24 | 11-18 | 수락 RS_FF S=R=1 | `syscall`이 seed에 따라 약 1/4 확률로 stall | ✅ |
+| 25 | 11-18 | fetch hold (wait가 clr보다 먼저) | `syscall` 반환 PC가 다음 명령 +4 (한 명령 건너뜀) | ✅ (11-18, 14a PASS) |
+| 26 | 11-18 | 공용 stack 가산기 mux sel = clr | flush와 겹친 `iret` 뒤 istack·stack이 4 어긋남 | ✅ (11-18, 14d PASS) |
+| 27 | 11-18 | 진입 때 `int-level` | `syscall` 핸들러의 `int-level`이 0x10 (`int_pri[1]` = 1인데) | ✅ (11-19, 14b PASS. ker는 20b로 남음) |
+| 28 | 11-18 | 진입 때 `int-tmplv` | 진입이 `int-level`을 `int-tmplv`에 복사하지 않음 | ✅ (11-19, 16b PASS) |
+| 29 | 11-18 | `syscall` 직전 IRQ | `INT_req` 2~14 half 전의 IRQ 펄스가 사라짐 | ✅ (11-19, 장치 latch 규칙으로 15b PASS, 35번) |
+| 30 | 11-18 | 연속 `syscall`의 `iret` | 두 번째 `iret`이 첫 반환 PC로 간 뒤 stall | ✅ (11-19, 19a~c PASS) |
+| 31 | 11-18 | `ld ; ld ; iret` | `iret`이 돌아오지 않음 (타이밍 의존) | ✅ (11-19, 22 PASS) |
+| 32 | 11-19 | `syscall` 수락 잠금 | `syscall`이 한 번 더 진입해 vector 0으로 가고 처음부터 다시 시작 | ✅ |
+| 33 | 11-19 | `iret` 완료 비트 (RET_INT, V1) | `iret` 뒤 commit이 멈춰 RS_full로 stall | ✅ |
+| 34 | 11-19 | istack 갱신 register 지연 | `iret` 뒤 istack이 +4로 돌아오지 않음 | ✅ |
+| 35 | 11-19 | IPU 출력 register 덮어쓰기 | 내보내던 IRQ를 `syscall` `INT_req`가 덮어 IRQ가 사라짐, `syscall` acp가 T_num 선으로 감 | ✅ 장치 규칙으로 회피 / ⚠️ acp 선 |
+| 36 | 11-19 | FT RS_FF S=R=1 | `syscall` wait와 IRQ `run_int`가 같은 클럭이면 fetch가 멈추지 않아 반환 PC 틀림 (15c) | ✅ |
+| 37 | 11-19 | IRQ 수락 latch 취소 | 수락 뒤 `stexp`로 level을 올려도 진입 (16b, R = 0x1dc..) | ✅ |
+| 38 | 11-19 | IPU ICLR 창의 펄스 | acp 직후 3클럭 안의 펄스가 사라짐 (17b) | ✅ 장치 규칙 (acp까지 high) |
 | — | 10-17 | 기존 알려진 문제 | `halt`가 분기보다 먼저 실행 | ✅ 재현 안 됨 (11-07 `haltbr`), CLAUDE.md에서 삭제 |
 
 2026-11-07 기준 runtests 13개 중 `knownbug`(k1~k3, 17번)만 DIFF이고 나머지는 모두 에뮬레이터와 같습니다. `selfflush`(a~l), `haltbr`(H1~H10)도 모두 같습니다.
@@ -120,7 +140,7 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-07) 중 dsim으로 찾은 회�
   - fetch가 0x50부터 다시 시작해 load가 **새 id d**로 다시 실행 → 8958 d가 0x110(정답)을 받고 8960 commit.
   - 지금 self flush는 "load id replay"가 아니라 "load PC부터 다시 fetch"입니다. 옛 id c는 commit되지만 regFile에 쓰지 않습니다(probe R2는 c commit 때 그대로, d commit 때 0x110).
   - dest = base인 경우(`selfflush` d)도 c commit 때 base가 유지되어, 다시 실행된 load가 맞는 base를 씁니다.
-- **테스트:** `program/test/selfflush.asm` a, b, c, d, e, h, i, k (16라운드, zseed 1~3) 모두 에뮬레이터와 같음.
+- **테스트:** `program/test/memory/selfflush.asm` a, b, c, d, e, h, i, k (16라운드, zseed 1~3) 모두 에뮬레이터와 같음.
 - **확인 안 한 것:** 옛 id c commit과 다시 fetch된 d 사이에 인터럽트가 들어오는 경우(정밀 상태에서 load를 건너뛸 수 있음), IO처럼 읽으면 상태가 바뀌는 주소의 load(두 번 읽힘).
 - **고칠 방향(필요하면):** self flush 때 load id 완료 비트 지우기. 지금은 결과에 영향이 없음.
 
@@ -176,7 +196,7 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-07) 중 dsim으로 찾은 회�
 
 ## 16. res-station.dig (non-debug) 핀 연결이 밀림 (11-02) ❌
 - `inst-wfile`에 `clr_self` 입력이 생기면서 핀 위치가 밀렸는데 `res-station.dig`(cpu-32.dig가 씀)는 갱신 안 됨: `clr_id` 연결 없음, `clr_ep`←`clr_id`, `clr_self`←`clr_ep`.
-- `res-station-debug.dig`처럼 맞추거나 `sync-nondebug.sh`로 맞춰야 합니다. (self flush 구조가 바뀌어 `clr_self`가 없어졌다면 다시 확인)
+- `res-station-debug.dig`처럼 손으로 맞춰야 합니다(`sync-nondebug.sh`는 2026-11-19에 삭제). (self flush 구조가 바뀌어 `clr_self`가 없어졌다면 다시 확인)
 
 ## 17. load-buffer forward가 접근 폭을 보지 않음 (11-05) ❌
 - **증상:** `knownbug`에서 `0x11223344`를 쓰고 부분 store 직후 같은 주소를 `ld .32B`로 읽으면 틀립니다.
@@ -204,6 +224,62 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-07) 중 dsim으로 찾은 회�
   - g dump: 20508 LDB가 ret(id 8)에 옛 반환 주소 0x2ac → 20512 JPU가 0x2ac로 점프 → 20538에야 store(id 7) STB A=0x8f8.
 - **고친 것:** 사용자가 `st.stack`이 PCA를 쓰도록 수정(`regFile.dig` 포함, 11-07). `selfflush` a~l 모두 PASS, runtests 13개는 knownbug만 DIFF(예전과 같음), `haltbr` 모두 같음.
 - **확인 안 한 것:** issue가 밀린 `ld.stack`의 base, stack 외 SC 레지스터.
+
+## 19~24. 인터럽트 (`iret`, `syscall`) (11-16 ~ 11-18) ✅
+재현은 `python tools/dsim/inttest.py`(설명은 `program/document/test.md` "인터럽트 회귀 테스트"). 19~22는 `int_iret`(7a~7c), 23~24는 `int_sys`(8a, 8b). 모두 사용자가 고쳤고 11-18에 PASS 20, SKIP 1(11번)입니다.
+
+- **19. `iret` load의 id/epoch:** `iret`은 issue 때 `CT_ISS-_OLDB`로 자기 id(`inst_IS`)의 load-buffer 칸을 받습니다. 그런데 TRAP_IRET(`Register@1100,3980`)이 내는 load 주소 쪽 id/epoch가 `int-inst`였습니다. load 응답이 그 칸과 맞지 않아 `iret`이 돌아오지 않았습니다. → `trap-inst`로 바꿈. load가 0x178을 받습니다.
+- **20. `iret` commit의 ECLR:** `iret` commit 때 `Fl_ECLR`가 `iret` PC+4(0x1c)로 redirect해서, JPU가 낸 0x178 redirect를 덮었습니다. → 사용자가 고침(`iret`이 0x178로 돌아감).
+- **21. 인터럽트 진입과 `iret`이 BTB에 씀:** 진입과 `iret`에서 `JPU_EN`이 BTB 쓰기를 켜서 0x174 → 8을 배웠습니다. 그 뒤 인터럽트가 없어도 fetch가 핸들러로 들어갔습니다. → 두 경우 BTB 쓰기를 뺌.
+- **22. `int-level` 복원:** `level` 레지스터(`Register@-540,3600`, en = `CT_ILVE`)를 TRAP_IRET이 켜는 driver가 없었습니다. 또 `Driver@320,3380`(RX_ILVTE)가 `CT_ILVTE`가 아니라 `CT_ILVE`를 몰았고, `CT_ILVTE`에는 PullDown이 없었습니다. → 고침. 7b, 7c PASS.
+- **23. IPU가 `INT_req`에 응답하지 않음:** `IPU-test.dig`의 `INT_req` 입력이 같은 이름 tunnel에만 이어져 있었고, `INT_rqac`는 Ground였습니다. → IPU가 `INT_req`를 `Register@1780,220`에 받아 `INT_rqac`로 돌려주고, 같은 enable로 `INT_id-_bus`가 가리키는 칸의 vec/pri를 `INT_vec`/`INT_lev`에 잡습니다. `syscall`은 id 1입니다(11-18, id 0은 panic/비상용). 잡힌 level이 0이면 `INT_out`이 오르지 않으므로 그 칸에 `int_pri` ≥ 1이 있어야 합니다.
+- **24. 수락 RS_FF의 S=R=1:** `syscall`에서 `int-forced`가 `run_int`를 올리는 클럭에 `INT_MASKED`가 아직 1입니다(같은 에지에 풀림). 그래서 `RS_FF@-240,2860`(S = `run_int`, R = `INT_acp | INT_MASKED`)과 `RS_FF@-480,2780`(S = `run_int`, R = `INT_MASKED | …`)이 둘 다 S=R=1을 받습니다. Digital의 RS_FF는 S=R=1이면 `Math.random() < 0.5`로 출력을 정합니다(`FlipflopRS.readInputs`). `@-480,2780`만 set되면 `run_int`가 바로 0이 되어 `INT_acp`가 나오지 않고 0x28c에서 stall합니다(16 seed 중 3회). 외부 IRQ는 `INT_MASKED` = 0이라 생기지 않습니다. → 사용자가 수정. 24 seed × tap 2종 = 48회 모두 PASS.
+  - 다른 RS_FF에서도 같은 형태(S와 R이 같은 에지에 1)가 생기면 seed에 따라 결과가 달라집니다. seed마다 결과가 다르면 먼저 의심합니다.
+- **남은 것:** 권한 검사는 배선되지 않았습니다(`ISA.md` 2.2 "권한 검사"). 그 뒤 추가된 테스트에서 나온 버그는 25~31번입니다.
+
+## 25~31. 인터럽트 테스트 확장에서 나온 것 (11-18) ✅
+tools 세션이 추가한 테스트(`int_sysprev`, `int_sysirq`, `int_nest`, `int_iret2`, `int_iretpre`, `int_wpsys`, `int_sysmem`, `int_flc`, `int_user`, `int_sys0`)입니다. `inttest.py -snap`(cpu-32 01:14) 결과는 PASS 32, XFAIL 11, SKIP 3이고, XFAIL 이유가 아래 번호입니다. 11-18 ~ 19에 모두 해결됐습니다(29번은 IRQ 장치 규칙으로, 나머지는 회로 수정으로. 그 과정에서 나온 것은 32~38번). 11-19 `inttest` 결과는 FAIL 0, PASS 43, XFAIL 2(20b, 20c), SKIP 0입니다.
+
+- **25. `syscall` 반환 PC가 +4 (14a, 15c):** `D_FF@-200,1220`(HOLD)의 D는 clr ∧ **¬wait**입니다(`And@-280,1200`의 In_2가 반전). HOLD Q는 한 사이클 동안 `CT_BUS-_IAR`, `CT_RF-_PCSE`와 DC valid(`Register'DC'@60,960`)의 en을 켭니다. 즉 fetch를 한 칸 진행시킵니다. `FT`와 `DC`는 valid 비트이고, 주소는 `PCS` → `PCS_FT`(`Register@800,1700`, en = IAR) → `PCS_DC`(`Register@960,1700`, en = `dc_e`)로 갑니다. 진입 때 `int-pc`가 `PCS_DC`를 잡습니다.
+  - int_sysprev case 5(예전 배치 `sp.bin`, `syscall` 0xd4, 정답 0xd8)에서는 이렇게 됩니다.
+    1. 7182: wait(TRAP trap-wait, `Driver@1220,3460`)만 1입니다. FT가 꺼지고 DC valid ← 0이 됩니다.
+    2. 7184: clr가 wait 없이 옵니다. HOLD D = 1이고, PCS ← 0xd8입니다.
+    3. 7186: HOLD = 1이라 IAR이 켜지고, 7188에 `PCS_FT` ← 0xd8, PCS → 0xdc입니다. DC valid의 D = FT.Q ∧ ¬(clr|wait) = 0이라 0xd8은 DC로 들어가지 못합니다.
+    4. 7192: FT가 다시 켜지고, 7194에 `PCS_FT` ← 0xdc로 덮입니다.
+    5. 7196: `PCS_DC` = 0xdc이고, `int-pc` = 0xdc가 됩니다.
+  - case 4는 wait와 clr가 같은 half(6952)라 HOLD D = 0입니다. PCS가 0xc0에 머물다가 FT 재시작 때 0xc0을 받습니다. 명령 종류가 원인이 아니라 타이밍 차이이고, 15c도 같은 형태입니다.
+  - **고칠 방향:** HOLD D에 FT.Q를 더합니다(clr ∧ ¬wait ∧ FT.Q). FT가 이미 멈춰 있으면 한 칸 진행하지 않게 하는 것입니다. 대안은 DC valid D를 (FT.Q | HOLD) ∧ ¬kill로 바꾸는 것인데, trap 대기 중인 명령이 issue되지 않게 따로 막아야 합니다. HOLD가 원래 맡은 경우(halt-frontend와 겹칠 때 등)를 바꾸지 않는지 확인이 필요합니다.
+  - 그림과 파형: https://claude.ai/artifact/PxT3wSw4RdRJyPuE1BGxqY
+- **26. 공용 stack 가산기 (14d):** istack은 `addsub-4c32@2700,-180`을 stack과 같이 씁니다. 그 입력 mux `Mux@2620,-200`의 sel이 **clr**입니다(in_0 = `Mux@2520,-220`(sel `CT_ISCM`: SCS/ISC), in_1 = `CT_SC-_FD`). istack 갱신(`iret` +4, 진입 −4)이 clr와 같은 사이클이면 가산기가 `CT_SC-_FD`(stack)를 씁니다. int_sysprev case 4의 `iret`(half 7024) 뒤 istack = 0x3004, stack = 0x3004이고, NPAD 24개 빌드 모두 istack = 0x3004입니다.
+  - **고칠 방향:** `CT_ISCE`가 켜져 있으면 그 mux가 clr를 따르지 않게 하거나, istack에 가산기를 따로 둡니다.
+- **27. 핸들러의 `int-level`이 0x10 (14b, 20b):** `int_pri[1]` = 1인데 `syscall` 핸들러에서 읽은 `int-level`이 0x10입니다. level이 0이고, ker도 켜지지 않았습니다. 원인은 아직 보지 않았습니다.
+- **28. 진입이 `int-tmplv`를 쓰지 않음 (16b):** 중첩된 핸들러가 읽은 `int-tmplv`가 0x81이 아니라 0입니다. `int-level` 0x80, `int-tmplv` 0x07로 두고 `syscall`해도 0입니다. 그래서 `iret`이 복원하는 level도 틀립니다.
+- **29. `syscall` 직전 IRQ가 사라짐 (15b):** IRQ 펄스가 `syscall`의 `INT_req`보다 2~14 half 먼저 오면 그 IRQ가 들어가지 않습니다(33회, 모든 seed).
+- **30. 두 번째 `syscall`의 `iret` (19a):** int_sysmem에서 두 번째 `syscall`의 `iret`이 첫 번째 반환 PC(0x320)로 간 뒤 stall합니다. 19b, 19c는 그래서 SKIP입니다.
+- **31. `ld ; ld ; iret` (22, int_iretpre):** 이 순서에서 `iret`이 돌아오지 않습니다. 타이밍에 따라 달라서, int_iret 변형에서 `iret` 바로 앞이 nop이나 set일 때도 멈췄습니다. int_nest의 level 2 핸들러는 그래서 끝에 dummy st를 둡니다.
+  - **원인 (11-18 trace, C4 정상 / C5 멈춤, zseed 1):** `iret`이 commit 자리에 오면 TRAP이 한 사이클 동안 `TRAP_IRET` 펄스를 냅니다(`Register@1100,4080`). 이 펄스가 Driver 13개(`Driver@340,4080~4560`)로 dispatch 제어 bus(`CT_FU-_INST/EPOCH/WR/MF`, `CT_MB-_LD`, `CT_MB-_OFFM`, `CT_INTM`, `CT_ISCM/ISCE/ISCS`, `CT_RF-_SCN`, `CT_ILVE`, `CT_RET-_LD`)를 직접 몹니다. 이 bus는 dispatch decoder의 Driver(sel = opcode decode ∧ `CT_DISP|disp_e`)도 같이 씁니다.
+    - C4는 그 사이클(8306)에 halt-frontend = 1이라 dispatch가 쉬고 있어서 `iret` Driver만 켜집니다.
+    - C5는 그 사이클(8332)에 halt-frontend = 0이고, `iret` 뒤에 fetch된 젊은 명령이 dispatch 중입니다. `Driver@1540,-1820`(`CT_FU-_WR`)과 `Driver@1540,-1900`(`CT_FU-_INST`)이 `iret` Driver와 같이 켜져 두 driver가 같은 net을 몹니다.
+    - 그 뒤로는 클럭만 토글하고 회로의 모든 신호가 멈춥니다. istack 레지스터는 en = 1, D = 0x2000인데도 0x1ffc에 머뭅니다. 시뮬레이터는 아무 메시지도 내지 않습니다.
+    - 앞 명령 종류가 원인이 아니라, 그 사이클에 dispatch가 쉬는지에 따라 갈립니다.
+  - **고칠 방향:** `TRAP_IRET` 사이클에 dispatch를 막거나(disp_e = 0 또는 halt-frontend), `iret` micro-op을 dispatch가 비었을 때만 내게 합니다.
+- **결정된 것 (11-19):** level 0 칸으로 `syscall`하면(int_sys0, 21b) IPU가 id 0(level 31)으로 바꾸고, CPU는 `int-level` 0x9f로 `int_vec[0]`에 진입합니다. 반환 PC는 `syscall` 다음 word입니다(`ISA.md` 2.2 "고정 id"). 11번(Fl_INT와 Fl_JPU가 같은 half)은 Fl_INT를 없애기로 해서 테스트에서 뺐습니다.
+
+## 32~38. 25~31번을 고치며 나온 것 (11-19) ✅
+재현은 `python tools/dsim/inttest.py`입니다. 좌표는 11-19 `cpu-32.dig` / `IPU-test.dig` 기준입니다.
+
+- **32. `syscall` 두 번 진입 (8a, 8b, 14c, 15a, 16a, 20a):** run_int = ¬`RS_FF@-480,2780`.Q ∧ int-accept(`And@-480,2860`)입니다. INT_acp(4738)가 이 RS_FF를 reset한 뒤에도 int-accept가 한 사이클 더 1입니다. int-forced가 `D_FF@-500,3340`(INT_rqac)과 `D_FF@-500,3380`(INT_in)을 거치기 때문입니다. 그 사이클(4740)에 run_int가 다시 켜지고, 이미 INT_id = 0이라 vector 0으로 가서 프로그램이 처음부터 다시 돕니다. → 사용자가 수정(INT_acp를 한 사이클 늦춘 `D_FF@-280,3280`의 ~Q로 run_int 쪽을 막음). 그림: https://claude.ai/artifact/QdWJiiAuW2XpBL2QG5c6kr
+  - 같은 무렵 진입의 level/level-T 쓰기가 int-accept 5사이클 내내 켜져 level-T가 새 level로 덮이던 것(27, 28번의 원인)도 첫 사이클만 쓰도록 고쳐졌습니다.
+- **33. `iret` 뒤 commit 멈춤 (15a, 16a, 20a):** `iret`이 dispatch될 때 `CT_RET-_INT`로 켜는 `Register@4600,2940`의 bit가 자기 Q를 다시 받지 않아 다음 dispatch에 지워집니다. JPU가 그 bit를 1로 읽으면 `JPU_RETF` = 0이라 V1을 내지 않습니다(V1 = ¬MF ∨ RF). TRAP_IRET의 완료 표시(`bus16-demux@1240,4000`)는 V2에만 연결되어, id가 V1을 끝내 받지 못하고 commit이 멈춥니다. int_sys는 bit가 먼저 지워져 JPU가 일반 `ret`처럼 V1/V2를 다 내서 우연히 통과했습니다. → RET_INT register를 `(Q & cmks) | demux`로 유지하고 V1 출처를 하나로 정리(사용자 수정).
+  - 처음에는 TRAP_IRET 사이클의 SCN 겹침을 원인으로 봤는데 틀렸습니다. SCN 겹침은 같이 dispatch된 push/pop의 stack 값을 틀리게 할 수는 있어도 멈추게 하지는 않습니다.
+- **34. istack이 +4로 돌아오지 않음 (7b, 14d, 17b):** 가산기 결과 scs_i를 `Register@2640,20`(en = `CT_ISCM`)에 한 번 저장한 뒤 `Mux@180,3520`이 TRAP_IRET일 때 그 값(ISC_sc)을 istack으로 보냈습니다. TRAP_IRET 사이클의 ISC_sc는 이전 값(0x1ffc)이고, 0x2000은 쓰기 enable이 꺼진 다음 클럭에 들어옵니다. → 사용자 수정, 7b PASS.
+- **35. IPU 출력 register 덮어쓰기 (15b, 29번의 원인):** 출력 register(`Register@1780,-100` id, `-20` vec, `60` lev, `220` rqit)의 en은 `Or@1660,140` = INT_acp ∨ INT_req ∨ 비어 있음입니다. IRQ를 내보내는 중(아직 수락 전)에 `syscall`의 INT_req가 오면 그 값으로 덮입니다. 입력 `D_FF@-320,-800`은 샘플만 해서 펄스 IRQ는 그대로 사라집니다. → 장치 쪽 규칙으로 해결: IRQ 선은 acp가 올 때까지 high를 유지합니다(`computer-32-test.dig`의 `RS-64`, S = I-in, R = I-acp). 그러면 `syscall` 수락 뒤 IPU가 IRQ를 다시 냅니다.
+  - ⚠️ 남은 것: id register의 D는 INT_req로 채울 때도 T_num(`PriorityEncoder@260,-1120`)이라, `syscall` 수락 때 acp가 그 순간 T_num 선(보통 line 0)으로 나갑니다. 그 선에 장치가 high로 대기 중이면 핸들러 없이 clear됩니다. 테스트로는 아직 잡지 않았습니다.
+- **36. FT RS_FF S=R=1 (15c, 1건):** `syscall`의 wait(FT R)와 IRQ 수락의 run_int(FT S, `Or@-240,960`)가 같은 클럭(17950)에 오면 `RS_FF 'FT'`가 S=R=1을 받아 무작위로 정해집니다(24번과 같은 형태). FT가 켜진 채 남으면 fetch가 0x42c → 0x438로 진행하고 int-pc = 0x430이 됩니다. → S = (run ∨ run_int) ∧ ¬wait(`And@-180,960`).
+- **37. IRQ 수락 latch가 취소되지 않음 (16b, 18건):** 수락 latch `RS_FF@-240,2860`의 R은 run_int | INT_ISS ∨ INT_MASKED인데, INT_MASKED는 `syscall`(int-forced)일 때만 나옵니다. 낮은 핸들러의 close(`stexp 0x91`)가 commit돼 int-accept가 꺼져도 latch가 남아, 높은 IRQ가 close 뒤에 들어가거나(R = 0x1dc..0x1e4) `int-tmplv`에 0x91이 들어갔습니다. → 취소 조건 = (한 클럭 늦춘 com1) ∧ ¬(`Comparator@-320,3420`의 `>`)를 두 latch의 R에 넣고, INT_ISS의 And에 (¬com1-dff ∨ `>`)를 더함(사용자 수정, 16b PASS).
+  - 고치는 중 두 번 틀렸습니다. ① com1 ∧ `>`(극성 반대): 수락 중 commit마다 latch가 풀려 진입이 ~1400 half 밀림. ② NAnd(com1, `>`): commit이 없을 때도 1이라 latch가 거의 항상 reset. ③ com1 ∧ ¬`>`: 비교기가 `stexp` commit 다음 클럭에야 새 level을 봐서 그 클럭의 INT_ISS를 막지 못함(3건) → com1을 D_FF로 늦추고 INT_ISS를 막아 해결.
+- **38. ICLR 창의 펄스 (17b):** acp 뒤 IPU의 ICLR(`NOr@1360,-160`, INT_acp와 2단 지연)이 3클럭 동안 새 요청을 막아서, 그 안에 온 1-clock 펄스가 사라졌습니다. → 35번의 장치 규칙(acp까지 high)으로 해결. 다만 acp가 오는 바로 그 edge(iret2의 H2 = 13970)에 펄스가 들어오면 `RS-64`가 S=R=1을 받아 seed에 따라 잡히기도 하고 무시되기도 합니다. 17b는 그 경우 진입 1번과 2번을 모두 허용합니다(`I-act|I-acp`로 판정).
+  - 13:50 회로와 13:57 회로에서 같은 펄스가 잡히고 안 잡힌 차이는 INT_acp와 ICLR 시점이 같아서 그쪽 때문이 아니고, 원인은 확인하지 않았습니다.
 
 ## 기존 알려진 문제: `halt`가 분기보다 먼저 실행 (10-17) ✅ 재현 안 됨 (11-07)
 - **예전 증상:** not-taken으로 예측된 분기 바로 뒤 `halt`가 분기보다 먼저 실행돼 CPU가 멈춤. 그래서 프로그램을 `jmp.one pc.32B, 0`으로 끝냈음.
