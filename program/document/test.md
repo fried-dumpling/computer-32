@@ -73,7 +73,7 @@ python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [-snap] [그룹...
 - 시작은 boot-sequencer(`-Dset=S=0,R=1,B_used=0,I-in=0 -Dat=6:R=0;10:S=1;16:S=0`)이고, 프로그램은 `-Drom`으로 boot ROM이 RAM에 복사합니다.
 - 인터럽트 없이 먼저 돌려 PC가 루프 주소에 닿는 half H를 찾고, 거기서부터 2 half 간격으로 펄스를 넣습니다. `I-in`이 오른 뒤 약 42 half에 IPU의 `acp`가 1 half 나오고, 그 4 half 뒤 PC가 핸들러가 됩니다.
 - 결과는 `PASS`, `FAIL`, `XFAIL`(지금 실패가 예상됨, 이유는 스크립트의 `XFAIL`), `XPASS`(예상과 달리 통과), `SKIP`(이번 실행에서 판단 불가)입니다. `FAIL`이나 `XPASS`가 있으면 종료 코드 1이고, `XPASS`가 나오면 `XFAIL`에서 그 항목을 지웁니다.
-- `components/`를 `program/build/dsim/int/components/`로 복사해 돌리므로 실행 중에 회로를 저장해도 됩니다. 출력은 같은 폴더의 `<프로그램>-z<seed>-<H>b<bit>.sim`, `.delta`입니다. 전체 약 20분(-j 9)입니다. `sysirq`, `nest`, `iret2`, `flc`가 zseed마다 수백 번 돌기 때문이고, 빨리 보려면 `-seeds 1`이나 그룹을 줍니다.
+- `components/`를 `program/build/dsim/int/components/`로 복사해 돌리므로 실행 중에 회로를 저장해도 됩니다. 출력은 같은 폴더의 `<프로그램>-z<seed>-<H>b<bit>.sim`, `.delta`입니다. 전체 1,079회, `-j 6`으로 약 4분입니다(2026-11-19; 예전 방식 약 1,650회는 30분). `sysirq`, `nest`, `iret2`는 이벤트 근처만 촘촘히 돌고, 다시 시작하는 실행은 일찍 끝냅니다(`tools/dsim/README.md`). 예전처럼 모든 위치를 보려면 `-full -nolimit`를 줍니다.
 
 | 항목 | 프로그램 | 확인하는 것 |
 |---|---|---|
