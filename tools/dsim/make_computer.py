@@ -11,7 +11,6 @@ harness_f, test_f, pins_f, dst = sys.argv[1:5]
 CX, CY = -900, -500          # cpu-32 position (the harness is at x < -1200)
 IO_X, IO_Y = -300, -1000     # column of the In/Out/Clock elements for the other pins
 ALIAS = {'C': ['C_i']}       # harness tunnels joined to a pin net through tunnels inside cpu-test
-
 s = open(harness_f, encoding='utf-8', newline='').read()
 t, _ = resolve_refs(open(test_f, encoding='utf-8', newline='').read())
 
@@ -25,6 +24,11 @@ harness_nets = {lab for n, lab, _ in elements(s) if n == 'Tunnel'}
 io = {lab: (n, b) for n, lab, b in elements(t) if n in ('In', 'Out', 'Clock') and lab}
 pins = [(l.split()[1], int(l.split()[2]), int(l.split()[3])) for l in open(pins_f) if l.startswith('cpu-32.dig ')]
 W = max(x for _, x, _ in pins); H = max(y for _, _, y in pins)
+# pin label -> harness tunnel name: some differ only in case (pin D_AMID, D_MID, MMU_md; nets D_amid, D_mid, MMU_MD)
+RENAME = {}
+for name, _, _ in pins:
+    m = [h for h in harness_nets if h.lower() == name.lower()]
+    if name not in harness_nets and len(m) == 1: RENAME[name] = m[0]
 
 def tunnel(name, x, y, rot):
     r = '' if rot == 0 else ('\n        <entry>\n          <string>rotation</string>\n'
@@ -52,11 +56,11 @@ for name, px, py in pins:
     elif px == W: dx, dy, rot = 40, 0, 0
     elif py == 0: dx, dy, rot = 0, -40, 1
     else:         dx, dy, rot = 0, 40, 3
-    E.append(tunnel(name, x + dx, y + dy, rot)); Wr.append(wire(x, y, x + dx, y + dy))
+    E.append(tunnel(RENAME.get(name, name), x + dx, y + dy, rot)); Wr.append(wire(x, y, x + dx, y + dy))
 
 iy = IO_Y
 for name, _, _ in pins:
-    if name in harness_nets and name not in ALIAS: continue
+    if RENAME.get(name, name) in harness_nets and name not in ALIAS: continue
     kind, b = io[name]
     if kind == 'Out':      # tunnel -> Out
         E.append(tunnel(name, IO_X + 200, iy, 2)); E.append(copy_at(b, IO_X + 240, iy))
@@ -74,3 +78,4 @@ s = s.replace('  </visualElements>', ''.join(E) + '  </visualElements>', 1)
 s = s.replace('  </wires>', ''.join(Wr) + '  </wires>', 1)
 open(dst, 'w', encoding='utf-8', newline='').write(s)
 print('cpu-32 pins %d, harness nets %s, io elements %d' % (len(pins), sorted(harness_nets), (iy - IO_Y) // 40))
+for k, v in sorted(RENAME.items()): print('pin %s -> harness tunnel %s' % (k, v))
