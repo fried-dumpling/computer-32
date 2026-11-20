@@ -20,10 +20,11 @@ while [ $# -gt 0 ]; do
     *) break ;;
   esac
 done
-# Sim options per circuit. computer-32-test: E and run are DipSwitches on the top (no top In),
-# cpu-32 has no probes, so the stall check (PC, com1, com2) taps those nets of cpu-32.
+# Sim options per circuit. computer-32-test: started by the boot sequencer S/R (the same start as
+# inttest.py START), no DipSwitch on the top. cpu-32 has no probes, so the stall check
+# (PC, com1, com2) taps those nets of cpu-32.
 case $CIRC in
-  computer-32-test.dig) COPT='-Ddip=-780,580;-780,620 -Dset= -Dtap=cpu-32.dig:PCS=PC,com1,com2' ;;
+  computer-32-test.dig) COPT='-Ddip= -Dset=S=0,R=1,B_used=0,I-in=0 -Dat=6:R=0;10:S=1;16:S=0 -Dtap=cpu-32.dig:PCS=PC,com1,com2' ;;
   *) COPT= ;;   # other circuits: Sim defaults (clock DipSwitch -560,-1640, set=E=1,run=1)
 esac
 echo "circuit: components/$CIRC"
