@@ -28,7 +28,7 @@ main:
     INITIST()
     set gen[1].32B, handler
     interst gen[1].32B, 0, vec | 1
-    interst zero.32B, 1, pri | 1
+    interst zero.32B, PKER + 1, pri | 1
     PUTC('L')
     set gen[1].32B, after
     PHEX()

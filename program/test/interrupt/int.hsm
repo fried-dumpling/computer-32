@@ -12,7 +12,8 @@
 #define INT_HSM 1
 
 #define IRQ 3                   ; I-in bit the runner pulses
-#define IRQ_LEV 1               ; its int_pri, so int-level in the handler = 0x11
+#define IRQ_LEV 1               ; its level, so int-level in the handler = 0x91
+#define PKER 0x80               ; int_pri ker bit: the handler runs in kernel (else it enters as user)
 
 #define IO_BASE 0x4000000
 #define TERM_OUT 12
@@ -61,9 +62,13 @@
     PUTC(' ')
 #end
 
+; the CPU starts in kernel with mask 1 (int-level 0x90): run the tests at
+; kernel, mask 0, level 0 so IRQs are accepted
 #macro INIT 0
     set stack.32B, 0x3000
     LSET(gen[24], IO_BASE)
+    set gen[20].32B, 0x80
+    stexp gen[20].32B, intlevel
 #end
 
 ; istack = ISTACK, with SENT in the words around it. the return PC must
@@ -77,11 +82,11 @@
     stexp gen[1].32B, istack
 #end
 
-; int_vec[IRQ] = handler, int_pri[IRQ] = IRQ_LEV (uses gen[1])
+; int_vec[IRQ] = handler, int_pri[IRQ] = PKER + IRQ_LEV (uses gen[1])
 #macro INTVEC 0
     set gen[1].32B, handler
     interst gen[1].32B, 0, vec | IRQ
-    interst zero.32B, IRQ_LEV, pri | IRQ
+    interst zero.32B, PKER + IRQ_LEV, pri | IRQ
 #end
 
 ; print "<istack> <mem[ISTACK-4]> <mem[ISTACK]> <int-level> "

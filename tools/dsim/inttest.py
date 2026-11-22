@@ -388,8 +388,8 @@ def t_prec(rep, pool, a):
     bad = [r.where() for r, f in done if not (f["ist"] == ISTACK - 4 and f["m4"] != SENT and f["m0"] == SENT)]
     rep.item("4", "push: istack -= 4, mem[istack] = return PC, mem[old istack] kept", (not bad) if done else None,
              f"{len(bad)}/{len(done)} wrong: " + brief(bad) if bad else f"{len(done)} runs")
-    bad = [f"{r.where()} level={f['lv']:#x}" for r, f in done if f["lv"] != 0x11]
-    rep.item("13", "int-level in the handler = {mask 1, level 1} = 0x11", (not bad) if done else None,
+    bad = [f"{r.where()} level={f['lv']:#x}" for r, f in done if f["lv"] != 0x91]
+    rep.item("13", "int-level in the handler = {ker 1, mask 1, level 1} = 0x91", (not bad) if done else None,
              f"{len(bad)}/{len(done)} wrong: " + brief(bad, 2) if bad else f"{len(done)} runs")
 
 
@@ -500,8 +500,8 @@ def t_iret(rep, pool, a):
              f"{len(entered)} entered, {len(bad)} wrong: " + brief(bad, 3) if bad else f"{len(entered)} runs")
     wrong = [r.where() for r, ist, _ in resumed if ist != ISTACK]
     rep.item("7b", "iret: istack back to ISTACK", (not wrong) if resumed else None, brief(wrong))
-    wrong = [r.where() for r, _, lv in resumed if lv != 0]
-    rep.item("7c", "iret: int-level back to 0", (not wrong) if resumed else None, brief(wrong))
+    wrong = [r.where() for r, _, lv in resumed if lv != 0x80]
+    rep.item("7c", "iret: int-level back to 0x80 (INIT)", (not wrong) if resumed else None, brief(wrong))
 
 
 def t_sys(rep, pool, a):
@@ -592,8 +592,8 @@ def t_sysirq(rep, pool, a):
     cal = [info[z][3] for z in a.seeds]
     # 14b: syscall level, from the runs without a pulse
     lvs = {f"z{r.seed}": (glog(r.text) or [0, 0])[1] for r in cal}
-    rep.item("14b", "int-level in the syscall handler = {mask 1, level int_pri[1] = 1} = 0x11",
-             all(lv5(v) == 0x11 for v in lvs.values()), ", ".join(f"{k}: {v:#x}" for k, v in lvs.items()))
+    rep.item("14b", "int-level in the syscall handler = {ker 1, mask 1, level int_pri[1] = 1} = 0x91",
+             all(v == 0x91 for v in lvs.values()), ", ".join(f"{k}: {v:#x}" for k, v in lvs.items()))
     stalled, lost, wrong, levels, order = [], [], [], [], {"Q first": 0, "S first": 0}
     final = re.compile(r"E" + HEX * 2 + r"G((?:[0-9A-F]{8} )*)g" + HEX * 2 + "e")
     for r in runs:
@@ -617,7 +617,7 @@ def t_sysirq(rep, pool, a):
             why = f"SQ IRQ R={rq:#x} before after (nested in the syscall handler?)"
         elif (g5, g6, ist, lv5(lv)) != (6, 60, ISTACK, 0):
             why = f"gen5={g5} gen6={g6} istack={ist:#x} level={lv:#x}"
-        if lv5(log[1 if seq[0] == "Q" else 3]) != 0x11:
+        if log[1 if seq[0] == "Q" else 3] != 0x91:
             levels.append(r.where())
         if why:
             wrong.append(f"{r.where()} {why}")
@@ -630,7 +630,7 @@ def t_sysirq(rep, pool, a):
     rep.item("15c", "IRQ around syscall: IRQ before the syscall commits (R <= sc) or after its iret, "
              "syscall R = next word", (not wrong) if len(lost) < len(runs) else None,
              f"{len(wrong)} wrong: " + brief(wrong, 3) if wrong else ", ".join(f"{k}: {v}" for k, v in order.items()))
-    rep.item("15d", "IRQ around syscall: int-level in the IRQ handler = 0x11", not levels, brief(levels))
+    rep.item("15d", "IRQ around syscall: int-level in the IRQ handler = 0x91", not levels, brief(levels))
 
 
 def t_nest(rep, pool, a):

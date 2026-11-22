@@ -45,7 +45,7 @@ main:
     INIT()
     INITIST()
     LOGINIT()
-    SETVEC(sysh, 1, 1)
+    SETVEC(sysh, 1, PKER + 1)
     PUTC('A')
     set gen[7].32B, 0
     st.zero gen[7].32B, ISTACK+16
