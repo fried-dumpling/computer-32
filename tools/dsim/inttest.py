@@ -8,7 +8,8 @@
 
 The emulator has no interrupts, so each item is compared with values from ISA.md 2.2, not
 with the emulator. An item in XFAIL is expected to fail today: it prints XFAIL while it
-fails and XPASS once it passes. The exit code is 1 on FAIL or XPASS (then remove the entry).
+fails and XPASS once it passes. The exit code is 1 on FAIL or XPASS (then remove the entry)
+or ERROR (item 0: a run that a Digital error such as a short circuit ended, "stop: ERROR").
 
 An interrupt is a 2-half pulse on IPU line IRQ (top-level In "I-in"). The programs set
 int_vec[IRQ] = handler and int_pri[IRQ] = 1 with INTVEC() (program/test/interrupt/int.hsm).
@@ -23,6 +24,7 @@ import statistics
 import subprocess
 import sys
 import threading
+import traceback
 import atexit
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -169,11 +171,15 @@ def sim(name, seed=1, h=None, cols=None, tag=None, pulses=None):
     if "[half=" not in stdout:
         raise RuntimeError(f"Sim failed for {tag}:\n{err}")
     text, tail = stdout.rsplit("[half=", 1)
+    m = re.search(r"stop: ERROR (.*)\]", tail)
+    if m:           # a Digital error (short circuit, ...) ended the run: always a failure (Report.show)
+        DIGITAL_ERRORS.append((tag, m.group(1).strip()))
     text = re.sub(r"\[RESTART at half \d+\]", "", text.replace("\n", ""))   # Sim's note, not program output
     return Run(name, seed, h, text, tail, delta, tag)
 
 
 CP = f"{JAR};{DSIM / 'build'}"
+DIGITAL_ERRORS = []         # (tag, message) of the runs that stopped with "stop: ERROR" (list.append is thread safe)
 ONESHOT = False             # -oneshot : one java process per run (the old way)
 _local = threading.local()
 _workers = []
@@ -323,6 +329,9 @@ class Report:
         self.rows.append((key, st, text, detail))
 
     def show(self):
+        for tag, msg in sorted(set(DIGITAL_ERRORS)):
+            self.rows.append(("0", "ERROR", f"Digital error in run {tag}", f"{msg} (details: {tag}.sim, worker log)"))
+        DIGITAL_ERRORS.clear()
         print()
         order = lambda row: (int(re.match(r"\d+", row[0]).group()), row[0])
         for key, st, text, detail in sorted(self.rows, key=order):
@@ -331,7 +340,7 @@ class Report:
         for r in self.rows:
             n[r[1]] = n.get(r[1], 0) + 1
         print("\n" + " ".join(f"{k}={v}" for k, v in sorted(n.items())))
-        return not any(r[1] in ("FAIL", "XPASS") for r in self.rows)
+        return not any(r[1] in ("FAIL", "XPASS", "ERROR") for r in self.rows)
 
 
 def brief(items, limit=6):
@@ -574,12 +583,21 @@ def t_iretpre(rep, pool, a):
              "syscall and by IRQ)", not hung and not bad, brief(hung + bad, 4))
 
 
+def banner(r, n):
+    """match of 'L' + n hex words at the start of r.text; a run that stopped before (e.g. mid-banner)
+    raises RuntimeError, which fails the group in main() instead of an AttributeError on None"""
+    m = re.match(r"L" + HEX * n, r.text)
+    if not m:
+        raise RuntimeError(f"{r.tag}: no L + {n} words in {r.text[:120]!r} ({r.tail.strip()})")
+    return m
+
+
 def t_sysirq(rep, pool, a):
     jobs = []
     info = {}
     for z in a.seeds:
         r, sc, hits, _, d = calibrate("sysirq", z)
-        m = re.match(r"L" + HEX * 3, r.text)
+        m = banner(r, 3)
         main_, after = hx(m.group(2)), hx(m.group(3))
         rise = [s for s, _ in high_spans(d["INT_req"])]
         if not rise:
@@ -637,7 +655,7 @@ def t_nest(rep, pool, a):
     jobs, info = [], {}
     for z in a.seeds:
         r, loop, hits, _, d = calibrate("nest", z)
-        m = re.match(r"L" + HEX * 4, r.text)
+        m = banner(r, 4)
         open_, close, main_ = hx(m.group(2)), hx(m.group(3)), hx(m.group(4))
         h1 = hits[len(hits) // 2] & ~1
         lo = sim("nest", z, cols=["PC"], pulses=[(h1, IRQ)], tag=f"nest-z{z}-lo")
@@ -704,7 +722,7 @@ def t_iret2(rep, pool, a):
     iret = op_addrs("iret2", 0x77)[0]
     for z in a.seeds:
         r, loop, hits, _, d = calibrate("iret2", z)
-        main_ = hx(re.match(r"L" + HEX * 2, r.text).group(2))
+        main_ = hx(banner(r, 2).group(2))
         h1 = hits[len(hits) // 2] & ~1
         one = sim("iret2", z, cols=["PC"], pulses=[(h1, IRQ)], tag=f"iret2-z{z}-one")
         dl = read_delta(one.delta)
@@ -878,13 +896,14 @@ def main():
         shutil.rmtree(SNAP, ignore_errors=True)
         shutil.copytree(src, SNAP, ignore=lambda d, names: [n for n in names if Path(d, n).is_file() and not n.endswith(".dig")])
     rep = Report()
-    try:
-        with ThreadPoolExecutor(a.j) as pool:
-            for g in groups:
+    with ThreadPoolExecutor(a.j) as pool:
+        for g in groups:
+            try:
                 TESTS[g](rep, pool, a)
-    except RuntimeError as e:
-        rep.show()
-        sys.exit(f"stopped: {e}")
+            except Exception as e:  # unexpected output in a calibration run etc.: fail this group, run the others
+                msg = str(e) if isinstance(e, RuntimeError) else f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+                print(f"{g}: stopped: {msg}", flush=True)
+                rep.item("0", f"group {g} stopped, its other items were not run", False, msg)
     sys.exit(0 if rep.show() else 1)
 
 
