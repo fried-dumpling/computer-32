@@ -2363,12 +2363,12 @@
       <elementName>Splitter</elementName>
       <elementAttributes>
         <entry>
-          <string>Input Splitting</string>
-          <string>8</string>
-        </entry>
-        <entry>
           <string>splitterSpreading</string>
           <int>3</int>
+        </entry>
+        <entry>
+          <string>Input Splitting</string>
+          <string>8</string>
         </entry>
         <entry>
           <string>Output Splitting</string>
@@ -2594,52 +2594,10 @@
         </entry>
         <entry>
           <string>NetName</string>
-          <string>I4S</string>
-        </entry>
-      </elementAttributes>
-      <pos x="1100" y="-680"/>
-    </visualElement>
-    <visualElement>
-      <elementName>Tunnel</elementName>
-      <elementAttributes>
-        <entry>
-          <string>rotation</string>
-          <rotation rotation="2"/>
-        </entry>
-        <entry>
-          <string>NetName</string>
           <string>I5S</string>
         </entry>
       </elementAttributes>
-      <pos x="1440" y="-680"/>
-    </visualElement>
-    <visualElement>
-      <elementName>Tunnel</elementName>
-      <elementAttributes>
-        <entry>
-          <string>rotation</string>
-          <rotation rotation="2"/>
-        </entry>
-        <entry>
-          <string>NetName</string>
-          <string>I6S</string>
-        </entry>
-      </elementAttributes>
       <pos x="1780" y="-680"/>
-    </visualElement>
-    <visualElement>
-      <elementName>Tunnel</elementName>
-      <elementAttributes>
-        <entry>
-          <string>rotation</string>
-          <rotation rotation="2"/>
-        </entry>
-        <entry>
-          <string>NetName</string>
-          <string>I7S</string>
-        </entry>
-      </elementAttributes>
-      <pos x="2120" y="-680"/>
     </visualElement>
     <visualElement>
       <elementName>Splitter</elementName>
@@ -2866,6 +2824,48 @@
         </entry>
       </elementAttributes>
       <pos x="3560" y="-1080"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>I4S</string>
+        </entry>
+      </elementAttributes>
+      <pos x="2120" y="-680"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>I6S</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1440" y="-680"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>I7S</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1100" y="-680"/>
     </visualElement>
   </visualElements>
   <wires>
@@ -3294,24 +3294,24 @@
       <p2 x="520" y="-680"/>
     </wire>
     <wire>
-      <p1 x="1100" y="-680"/>
-      <p2 x="1120" y="-680"/>
-    </wire>
-    <wire>
-      <p1 x="1440" y="-680"/>
-      <p2 x="1460" y="-680"/>
-    </wire>
-    <wire>
       <p1 x="1780" y="-680"/>
       <p2 x="1800" y="-680"/>
+    </wire>
+    <wire>
+      <p1 x="3500" y="-680"/>
+      <p2 x="3520" y="-680"/>
     </wire>
     <wire>
       <p1 x="2120" y="-680"/>
       <p2 x="2140" y="-680"/>
     </wire>
     <wire>
-      <p1 x="3500" y="-680"/>
-      <p2 x="3520" y="-680"/>
+      <p1 x="1440" y="-680"/>
+      <p2 x="1460" y="-680"/>
+    </wire>
+    <wire>
+      <p1 x="1100" y="-680"/>
+      <p2 x="1120" y="-680"/>
     </wire>
     <wire>
       <p1 x="4040" y="-40"/>

@@ -157,7 +157,7 @@
           <string>addr_ot</string>
         </entry>
       </elementAttributes>
-      <pos x="1440" y="800"/>
+      <pos x="1540" y="800"/>
     </visualElement>
     <visualElement>
       <elementName>Tunnel</elementName>
@@ -172,16 +172,6 @@
         </entry>
       </elementAttributes>
       <pos x="1280" y="820"/>
-    </visualElement>
-    <visualElement>
-      <elementName>Tunnel</elementName>
-      <elementAttributes>
-        <entry>
-          <string>NetName</string>
-          <string>err_o</string>
-        </entry>
-      </elementAttributes>
-      <pos x="1440" y="820"/>
     </visualElement>
     <visualElement>
       <elementName>Out</elementName>
@@ -380,6 +370,35 @@
       </elementAttributes>
       <pos x="1280" y="860"/>
     </visualElement>
+    <visualElement>
+      <elementName>And</elementName>
+      <elementAttributes/>
+      <pos x="1460" y="820"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>NetName</string>
+          <string>err_o</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1540" y="840"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="2"/>
+        </entry>
+        <entry>
+          <string>NetName</string>
+          <string>E</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1440" y="860"/>
+    </visualElement>
   </visualElements>
   <wires>
     <wire>
@@ -396,7 +415,7 @@
     </wire>
     <wire>
       <p1 x="1420" y="800"/>
-      <p2 x="1440" y="800"/>
+      <p2 x="1540" y="800"/>
     </wire>
     <wire>
       <p1 x="1360" y="740"/>
@@ -413,6 +432,10 @@
     <wire>
       <p1 x="1280" y="840"/>
       <p2 x="1320" y="840"/>
+    </wire>
+    <wire>
+      <p1 x="1520" y="840"/>
+      <p2 x="1540" y="840"/>
     </wire>
     <wire>
       <p1 x="1340" y="680"/>
@@ -452,7 +475,7 @@
     </wire>
     <wire>
       <p1 x="1420" y="820"/>
-      <p2 x="1440" y="820"/>
+      <p2 x="1460" y="820"/>
     </wire>
     <wire>
       <p1 x="1040" y="600"/>
@@ -469,6 +492,10 @@
     <wire>
       <p1 x="1280" y="860"/>
       <p2 x="1320" y="860"/>
+    </wire>
+    <wire>
+      <p1 x="1440" y="860"/>
+      <p2 x="1460" y="860"/>
     </wire>
     <wire>
       <p1 x="1440" y="620"/>
