@@ -3803,11 +3803,7 @@
       <elementAttributes>
         <entry>
           <string>Label</string>
-          <string>clr_16</string>
-        </entry>
-        <entry>
-          <string>Bits</string>
-          <int>16</int>
+          <string>clr</string>
         </entry>
       </elementAttributes>
       <pos x="1660" y="780"/>
@@ -3817,7 +3813,7 @@
       <elementAttributes>
         <entry>
           <string>NetName</string>
-          <string>clri</string>
+          <string>clr</string>
         </entry>
       </elementAttributes>
       <pos x="1680" y="780"/>
@@ -3851,36 +3847,14 @@
       <pos x="2480" y="460"/>
     </visualElement>
     <visualElement>
-      <elementName>Splitter</elementName>
+      <elementName>Tunnel</elementName>
       <elementAttributes>
         <entry>
-          <string>mirror</string>
-          <boolean>true</boolean>
-        </entry>
-        <entry>
-          <string>Input Splitting</string>
-          <string>16</string>
-        </entry>
-        <entry>
-          <string>Output Splitting</string>
-          <string>1*16</string>
+          <string>NetName</string>
+          <string>clr_16</string>
         </entry>
       </elementAttributes>
-      <pos x="2000" y="760"/>
-    </visualElement>
-    <visualElement>
-      <elementName>Splitter</elementName>
-      <elementAttributes>
-        <entry>
-          <string>Input Splitting</string>
-          <string>1*16</string>
-        </entry>
-        <entry>
-          <string>Output Splitting</string>
-          <string>16</string>
-        </entry>
-      </elementAttributes>
-      <pos x="2040" y="460"/>
+      <pos x="2080" y="460"/>
     </visualElement>
     <visualElement>
       <elementName>Tunnel</elementName>
@@ -3891,23 +3865,31 @@
         </entry>
         <entry>
           <string>NetName</string>
-          <string>clri</string>
+          <string>clr</string>
         </entry>
       </elementAttributes>
-      <pos x="1980" y="760"/>
+      <pos x="1980" y="460"/>
     </visualElement>
     <visualElement>
-      <elementName>Tunnel</elementName>
+      <elementName>BitExtender</elementName>
       <elementAttributes>
         <entry>
-          <string>NetName</string>
-          <string>clr_16</string>
+          <string>inputBits</string>
+          <int>1</int>
+        </entry>
+        <entry>
+          <string>outputBits</string>
+          <int>16</int>
         </entry>
       </elementAttributes>
-      <pos x="2080" y="460"/>
+      <pos x="2000" y="460"/>
     </visualElement>
   </visualElements>
   <wires>
+    <wire>
+      <p1 x="1980" y="460"/>
+      <p2 x="2000" y="460"/>
+    </wire>
     <wire>
       <p1 x="2220" y="640"/>
       <p2 x="2240" y="640"/>
@@ -3931,10 +3913,6 @@
     <wire>
       <p1 x="3200" y="640"/>
       <p2 x="3220" y="640"/>
-    </wire>
-    <wire>
-      <p1 x="2020" y="640"/>
-      <p2 x="2040" y="640"/>
     </wire>
     <wire>
       <p1 x="2180" y="-260"/>
@@ -4007,10 +3985,6 @@
     <wire>
       <p1 x="3200" y="520"/>
       <p2 x="3220" y="520"/>
-    </wire>
-    <wire>
-      <p1 x="2020" y="520"/>
-      <p2 x="2040" y="520"/>
     </wire>
     <wire>
       <p1 x="2360" y="-140"/>
@@ -4141,10 +4115,6 @@
       <p2 x="3220" y="660"/>
     </wire>
     <wire>
-      <p1 x="2020" y="660"/>
-      <p2 x="2040" y="660"/>
-    </wire>
-    <wire>
       <p1 x="2220" y="280"/>
       <p2 x="2240" y="280"/>
     </wire>
@@ -4211,10 +4181,6 @@
     <wire>
       <p1 x="1660" y="540"/>
       <p2 x="1680" y="540"/>
-    </wire>
-    <wire>
-      <p1 x="2020" y="540"/>
-      <p2 x="2040" y="540"/>
     </wire>
     <wire>
       <p1 x="2360" y="-160"/>
@@ -4353,10 +4319,6 @@
       <p2 x="3220" y="680"/>
     </wire>
     <wire>
-      <p1 x="2020" y="680"/>
-      <p2 x="2040" y="680"/>
-    </wire>
-    <wire>
       <p1 x="2360" y="-300"/>
       <p2 x="2380" y="-300"/>
     </wire>
@@ -4427,10 +4389,6 @@
     <wire>
       <p1 x="3200" y="560"/>
       <p2 x="3220" y="560"/>
-    </wire>
-    <wire>
-      <p1 x="2020" y="560"/>
-      <p2 x="2040" y="560"/>
     </wire>
     <wire>
       <p1 x="2360" y="-180"/>
@@ -4589,10 +4547,6 @@
       <p2 x="3220" y="700"/>
     </wire>
     <wire>
-      <p1 x="2020" y="700"/>
-      <p2 x="2040" y="700"/>
-    </wire>
-    <wire>
       <p1 x="2220" y="60"/>
       <p2 x="2240" y="60"/>
     </wire>
@@ -4693,10 +4647,6 @@
       <p2 x="2500" y="580"/>
     </wire>
     <wire>
-      <p1 x="2020" y="580"/>
-      <p2 x="2040" y="580"/>
-    </wire>
-    <wire>
       <p1 x="2220" y="200"/>
       <p2 x="2240" y="200"/>
     </wire>
@@ -4743,10 +4693,6 @@
     <wire>
       <p1 x="2480" y="460"/>
       <p2 x="2500" y="460"/>
-    </wire>
-    <wire>
-      <p1 x="2020" y="460"/>
-      <p2 x="2040" y="460"/>
     </wire>
     <wire>
       <p1 x="2060" y="460"/>
@@ -4815,10 +4761,6 @@
     <wire>
       <p1 x="2780" y="720"/>
       <p2 x="2800" y="720"/>
-    </wire>
-    <wire>
-      <p1 x="2020" y="720"/>
-      <p2 x="2040" y="720"/>
     </wire>
     <wire>
       <p1 x="2220" y="80"/>
@@ -4953,10 +4895,6 @@
       <p2 x="1680" y="600"/>
     </wire>
     <wire>
-      <p1 x="2020" y="600"/>
-      <p2 x="2040" y="600"/>
-    </wire>
-    <wire>
       <p1 x="2800" y="-220"/>
       <p2 x="2820" y="-220"/>
     </wire>
@@ -5045,10 +4983,6 @@
       <p2 x="2640" y="480"/>
     </wire>
     <wire>
-      <p1 x="2020" y="480"/>
-      <p2 x="2040" y="480"/>
-    </wire>
-    <wire>
       <p1 x="2960" y="740"/>
       <p2 x="2980" y="740"/>
     </wire>
@@ -5075,10 +5009,6 @@
     <wire>
       <p1 x="2420" y="740"/>
       <p2 x="2440" y="740"/>
-    </wire>
-    <wire>
-      <p1 x="2020" y="740"/>
-      <p2 x="2040" y="740"/>
     </wire>
     <wire>
       <p1 x="2440" y="740"/>
@@ -5189,10 +5119,6 @@
       <p2 x="3080" y="620"/>
     </wire>
     <wire>
-      <p1 x="2020" y="620"/>
-      <p2 x="2040" y="620"/>
-    </wire>
-    <wire>
       <p1 x="2400" y="-240"/>
       <p2 x="2420" y="-240"/>
     </wire>
@@ -5289,10 +5215,6 @@
       <p2 x="3220" y="500"/>
     </wire>
     <wire>
-      <p1 x="2020" y="500"/>
-      <p2 x="2040" y="500"/>
-    </wire>
-    <wire>
       <p1 x="2360" y="-120"/>
       <p2 x="2380" y="-120"/>
     </wire>
@@ -5335,14 +5257,6 @@
     <wire>
       <p1 x="2040" y="120"/>
       <p2 x="2060" y="120"/>
-    </wire>
-    <wire>
-      <p1 x="2020" y="760"/>
-      <p2 x="2040" y="760"/>
-    </wire>
-    <wire>
-      <p1 x="1980" y="760"/>
-      <p2 x="2000" y="760"/>
     </wire>
     <wire>
       <p1 x="2620" y="380"/>

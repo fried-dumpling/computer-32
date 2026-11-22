@@ -14380,26 +14380,6 @@
       <pos x="1720" y="760"/>
     </visualElement>
     <visualElement>
-      <elementName>In</elementName>
-      <elementAttributes>
-        <entry>
-          <string>Label</string>
-          <string>clr_self</string>
-        </entry>
-      </elementAttributes>
-      <pos x="900" y="1080"/>
-    </visualElement>
-    <visualElement>
-      <elementName>Tunnel</elementName>
-      <elementAttributes>
-        <entry>
-          <string>NetName</string>
-          <string>clr_self</string>
-        </entry>
-      </elementAttributes>
-      <pos x="920" y="1080"/>
-    </visualElement>
-    <visualElement>
       <elementName>Tunnel</elementName>
       <elementAttributes>
         <entry>
@@ -14938,6 +14918,26 @@
         </entry>
       </elementAttributes>
       <pos x="2280" y="880"/>
+    </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>sclr</string>
+        </entry>
+      </elementAttributes>
+      <pos x="900" y="1080"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>NetName</string>
+          <string>clr_self</string>
+        </entry>
+      </elementAttributes>
+      <pos x="920" y="1080"/>
     </visualElement>
   </visualElements>
   <wires>
@@ -18903,10 +18903,6 @@
     </wire>
     <wire>
       <p1 x="2560" y="960"/>
-      <p2 x="2580" y="960"/>
-    </wire>
-    <wire>
-      <p1 x="2580" y="960"/>
       <p2 x="2620" y="960"/>
     </wire>
     <wire>
