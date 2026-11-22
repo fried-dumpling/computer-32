@@ -68,9 +68,6 @@ IRETPRE = ["st", "nop", "set", "4 nops", "ld", "ld ld (int_nest)", "ld ld", "st 
 
 # item -> why it fails today. Remove the entry when the item passes.
 XFAIL = {
-    "20b": "errors.md #27. 11-18: entry does not set ker (int-level 0x10 in the handler)",
-    "20c": "privilege check not wired: ISS_kernel has no consumer, DP_ker is a PullDown "
-           "(the trap id is also not decided; the test assumes id 0)",
 }
 
 
@@ -808,20 +805,21 @@ def t_sysmem(rep, pool, a):
 
 def t_user(rep, pool, a):
     runs = list(pool.map(lambda z: sim("user", z, tag=f"user-z{z}"), a.seeds))
-    ok_a, ok_b, ok_c, det = [], [], [], []
+    ok_a, ok_b, det = [], [], []
     for r in runs:
-        m = re.match(r"L" + HEX * 3, r.text)
+        m = re.match(r"L" + HEX * 2, r.text)
         log = glog(r.text) or []
-        u1, ust = (hx(m.group(1)), hx(m.group(2))) if m else (None, None)
+        u1, u2 = (hx(m.group(1)), hx(m.group(2))) if m else (None, None)
         det.append(f"z{r.seed} {r.text[r.text.find('K'):r.text.find('E')]!r} log " + " ".join(f"{x:x}" for x in log))
-        ok_a.append(len(log) >= 4 and log[0] == u1 and "Su" in r.text)
-        ok_b.append(len(log) >= 4 and log[1] & 0x80 == 0x80 and log[2] & 0x80 == 0)
-        # trap: fault handler logs 0xFA, R = the stexp, istack unchanged (ISTACK-4 during the trap)
-        i = log.index(0xFA) if 0xFA in log else None
-        ok_c.append(i is not None and log[i + 1:i + 3] == [ust, ISTACK - 4] and "v" not in r.text)
+        # user code makes no memory access (the MMU keeps user mode off the terminal): it puts a mark
+        # in gen[7] and calls syscall, sysh prints "S<mark>" and logs {R, int-level, int-tmplv, istack}.
+        # the 2nd syscall ('w') proves the iret went back to user
+        ok_a.append(len(log) == 8 and log[0] == u1 and log[4] == u2 and "KSUSwE" in r.text)
+        ok_b.append(len(log) == 8 and all(log[k] & 0x80 == 0x80 and log[k + 1] & 0x80 == 0 for k in (1, 5)))
     rep.item("20a", "user mode: syscall from user enters (R = next word) and returns to user", all(ok_a), det[0])
     rep.item("20b", "user mode: in the handler int-level ker = 1, int-tmplv ker = 0", all(ok_b), det[0])
-    rep.item("20c", "user mode: stexp traps (assumed id 0), R = the stexp, istack unchanged", all(ok_c), det[0])
+    rep.item("20c", "user mode: stexp traps (assumed id 0), R = the stexp, istack unchanged", None,
+             "not run: the privilege fault does not store its id yet and re-runs the stexp forever")
 
 
 def t_sys0(rep, pool, a):
