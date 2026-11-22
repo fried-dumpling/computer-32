@@ -82,10 +82,16 @@ run() { # name bin seed keys emukeys options
   timeout 900 java -Dzseed=$z -Drom="$O/$b.bin" $COPT $x -cp "$J;$D/build" Sim "$R/components/$CIRC" - "$k" 4000000 2>&1 \
     | grep -v -E "WARNING|Importer|zseed" > "$O/$n.sim"
   python "$R/tools/emu/isa32emu.py" "$O/$b.bin" "$(printf "$ek")" > "$O/$n.emu" 2>&1
-  if diff <(grep -v '^\[half' "$O/$n.sim" | sed '/^$/d') <(sed -e '/^\[/,$d' -e '/^$/d' "$O/$n.emu") > /dev/null
+  # Sim's stderr is in the .sim file: drop its own lines. The [time ...] line has no newline before
+  # it, so it can sit right after the program's last output on the same line: cut it off there.
+  if grep -q 'stop: ERROR' "$O/$n.sim"; then r=ERROR    # Digital error (short circuit, ...): see the .sim
+  elif diff <(grep -v -E '^\[half|^DIGITAL ERROR|^  (origin|value): |^stall: ' "$O/$n.sim" \
+                | sed -e 's/\[time model=.*$//' -e '/^$/d') \
+            <(sed -e '/^\[/,$d' -e '/^$/d' "$O/$n.emu") > /dev/null
   then r=SAME; else r=DIFF; fi
-  echo "== $n $r $(tail -1 "$O/$n.sim")"
+  echo "== $n $r $(tail -1 "$O/$n.sim")" | tee -a "$RES"
 }
+RES="$O/runtests.res"; : > "$RES"
 for t in "${T[@]}"; do
   # keys may contain '|', so split the name, bin, seed from the front and options, emulator keys from the back
   n=${t%%|*}; r=${t#*|}; b=${r%%|*}; r=${r#*|}; z=${r%%|*}; r=${r#*|}
@@ -95,3 +101,7 @@ for t in "${T[@]}"; do
   run "$n" "$b" "$z" "$k" "$ek" "$x" &
 done
 wait
+# summary (knownbug is an expected DIFF); exit 1 on an ERROR
+echo "summary: $(awk '{print $3}' "$RES" | sort | uniq -c | awk '{printf "%s=%s ", $2, $1}')"
+grep ' ERROR ' "$RES" | sed 's/^== /ERROR: /'
+! grep -q ' ERROR ' "$RES"

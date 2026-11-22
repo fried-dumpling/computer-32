@@ -16,7 +16,8 @@ java [옵션] -cp "$J;build" Sim <circuit.dig> <program.bin> <keys> [maxHalfCycl
 ```
 
 - `keys`: 프로그램이 `> `를 출력할 때마다 한 글자씩 넣습니다. `-Dlines=1`이면 `|`로 나눈 한 줄씩 `\n`을 붙여 넣습니다(calc용). 키를 다 쓴 뒤 다음 `> `가 나오면 끝냅니다(`""`이면 첫 `> `에서 끝).
-- 끝날 때 `[half=... keysFed=... PC=... stop: 이유]`를 출력합니다. 이유는 `keys used up`, `restart`, `stall N`, `idle N`이고, `maxHalfCycles`(기본 2000000)까지 돌았으면 비어 있습니다.
+- 끝날 때 `[half=... keysFed=... PC=... stop: 이유]`를 출력합니다. 이유는 `keys used up`, `restart`, `stall N`, `idle N`, `maxOut N`, `maxRepeat N`, `ERROR <메시지>`이고, `maxHalfCycles`(기본 2000000)까지 돌았으면 비어 있습니다.
+- `ERROR`: Digital이 시뮬레이션 중 오류(예: `BurnException` "More than one output is active on a wire", 단락)를 내면 Model이 닫히고 그 반클럭에서 멈춥니다. stderr에 `DIGITAL ERROR at half H: ...`를, 단락이면 `origin:`(.dig 파일)과 그 net에 걸린 값(`value:`)도 출력합니다. 어느 net인지 알 수 있는 단서는 이것뿐입니다.
 - 옵션 (`-D이름=값`, `Sim` 앞에 씀)
 
 | 옵션 | 뜻 |
@@ -62,7 +63,7 @@ java -cp "$J;build" Sim -server
 bash tools/dsim/runtests.sh [-j N] [-nobuild] [-c 회로.dig] [이름...]
 ```
 
-- 테스트 프로그램을 빌드해 `components/<회로>`에서 병렬로 돌리고(`-Drom`), 터미널 출력을 에뮬레이터와 비교해 `== 이름 SAME|DIFF`를 출력합니다. git-bash에서 실행하고, `build/`에 Sim이 컴파일되어 있어야 합니다.
+- 테스트 프로그램을 빌드해 `components/<회로>`에서 병렬로 돌리고(`-Drom`), 터미널 출력을 에뮬레이터와 비교해 `== 이름 SAME|DIFF|ERROR`를 출력하고, 끝에 `summary: SAME=.. DIFF=..`를 출력합니다. `ERROR`(Sim이 `stop: ERROR`로 멈춤)가 하나라도 있으면 exit 1입니다. 비교 전에 Sim의 stderr 줄(`[time ...]`은 마지막 출력과 같은 줄에 붙을 수 있어 그 부분만 잘라냄)을 지웁니다. git-bash에서 실행하고, `build/`에 Sim이 컴파일되어 있어야 합니다.
 - 회로는 기본 `computer-32-test.dig`(2026-11-08부터, `DSIM_CIRCUIT` 환경 변수나 `-c`로 바꿈)입니다. 회로별 Sim 옵션은 스크립트의 `COPT`입니다.
   - `computer-32-test.dig`: top의 DipSwitch `-780,580`(E), `-780,620`(run)을 켜고 `-Dset=`. `cpu-32`에는 probe가 없으므로 stall 검사용으로 `-Dtap=cpu-32.dig:PCS=PC,com1,com2`. 다른 신호는 `-Dtap=cpu-32.dig:넷,...`이나 `-Dprobe=cpu-32.dig@x,y=이름`으로 그때마다 붙입니다.
   - `cpu-test.dig`(`-c cpu-test.dig`): Sim 기본값 그대로.
@@ -80,6 +81,8 @@ python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [-snap] [-full] [-
 - `computer-32-test.dig`(CPU + IPU)에서 `program/test/int_*.asm`을 돌려 `document/ISA.md` 2.2절로 계산한 값과 비교합니다(에뮬레이터에 인터럽트가 없음). 항목, 방법, 최근 결과는 `program/document/test.md`에 있습니다.
 - 인터럽트는 top-level In `I-in`의 bit `IRQ`(3)에 넣는 2 half 펄스입니다(`-Dat=H:I-in=8;H+2:I-in=0`). 시작은 boot-sequencer S/R입니다.
 - 지금 실패가 예상되는 항목은 스크립트의 `XFAIL`에 이유와 함께 있습니다.
+- Digital 오류(`stop: ERROR`, 단락 등)로 끝난 실행은 항목 0 `ERROR`로 요약에 나오고 exit 1입니다. 자세한 내용은 그 실행의 `.sim`과 worker 로그에 있습니다.
+- 그룹 하나가 예외로 멈추면(예: 보정 실행 출력이 `L<주소>...`로 시작하지 않음) 그 그룹만 항목 0 `FAIL group <그룹> stopped`로 남기고 다음 그룹을 계속 돌립니다(예전에는 전체가 `stopped:`로 끝났음).
 - 스레드마다 `Sim -server`를 하나 띄워 두고 실행을 보냅니다(worker 로그 `program/build/dsim/int/worker-N.log`). `-oneshot`은 예전처럼 실행마다 java를 새로 띄웁니다. `iret2` + `prec`(231회, `-j 9`) 기준 255초에서 59초로 줄었고 결과는 같았습니다(2026-11-19).
 - 같은 `program/build/dsim/int`에서 두 개를 동시에 돌리면 서로 `.sim` 파일과 회로 복사본을 덮어쓰므로, 시작할 때 `inttest.lock`(pid)을 만들고 다른 실행이 살아 있으면 멈춥니다. 강제로 끝난 실행이 남긴 lock은 pid가 없으면 지웁니다. 다른 폴더에서 돌리려면 `INTTEST_OUT=int-x`(`program/build/dsim/` 아래 이름)를 줍니다.
 - 기본 실행은 2026-11-19부터 다음처럼 줄였습니다. 같은 회로 복사본에서 예전 방식(`-full -nolimit -stall 6000`, 약 1,650회, `-j 6` 1770초)과 비교해 45개 항목의 결과가 모두 같았고 1,079회에 231초가 걸렸습니다(`sysirq` 630→377, `nest` 492→247, `iret2` 189→115).
