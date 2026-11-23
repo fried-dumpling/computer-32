@@ -281,6 +281,21 @@ tools 세션이 추가한 테스트(`int_sysprev`, `int_sysirq`, `int_nest`, `in
 - **38. ICLR 창의 펄스 (17b):** acp 뒤 IPU의 ICLR(`NOr@1360,-160`, INT_acp와 2단 지연)이 3클럭 동안 새 요청을 막아서, 그 안에 온 1-clock 펄스가 사라졌습니다. → 35번의 장치 규칙(acp까지 high)으로 해결. 다만 acp가 오는 바로 그 edge(iret2의 H2 = 13970)에 펄스가 들어오면 `RS-64`가 S=R=1을 받아 seed에 따라 잡히기도 하고 무시되기도 합니다. 17b는 그 경우 진입 1번과 2번을 모두 허용합니다(`I-act|I-acp`로 판정).
   - 13:50 회로와 13:57 회로에서 같은 펄스가 잡히고 안 잡힌 차이는 INT_acp와 ICLR 시점이 같아서 그쪽 때문이 아니고, 원인은 확인하지 않았습니다.
 
+## 39~45. kernel 시작, syscall 경로, page/privilege fault (11-22 ~ 11-23) 진행 중
+재현은 `python tools/dsim/inttest.py` (fault는 그룹 `fault`, 23a~23h, `program/test/interrupt/int_fault.asm`)입니다. 좌표는 11-23 `cpu-32.dig` 기준입니다. 11-23 기준 회로: page fault(inst-read, data store/load의 MMU error) = id 3, privilege fault = id 4. 우선순위: fetch page fault > privilege fault > data page fault > syscall/trap(break). syscall/iret 중 data fault는 아직 처리하지 않음.
+
+- **39. `CT_INT-_W`/wait driver 충돌 (11-22):** "more than one output active on a wire"(dsim이 이제 `stop: ERROR`로 잡음). → 사용자 수정 ✅
+- **40. `index-compressor` SI4..7 위치, ROB-INT data select (11-22):** syscall의 ROB-INT 쓰기가 사라지거나 id 0으로 진입. → 사용자 수정 ✅
+- **41. flush 사이클에 issue된 오경로 serialize 명령이 SRL 래치를 남김 (11-22, 14a, 14c, 15a, 16a, 19a):** `RS_FF@5160,-2600`(SRL_HALT)의 S = `CT_ISS-_SRL`, R = clr ∧ inst-sfcomp(저장된 이전 id). 오예측 flush(clr)와 같은 사이클에 오경로 `ldexp`/`iret`이 issue되면 R이 이전 id를 봐서 0, S만 들어가 frontend가 영원히 멈춤. 최소 재현 `jmp.one main; nop; ldexp; iret; main:`. → 사용자 수정 ✅
+- **42. fault의 R(복귀 PC) (11-23, 23a~23f):**
+  - 처음: E-clr이 PC를 `HALT_PC`(Register@1580,4240, en = `CT_TRAP-_LD`, TRAP 유닛 명령의 PC만 담음) + 4로 복구. fault 때는 갱신되지 않아 마지막 kernel `iret`(0x810) + 4 = 0x814가 R이 됨(`int-pc` = INT_ISS 때의 `PCS_DC` = 복구된 fetch PC). 예전 int_user의 같은 store 무한 반복도 같은 원인.
+  - 1차 수정(22:05): commit 중인 명령의 PC(`pca_i`, ROB-PC D1)로 복구했지만 +4가 붙어 R = 명령 + 4.
+  - 2차(22:08): 모든 E-clr이 +4 없이 `pca_i`로 가서 TRAP 완료(`interst` 등)가 자기 자신을 다시 실행, 프로그램 시작에서 무한 반복.
+  - 3차(22:17): PCF = `Fl_ECLR` ∧ `CT_INT-_W`(And@280,1920) → `pca_i`, +4 없음. fault R은 맞음(23a, 23b PASS, 23c R 맞음). **그러나 syscall/trap도 ROB-INT에 기록돼 `CT_INT-_W`가 켜지므로 syscall R = syscall 자신이 되어 무한 재진입**(8a/8b/14/15a/19a/20/21b/22 FAIL, inttest PASS 33 FAIL 15). → PCF(+4 생략)는 fault(id 3, 4)일 때만, syscall/trap(id 1, 0)은 +4. ⚠️ 진행 중
+- **43. privilege fault가 난 명령이 그대로 실행됨 (23c, 23e):** 검사 And@-280,2380 = mode(¬ker) ∧ `ker_DP`의 출력은 ROB-INT 기록(`bus16-demux@-180,2380`)과 int-err(`Or@-180,2320`)로만 가고 유닛 dispatch enable을 막지 않음. user `stexp istack`은 istack = 0x1234를 써 버리고(push가 0x1230), user `iret`은 TRAP이 실행해 mem[istack]의 SENT(0x5A5A5A5A)로 JPU flush를 내며 fault entry와 겹쳐 `waiting=1`에서 멈춤. 방향: 검사 결과로 dispatch를 막거나, 부작용 있는 유닛(확장 레지스터 쓰기, TRAP)이 같은 id의 ROB-INT 기록을 보고 실행하지 않게. ❌
+- **44. fetch page fault entry가 멈춤 (23d):** fetch fault는 dispatch 때 ROB-INT에 기록되어 `CT_INT-_W` → `INT_req` → `INT_rqac`가 ROB-gen의 commit(`Fl_ECLR`)보다 먼저 지나감. 그 뒤 `waiting=1`, `INT_fetch=1`인 채 `INT_HALT`로 가지 못함. 정상인 data fault는 `Fl_ECLR` → `INT_req` 순서. ❌
+- **45. flush 사이클에 issue된 오경로 kernel 명령이 ROB-INT에 privilege fault를 남김 (23f):** 41번과 같은 종류. BTB miss `jmp` flush(clr)와 같은 사이클에 오경로 `stexp`(또는 `iret`)가 issue되고, 다음 사이클에 flush된 id로 `ROB-INT_D=4`가 쓰임. 핸들러에서 그 id가 재사용될 때 발동해 가짜 중첩 V(tmplv 0x91). 권한 검사의 ROB-INT 쓰기도 ¬clr로 막아야 함. 23g(오경로만)은 타이밍이 달라 PASS. ❌
+
 ## 기존 알려진 문제: `halt`가 분기보다 먼저 실행 (10-17) ✅ 재현 안 됨 (11-07)
 - **예전 증상:** not-taken으로 예측된 분기 바로 뒤 `halt`가 분기보다 먼저 실행돼 CPU가 멈춤. 그래서 프로그램을 `jmp.one pc.32B, 0`으로 끝냈음.
 - **테스트 `program/test/haltbr.asm` H1~H10:** 처음 실행이라 not-taken으로 예측되고(JPU_pred=3) 실제로는 taken인 분기 바로 뒤 halt. 분기 앞에 상수 cmp, 24단 addi chain, load, pointer chase, self flush되는 load, load한 카운터 루프, 늦은 taken 분기, load한 레지스터로 jmp.one, load 8개 진행 중, 먼 target. 10개 × zseed 1~3 모두 에뮬레이터와 같음. halt를 넣은 fill, picalc도 같음.

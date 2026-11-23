@@ -57,11 +57,12 @@ START = "6:R=0;10:S=1;16:S=0"
 TAP = "cpu-32.dig:PCS=PC,com1,com2,INT_req=INT_req"
 
 PROGRAMS = ["ext", "prec", "sled", "misp", "flc", "iret", "iret2", "iretpre", "sys", "sysprev", "sysirq",
-            "nest", "wpsys", "sysmem", "user", "sys0", "tbl"]
+            "nest", "wpsys", "sysmem", "user", "sys0", "tbl", "fault"]
 # programs that are also built as variants: image int_<name>_<tag> from a wrapper in OUT
 # that #defines the given line and includes the program (dasm has no -D)
 VARIANTS = {"sysprev": {f"p{n}": f"NPAD {n}" for n in range(24)},
-            "iretpre": {f"c{k}": f"C{k} 1" for k in range(8)}}
+            "iretpre": {f"c{k}": f"C{k} 1" for k in range(8)},
+            "fault": {**{f"s{k}": f"FSTART s{k}\n#define FONE 1" for k in range(1, 7)}, "wp": "FSTART r6"}}
 SYSPREV = ["st", "set", "addi", "nop", "set+nop", "mispredicted loop exit", "jmp.one",
            "predicted not-taken jmp.zero", "ld", "cmpi", "loop exit+nop", "loop exit+set"]
 IRETPRE = ["st", "nop", "set", "4 nops", "ld", "ld ld (int_nest)", "ld ld", "st st .. ld ld"]
@@ -835,9 +836,43 @@ def t_sys0(rep, pool, a):
              f"want R={sc + 4:#x}, output {r.text[:60]!r}, stop [{r.tail.strip()}]")
 
 
+def t_fault(rep, pool, a):
+    """int_fault: user faults. page fault id 3 'P', privilege fault id 4 'V'; each handler logs
+    {0xF3|0xF4, R, int-level, int-tmplv, istack} and irets to the next case. one variant per case
+    (int_fault_s<n>: only that case, then the syscall), the wrong-path block alone (_wp) and the full run."""
+    names = ["full", "wp"] + [f"s{k}" for k in range(1, 7)]
+    runs = dict(zip(names, pool.map(lambda v: sim("fault" if v == "full" else f"fault_{v}", a.seeds[0]), names)))
+    m = re.match(r"L" + HEX * 6, runs["full"].text)
+    if not m:
+        rep.item("23a", "fault: program prints its labels", False, f"output {runs['full'].text[:80]!r}")
+        return
+    c = [hx(x) for x in m.groups()]                     # c1 .. c6
+    cases = [("23a", "user ld above plimit: page fault (id 3), R = the ld", "P", 0xF3, c[0]),
+             ("23b", "user st above plimit: page fault (id 3), R = the st", "P", 0xF3, c[1]),
+             ("23c", "user stexp: privilege fault (id 4), R = the stexp, istack not written", "V", 0xF4, c[2]),
+             ("23d", "user jmp above plimit: fetch page fault (id 3), R = the target 0x6000", "P", 0xF3, 0x6000),
+             ("23e", "user iret: privilege fault (id 4), R = the iret, no return", "V", 0xF4, c[4]),
+             ("23f", "user st to the terminal: page fault (id 3), R = the st", "P", 0xF3, c[5])]
+    for n, (key, text, mark, tag, want) in enumerate(cases, 1):
+        r = runs[f"s{n}"]
+        log = glog(r.text) or []
+        ok = (f"K{mark}SE" in r.text and len(log) == 5 and log[0] == tag and log[1] == want and log[2] == 0x91
+              and log[3] & 0x80 == 0 and log[4] == ISTACK - 4)
+        rep.item(key, text, ok, f"want K{mark}SE, log {tag:x} {want:x} 91 <user> {ISTACK - 4:x}; "
+                 f"output {r.text[r.text.find('K'):][:64]!r}, stop [{r.tail.strip()[:50]}]")
+    r = runs["wp"]
+    rep.item("23g", "fault: ld above plimit and stexp on the wrong path behind a jmp do not trap",
+             "KSEGg" in r.text, f"output {r.text[r.text.find('K'):][:64]!r}, stop [{r.tail.strip()[:50]}]")
+    r = runs["full"]
+    rep.item("23h", "fault: all cases in one run (KPPVPVPSE, 6 records)",
+             "KPPVPVPSE" in r.text and len(glog(r.text) or []) == 30,
+             f"output {r.text[r.text.find('K'):][:64]!r}, stop [{r.tail.strip()[:50]}]")
+
+
 TESTS = {"ext": t_ext, "prec": t_prec, "sled": t_sled, "misp": t_misp, "flc": t_flc, "iret": t_iret,
          "iret2": t_iret2, "iretpre": t_iretpre, "sys": t_sys, "sysprev": t_sysprev, "sysirq": t_sysirq, "nest": t_nest,
-         "wpsys": t_wpsys, "sysmem": t_sysmem, "user": t_user, "sys0": t_sys0, "tbl": t_tbl}
+         "wpsys": t_wpsys, "sysmem": t_sysmem, "user": t_user, "sys0": t_sys0, "tbl": t_tbl,
+         "fault": t_fault}
 
 
 def lock_out():
