@@ -20,10 +20,11 @@ while [ $# -gt 0 ]; do
     *) break ;;
   esac
 done
-# Sim options per circuit. computer-32-test: E and run are DipSwitches on the top (no top In),
-# cpu-32 has no probes, so the stall check (PC, com1, com2) taps those nets of cpu-32.
+# Sim options per circuit. computer-32-test: started by the boot sequencer S/R (the same start as
+# inttest.py START), no DipSwitch on the top. cpu-32 has no probes, so the stall check
+# (PC, com1, com2) taps those nets of cpu-32.
 case $CIRC in
-  computer-32-test.dig) COPT='-Ddip=-780,580;-780,620 -Dset= -Dtap=cpu-32.dig:PCS=PC,com1,com2' ;;
+  computer-32-test.dig) COPT='-Ddip= -Dset=S=0,R=1,B_used=0,I-in=0 -Dat=6:R=0;10:S=1;16:S=0 -Dtap=cpu-32.dig:PCS=PC,com1,com2' ;;
   *) COPT= ;;   # other circuits: Sim defaults (clock DipSwitch -560,-1640, set=E=1,run=1)
 esac
 echo "circuit: components/$CIRC"
@@ -82,10 +83,16 @@ run() { # name bin seed keys emukeys options
   timeout 900 java -Dzseed=$z -Drom="$O/$b.bin" $COPT $x -cp "$J;$D/build" Sim "$R/components/$CIRC" - "$k" 4000000 2>&1 \
     | grep -v -E "WARNING|Importer|zseed" > "$O/$n.sim"
   python "$R/tools/emu/isa32emu.py" "$O/$b.bin" "$(printf "$ek")" > "$O/$n.emu" 2>&1
-  if diff <(grep -v '^\[half' "$O/$n.sim" | sed '/^$/d') <(sed -e '/^\[/,$d' -e '/^$/d' "$O/$n.emu") > /dev/null
+  # Sim's stderr is in the .sim file: drop its own lines. The [time ...] line has no newline before
+  # it, so it can sit right after the program's last output on the same line: cut it off there.
+  if grep -q 'stop: ERROR' "$O/$n.sim"; then r=ERROR    # Digital error (short circuit, ...): see the .sim
+  elif diff <(grep -v -E '^\[half|^DIGITAL ERROR|^  (origin|value): |^stall: ' "$O/$n.sim" \
+                | sed -e 's/\[time model=.*$//' -e '/^$/d') \
+            <(sed -e '/^\[/,$d' -e '/^$/d' "$O/$n.emu") > /dev/null
   then r=SAME; else r=DIFF; fi
-  echo "== $n $r $(tail -1 "$O/$n.sim")"
+  echo "== $n $r $(tail -1 "$O/$n.sim")" | tee -a "$RES"
 }
+RES="$O/runtests.res"; : > "$RES"
 for t in "${T[@]}"; do
   # keys may contain '|', so split the name, bin, seed from the front and options, emulator keys from the back
   n=${t%%|*}; r=${t#*|}; b=${r%%|*}; r=${r#*|}; z=${r%%|*}; r=${r#*|}
@@ -95,3 +102,7 @@ for t in "${T[@]}"; do
   run "$n" "$b" "$z" "$k" "$ek" "$x" &
 done
 wait
+# summary (knownbug is an expected DIFF); exit 1 on an ERROR
+echo "summary: $(awk '{print $3}' "$RES" | sort | uniq -c | awk '{printf "%s=%s ", $2, $1}')"
+grep ' ERROR ' "$RES" | sed 's/^== /ERROR: /'
+! grep -q ' ERROR ' "$RES"

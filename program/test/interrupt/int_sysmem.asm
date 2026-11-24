@@ -37,7 +37,7 @@ main:
     INIT()
     INITIST()
     LOGINIT()
-    SETVEC(sysh, 1, 1)
+    SETVEC(sysh, 1, PKER + 1)
     LSET(gen[1], SENT)
     st.zero gen[1].32B, XA
     st.zero gen[1].32B, ZA
