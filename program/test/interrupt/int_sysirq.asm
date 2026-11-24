@@ -35,7 +35,7 @@ main:
     INITIST()
     LOGINIT()
     INTVEC()
-    SETVEC(sysh, 1, 1)
+    SETVEC(sysh, 1, PKER + 1)
     PUTC('L')
     PADDR(sc)
     PADDR(main)

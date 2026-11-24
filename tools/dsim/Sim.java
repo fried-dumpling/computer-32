@@ -248,6 +248,11 @@ public class Sim {
         String zseed = System.getProperty("zseed");
         if (zseed != null) System.err.println("zseed: " + seedHighZ(m, zseed) + " values");
         long tm2 = System.nanoTime();
+        // Model.doStep catches errors such as a BurnException (short circuit), only fires ERROR_OCCURRED
+        // and closes the model: catch the first one so the run stops with "stop: ERROR <msg>"
+        final Exception[] err = {null};
+        m.addObserver(ev -> { if (ev.getType() == ModelEventType.ERROR_OCCURRED && err[0] == null) err[0] = ev.getCause(); },
+                ModelEventType.ERROR_OCCURRED);
         m.init();
         for (String kv : System.getProperty("set", "E=1,run=1").split(",")) {
             if (kv.isEmpty()) continue;     // set= : no top-level inputs (e.g. E/run are DipSwitches)
@@ -303,7 +308,7 @@ public class Sim {
         for (Signal s : m.getSignals()) if (s.getName().equals("PC")) pcSig = s.getValue();
         long watchHash = 0, lastChange = 0, lastOut = 0;
         int outLen = 0;
-        String stop = "";
+        String stop = err[0] != null ? digitalError(err[0], -1) : "";
         ObservableValue c = m.getClocks().get(0).getClockOutput();
         long t0 = System.currentTimeMillis();
         int ki = 0, prompts = 0;
@@ -314,7 +319,7 @@ public class Sim {
                 String[] p = e.split(":", 2);
                 at.put(Long.parseLong(p[0]), p[1]);
             }
-        for (h = 0; h < maxHalf; h++) {
+        for (h = 0; h < maxHalf && stop.isEmpty(); h++) {
             if (at.containsKey(h))
                 for (String kv : at.get(h).split(",")) {
                     String[] p = kv.split("=");
@@ -322,6 +327,7 @@ public class Sim {
                 }
             c.setBool(!c.getBool());
             m.doStep();
+            if (err[0] != null) { stop = digitalError(err[0], h); break; }
             if (dumping && h >= csvFrom) {
                 StringBuilder r = new StringBuilder().append(h);
                 for (Signal s : sigs) r.append(',').append(fmt(s.getValue()));
@@ -347,6 +353,7 @@ public class Sim {
                     kb.append(items[ki++]).append(lines ? "\n" : "");
                     for (Keyboard k : kbds) k.hasChanged();   // like KeyboardDialog: re-evaluate av
                     m.doStep();
+                    if (err[0] != null) { stop = digitalError(err[0], h); break; }
                     if (csvName != null && ki == csvKey) dumping = true;
                 } else { stop = " keys used up"; break; }
             }
@@ -384,6 +391,19 @@ public class Sim {
         System.out.println("\n[half=" + h + " keysFed=" + ki + " ms=" + (System.currentTimeMillis() - t0)
                 + (restartAt >= 0 ? " RESTART@" + restartAt : "")
                 + (pcSig != null ? " PC=" + fmt(pcSig) : "") + (stop.isEmpty() ? "" : " stop:" + stop) + "]");
+    }
+
+    // print a Digital error to stderr (for a short circuit also the circuit file and the values on the
+    // net, the only hint which net it was); returns the stop text
+    static String digitalError(Exception e, long h) {
+        System.err.println("DIGITAL ERROR at half " + h + ": " + e);
+        if (e instanceof BurnException) {
+            BurnException be = (BurnException) e;
+            System.err.println("  origin: " + be.getOrigin());
+            for (ObservableValue v : be.getValues())
+                System.err.println("  value: bits=" + v.getBits() + " val=" + fmt(v) + " " + v);
+        }
+        return " ERROR " + String.valueOf(e.getMessage()).replace('\n', ' ').replace('\r', ' ');
     }
 
     static final Map<VisualElement, File> ROM_ORIG = new IdentityHashMap<>();

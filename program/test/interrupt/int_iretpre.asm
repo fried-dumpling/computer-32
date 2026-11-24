@@ -60,7 +60,7 @@ main:
     INITIST()
     LOGINIT()
     INTVEC()
-    SETVEC(handler, 1, 1)
+    SETVEC(handler, 1, PKER + 1)
     PUTC('L')
     PADDR(loop)
     PUTC('S')
