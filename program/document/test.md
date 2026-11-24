@@ -83,27 +83,52 @@ python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [-snap] [그룹...
 | 4 | `int_prec` | `istack -= 4; mem[istack] = 복귀 PC`, 원래 `istack` 칸은 그대로 |
 | 5 | `int_sled` | 복귀 PC = 첫 미commit 명령. `addi` 연속이라 `sled + 4*gen[5]`로 정확히 계산됩니다 |
 | 6a, 6b | `int_prec`, `int_sys` | `syscall`이 없으면 `INT_req`가 0, 있으면 1 |
-| 7a, 7b, 7c | `int_iret` | `iret` 뒤 프로그램이 이어지는지, `istack`과 `int-level`이 복원되는지 |
+| 7a, 7b, 7c | `int_iret` | `iret` 뒤 프로그램이 이어지는지, `istack`과 `int-level`(INIT의 0x80)이 복원되는지 |
 | 8a, 8b | `int_sys` | `syscall`이 핸들러로 들어가고 복귀 PC가 다음 명령인지, 돌아와 `BC`를 출력하는지. IRQ 펄스 없이 IPU가 `INT_req`에 응답해야 합니다. `syscall`은 id 1이므로 프로그램이 `int_vec[1]` = handler, `int_pri[1]` = 1을 씁니다(level 0이면 진입하지 않음). 출력 `L00000284 AH00000284 hBCE` |
 | 9 | `int_tbl` | `interst`/`interld` 왕복(`int_vec[3]`, `int_pri[3]`). 출력 `A00000105 00000009 E` |
 | 10a, 10b, 10c | `int_misp` | 번갈아 오분기하는 분기 주변 진입. 복귀 PC와 `gen[5..7]`이 정상 경로의 명령 경계인지(10a는 +4 허용, 10b는 정확히), 끝까지 도는지(10c) |
 | 10d, 10e, 10f | `int_flc` | 10a~10c와 같은 검사. 분기 조건이 `st`/`ld`를 거쳐 늦게 결정됩니다(원래 Fl_INT와 Fl_JPU를 겹치게 하려는 것. Fl_INT는 없앨 예정이라 11번 항목은 11-19에 뺐습니다). 루프 150회, zseed 전부 |
-| 13 | `int_prec` | 핸들러 안의 `int-level`이 `{mask 1, level 1}` = 0x11 |
+| 13 | `int_prec` | 핸들러 안의 `int-level`이 `{ker 1, mask 1, level 1}` = 0x91 |
 | 14a | `int_sysprev` | `syscall` 앞 명령 12종(`st`, `set`, `addi`, `nop`, 오분기된 루프 끝 등)마다 복귀 PC가 다음 명령인지. `NPAD` 0~23(`.data` 길이 → boot 복사 시간)으로 24번 빌드합니다 |
-| 14b | `int_sysirq` | `syscall` 핸들러 안의 `int-level`이 `{mask 1, int_pri[1] = 1}` = 0x11 |
+| 14b | `int_sysirq` | `syscall` 핸들러 안의 `int-level`이 `{ker 1, mask 1, int_pri[1] = 1}` = 0x91 |
 | 14c, 14d | `int_sysprev` | 모든 `NPAD`에서 끝까지 도는지(14c), 끝에서 `istack` = ISTACK, `stack` = 0x3000인지(14d) |
-| 15a~15d | `int_sysirq` | `syscall`(id 1)과 IRQ(id 3)가 둘 다 level 1. `syscall` 앞 루프부터 핸들러 뒤까지 모든 위상에 IRQ 펄스. 끝까지 도는지(15a), 두 핸들러가 한 번씩 도는지 = IRQ가 없어지지 않는지(15b), IRQ가 `syscall` commit 전(R ≤ sc)이거나 `syscall` 핸들러의 `iret` 뒤에 들어가고 `syscall` 복귀 PC가 다음 명령인지(15c), IRQ 핸들러 level 0x11(15d). zseed 전부 |
+| 15a~15d | `int_sysirq` | `syscall`(id 1)과 IRQ(id 3)가 둘 다 level 1. `syscall` 앞 루프부터 핸들러 뒤까지 모든 위상에 IRQ 펄스. 끝까지 도는지(15a), 두 핸들러가 한 번씩 도는지 = IRQ가 없어지지 않는지(15b), IRQ가 `syscall` commit 전(R ≤ sc)이거나 `syscall` 핸들러의 `iret` 뒤에 들어가고 `syscall` 복귀 PC가 다음 명령인지(15c), IRQ 핸들러 level 0x91(15d). zseed 전부 |
 | 16a, 16b | `int_nest` | 낮은 IRQ(id 3, level 1) 핸들러가 `int-tmplv`를 저장하고 mask를 내린 동안(0x81) 높은 IRQ(id 4 = `I-in` bit 4, level 2)를 모든 위상에 넣습니다. 끝까지 도는지(16a). 높은 쪽이 mask 0 구간 안에서만 중첩되고(아니면 낮은 쪽 `iret` 뒤 main에서), level 0x12 / `int-tmplv` 0x01, 복원한 `int-tmplv`, 마지막 `istack`/`int-level`/`gen[5]`이 맞는지(16b). zseed 전부 |
 | 17a, 17b | `int_iret2` | 첫 IRQ의 핸들러 진입부터 `iret` 뒤까지 모든 위상에 둘째 IRQ. 끝까지 도는지(17a), 진입이 정확히 2번이고 두 복귀 PC가 main에 있는지, `istack`/`int-level`/`gen[5]`(17b). 둘째 펄스를 잡는 edge 직전 half(H2−1)에 그 선의 `I-act`나 `I-acp`가 1이면 장치 latch가 펄스를 무시할 수 있어서(S=R=1, seed에 따라 다름) 1번 또는 2번을 허용합니다. zseed 전부 |
 | 18 | `int_wpsys` | 항상 taken인 분기(조건이 load라 늦게 결정, BTB miss는 not taken 예측)의 fall-through에 `syscall`. `INT_req`가 0, 핸들러 진입 없음. 오경로에서 `syscall`을 fetch하지 않았으면 `SKIP` |
 | 19a, 19b, 19c | `int_sysmem` | `st` 바로 뒤, `ld` 바로 뒤 `syscall`. 복귀 PC(19a), 핸들러에서 본 메모리와 `gen[6]`: 앞 `st`/`ld`는 끝나고 뒤 `st`는 안 됨(19b), `syscall` 뒤 `ld`가 핸들러의 store를 보는지(19c) |
-| 20a, 20b, 20c | `int_user` | `iret`(`int-tmplv` = 0)으로 user에 들어감. user `syscall`이 들어가고 user로 돌아오는지(20a), 핸들러에서 `int-level` ker = 1, `int-tmplv` ker = 0(20b), user의 `stexp`가 trap하는지(20c, trap id는 미정이라 id 0으로 가정) |
+| 20a, 20b | `int_user` | `pbase` = 0, `plimit` = 0x5000(리셋 값이면 첫 user fetch가 fault)으로 두고 `iret`(`int-tmplv` = 0)으로 user에 들어감. user 코드는 메모리에 접근하지 않음(user mode는 MMU 때문에 터미널 0x4000000에 쓸 수 없음): `gen[7]`에 표식을 넣고 `syscall`하면 kernel 핸들러가 `S<표식>`을 출력하고 로그를 남김. 출력 `L<u1> <u2> KSUSwE G...g`. user `syscall`이 들어가고(R = 다음 word) user로 돌아오는지(20a, 둘째 `syscall`로 확인), 핸들러에서 `int-level` ker = 1, `int-tmplv` ker = 0(20b). user의 `stexp`(예전 20c, id 0 가정)는 23c(privilege fault id 4)로 옮김(2026-11-25) |
 | 21a, 21b | `int_sys0` | `int_pri[1]` = 0인 `syscall`: 핸들러가 돌지 않는지(21a), id 0으로 한 번 진입하고(복귀 PC = `syscall` 다음 word, `int-level` 0x9f) `iret` 뒤 끝까지 도는지(21b, 11-19 결정, `ISA.md` 2.2 "고정 id"). 프로그램이 `int_vec[0]`에 handler를 둡니다. 출력 `APBEG<R> 0000009F g` |
 | 22 | `int_iretpre` | 핸들러 끝(`iret` 바로 앞) 8종(`st`, `nop`, `set`, `nop` 4개, `ld`, `ld ld` 등)을 따로 빌드(`C0`~`C7`). `syscall`과 IRQ로 한 번씩 들어가 둘 다 돌아오는지 |
-| (공통) | `int.hsm` | 핸들러는 `LOGK`/`LOGRET`/`LOGEXT`로 값을 메모리 로그(`LOG` 0x2800)에 붙입니다. ALU를 쓰지 않아 끼어든 코드의 flag가 그대로입니다. main이 끝에 `DUMPLOG`로 `G<값> ... g`를 출력합니다 |
+| 23a~23h | `int_fault` | page fault(id 3, `P`)와 privilege fault(id 4, `V`). `pbase` = 0, `plimit` = 0x5000, user에서 c1 `ld` 0x6000, c2 `st` 0x6000, c3 `stexp istack`, c4 `jmp` 0x6000(fetch fault), c5 `iret`, c6 터미널 `st`. 핸들러는 `{0xF3/0xF4, R, int-level, int-tmplv, istack}`을 로그에 남기고 다음 케이스로 `iret`. 케이스마다 그 케이스만 도는 변형(`FSTART s<n>`, `FONE`)으로 23a~23f를 판정(기대: R = fault 낸 명령, fetch fault는 0x6000, `int-level` 0x91, `int-tmplv` ker 0, istack 0x1FFC). 23g: 오경로(BTB miss `jmp` 뒤)의 `ld` 0x6000, `stexp`가 trap하지 않는지(변형 `wp`). 23h: 전체 한 번에(`KPPVPVPSE`, 기록 6개). 20c(id 0 가정)는 23c로 대신함. syscall/iret 중 data fault는 아직 회로에서 처리하지 않아 시험하지 않음(2026-11-23) |
+| (공통) | `int.hsm` | CPU는 kernel, mask 1(`int-level` 0x90)로 시작하므로 `INIT`이 `int-level` = 0x80(ker 1, mask 0, level 0)을 씁니다(2026-11-22). `int_pri`에는 ker 비트를 함께 써야(`PKER` + level, 예: 0x81) 핸들러가 kernel로 돌고 핸들러 안 `int-level`이 0x91이 됩니다. `int_sys0`의 level 0과 `int_tbl`의 왕복 값은 그대로입니다. 핸들러는 `LOGK`/`LOGRET`/`LOGEXT`로 값을 메모리 로그(`LOG` 0x2800)에 붙입니다. ALU를 쓰지 않아 끼어든 코드의 flag가 그대로입니다. main이 끝에 `DUMPLOG`로 `G<값> ... g`를 출력합니다 |
 
 - 모든 실행에 `cpu-32`의 tunnel `PCS`(PC), `com1`, `com2`, `INT_req` probe를 붙입니다(`-Dtap`). 17b는 top-level probe `I-act`, `I-acp`도 기록합니다.
 - 위상 sweep은 2 half 간격의 짝수 half(클럭 상승)만 봅니다.
+
+### 결과 (2026-11-25, `cpu-32.dig` 00:36 저장본, `ROB-INT.dig` 00:35, `computer-32-test.dig` 11-24 22:48, kernel 브랜치)
+
+PASS 52, FAIL 0, SKIP 0(20c는 23c로 옮겨 뺌; 이 실행 때는 SKIP 1로 보고됨). `fault` 그룹 23a~23h 모두 PASS(R, int-level, int-tmplv, istack 기대값 일치). `runtests.sh` SAME 12, DIFF 1(knownbug, 예상). 11-24 ~ 11-25에 고친 원인은 `document/errors.md` 42~53번.
+
+- 아직 시험하지 않은 것: 같은 사이클에 겹친 fault의 우선순위, syscall/iret 중 data fault(회로 미처리).
+
+### 결과 (2026-11-23, `cpu-32.dig` 22:17 저장본, kernel 브랜치) 11-25에 해결
+
+page fault(id 3)와 privilege fault(id 4)를 넣은 회로와 새 테스트 `int_fault`(23a~23h). 자세한 원인은 `document/errors.md` 39~45번.
+
+- 21:13 저장본: 기존 PASS 44, SKIP 1 그대로. `runtests.sh` SAME 12, DIFF 1(knownbug).
+- 22:17 저장본: `runtests.sh` SAME 13(selftest seed 하나 추가), DIFF 1(knownbug). inttest PASS 33, FAIL 15, SKIP 4.
+  - 23a, 23b, 23g PASS. fault R = 명령 자신(errors.md 42).
+  - 같은 수정으로 syscall R도 syscall 자신이 되어 무한 재진입: 8a, 8b, 14a~14c, 15a, 19a~19c, 20a, 20b, 21b, 22 FAIL/SKIP(42).
+  - 23c, 23e: privilege fault 명령이 실행됨(43). 23d: fetch fault entry가 멈춤(44). 23f: 오경로 `stexp`가 남긴 가짜 privilege fault(45). 23h: 23d에서 멈춤.
+
+### 결과 (2026-11-22, `cpu-32.dig` 23:17 저장본, kernel 브랜치)
+
+PASS 44, SKIP 1(20c), 종료 코드 0. `runtests.sh`는 SAME 12, DIFF 1(knownbug, 예상).
+
+- CPU가 kernel, mask 1로 시작해 `INIT`이 `int-level` = 0x80을 쓰고, 핸들러의 `int_pri`에 ker 비트(`PKER`)를 넣었습니다. 핸들러 level 기대값은 0x91(13, 14b, 15d), `iret` 뒤는 0x80(7c)입니다.
+- 이날 찾아 고친 회로 문제: `index-compressor`의 SI4..7 위치(syscall의 ROB-INT 쓰기가 사라짐), ROB-INT data select(syscall이 id 0으로 진입), flush와 같은 사이클에 issue된 오경로 `ldexp`/`iret`이 serialize 래치(`RS_FF@5160,-2600`, `SRL_HALT`)를 남겨 frontend가 멈춤(14a, 14c, 15a, 16a, 19a). 마지막 것의 최소 재현은 `jmp.one main; nop; ldexp; iret; main:`입니다.
+- 20b(errors.md #27)는 PASS가 되어 `XFAIL`에서 뺐습니다. 20c는 권한 fault가 id를 저장하기 전까지 실행하지 않습니다.
 
 ### 결과 (2026-11-19, `cpu-32.dig` 23:00 저장본, `IPU-test.dig` 13:35, `computer-32-test.dig` 14:20)
 

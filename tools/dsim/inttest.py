@@ -8,7 +8,8 @@
 
 The emulator has no interrupts, so each item is compared with values from ISA.md 2.2, not
 with the emulator. An item in XFAIL is expected to fail today: it prints XFAIL while it
-fails and XPASS once it passes. The exit code is 1 on FAIL or XPASS (then remove the entry).
+fails and XPASS once it passes. The exit code is 1 on FAIL or XPASS (then remove the entry)
+or ERROR (item 0: a run that a Digital error such as a short circuit ended, "stop: ERROR").
 
 An interrupt is a 2-half pulse on IPU line IRQ (top-level In "I-in"). The programs set
 int_vec[IRQ] = handler and int_pri[IRQ] = 1 with INTVEC() (program/test/interrupt/int.hsm).
@@ -23,6 +24,7 @@ import statistics
 import subprocess
 import sys
 import threading
+import traceback
 import atexit
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -55,20 +57,18 @@ START = "6:R=0;10:S=1;16:S=0"
 TAP = "cpu-32.dig:PCS=PC,com1,com2,INT_req=INT_req"
 
 PROGRAMS = ["ext", "prec", "sled", "misp", "flc", "iret", "iret2", "iretpre", "sys", "sysprev", "sysirq",
-            "nest", "wpsys", "sysmem", "user", "sys0", "tbl"]
+            "nest", "wpsys", "sysmem", "user", "sys0", "tbl", "fault"]
 # programs that are also built as variants: image int_<name>_<tag> from a wrapper in OUT
 # that #defines the given line and includes the program (dasm has no -D)
 VARIANTS = {"sysprev": {f"p{n}": f"NPAD {n}" for n in range(24)},
-            "iretpre": {f"c{k}": f"C{k} 1" for k in range(8)}}
+            "iretpre": {f"c{k}": f"C{k} 1" for k in range(8)},
+            "fault": {**{f"s{k}": f"FSTART s{k}\n#define FONE 1" for k in range(1, 7)}, "wp": "FSTART r6"}}
 SYSPREV = ["st", "set", "addi", "nop", "set+nop", "mispredicted loop exit", "jmp.one",
            "predicted not-taken jmp.zero", "ld", "cmpi", "loop exit+nop", "loop exit+set"]
 IRETPRE = ["st", "nop", "set", "4 nops", "ld", "ld ld (int_nest)", "ld ld", "st st .. ld ld"]
 
 # item -> why it fails today. Remove the entry when the item passes.
 XFAIL = {
-    "20b": "errors.md #27. 11-18: entry does not set ker (int-level 0x10 in the handler)",
-    "20c": "privilege check not wired: ISS_kernel has no consumer, DP_ker is a PullDown "
-           "(the trap id is also not decided; the test assumes id 0)",
 }
 
 
@@ -169,11 +169,15 @@ def sim(name, seed=1, h=None, cols=None, tag=None, pulses=None):
     if "[half=" not in stdout:
         raise RuntimeError(f"Sim failed for {tag}:\n{err}")
     text, tail = stdout.rsplit("[half=", 1)
+    m = re.search(r"stop: ERROR (.*)\]", tail)
+    if m:           # a Digital error (short circuit, ...) ended the run: always a failure (Report.show)
+        DIGITAL_ERRORS.append((tag, m.group(1).strip()))
     text = re.sub(r"\[RESTART at half \d+\]", "", text.replace("\n", ""))   # Sim's note, not program output
     return Run(name, seed, h, text, tail, delta, tag)
 
 
 CP = f"{JAR};{DSIM / 'build'}"
+DIGITAL_ERRORS = []         # (tag, message) of the runs that stopped with "stop: ERROR" (list.append is thread safe)
 ONESHOT = False             # -oneshot : one java process per run (the old way)
 _local = threading.local()
 _workers = []
@@ -323,6 +327,9 @@ class Report:
         self.rows.append((key, st, text, detail))
 
     def show(self):
+        for tag, msg in sorted(set(DIGITAL_ERRORS)):
+            self.rows.append(("0", "ERROR", f"Digital error in run {tag}", f"{msg} (details: {tag}.sim, worker log)"))
+        DIGITAL_ERRORS.clear()
         print()
         order = lambda row: (int(re.match(r"\d+", row[0]).group()), row[0])
         for key, st, text, detail in sorted(self.rows, key=order):
@@ -331,7 +338,7 @@ class Report:
         for r in self.rows:
             n[r[1]] = n.get(r[1], 0) + 1
         print("\n" + " ".join(f"{k}={v}" for k, v in sorted(n.items())))
-        return not any(r[1] in ("FAIL", "XPASS") for r in self.rows)
+        return not any(r[1] in ("FAIL", "XPASS", "ERROR") for r in self.rows)
 
 
 def brief(items, limit=6):
@@ -388,8 +395,8 @@ def t_prec(rep, pool, a):
     bad = [r.where() for r, f in done if not (f["ist"] == ISTACK - 4 and f["m4"] != SENT and f["m0"] == SENT)]
     rep.item("4", "push: istack -= 4, mem[istack] = return PC, mem[old istack] kept", (not bad) if done else None,
              f"{len(bad)}/{len(done)} wrong: " + brief(bad) if bad else f"{len(done)} runs")
-    bad = [f"{r.where()} level={f['lv']:#x}" for r, f in done if f["lv"] != 0x11]
-    rep.item("13", "int-level in the handler = {mask 1, level 1} = 0x11", (not bad) if done else None,
+    bad = [f"{r.where()} level={f['lv']:#x}" for r, f in done if f["lv"] != 0x91]
+    rep.item("13", "int-level in the handler = {ker 1, mask 1, level 1} = 0x91", (not bad) if done else None,
              f"{len(bad)}/{len(done)} wrong: " + brief(bad, 2) if bad else f"{len(done)} runs")
 
 
@@ -500,8 +507,8 @@ def t_iret(rep, pool, a):
              f"{len(entered)} entered, {len(bad)} wrong: " + brief(bad, 3) if bad else f"{len(entered)} runs")
     wrong = [r.where() for r, ist, _ in resumed if ist != ISTACK]
     rep.item("7b", "iret: istack back to ISTACK", (not wrong) if resumed else None, brief(wrong))
-    wrong = [r.where() for r, _, lv in resumed if lv != 0]
-    rep.item("7c", "iret: int-level back to 0", (not wrong) if resumed else None, brief(wrong))
+    wrong = [r.where() for r, _, lv in resumed if lv != 0x80]
+    rep.item("7c", "iret: int-level back to 0x80 (INIT)", (not wrong) if resumed else None, brief(wrong))
 
 
 def t_sys(rep, pool, a):
@@ -574,12 +581,21 @@ def t_iretpre(rep, pool, a):
              "syscall and by IRQ)", not hung and not bad, brief(hung + bad, 4))
 
 
+def banner(r, n):
+    """match of 'L' + n hex words at the start of r.text; a run that stopped before (e.g. mid-banner)
+    raises RuntimeError, which fails the group in main() instead of an AttributeError on None"""
+    m = re.match(r"L" + HEX * n, r.text)
+    if not m:
+        raise RuntimeError(f"{r.tag}: no L + {n} words in {r.text[:120]!r} ({r.tail.strip()})")
+    return m
+
+
 def t_sysirq(rep, pool, a):
     jobs = []
     info = {}
     for z in a.seeds:
         r, sc, hits, _, d = calibrate("sysirq", z)
-        m = re.match(r"L" + HEX * 3, r.text)
+        m = banner(r, 3)
         main_, after = hx(m.group(2)), hx(m.group(3))
         rise = [s for s, _ in high_spans(d["INT_req"])]
         if not rise:
@@ -592,8 +608,8 @@ def t_sysirq(rep, pool, a):
     cal = [info[z][3] for z in a.seeds]
     # 14b: syscall level, from the runs without a pulse
     lvs = {f"z{r.seed}": (glog(r.text) or [0, 0])[1] for r in cal}
-    rep.item("14b", "int-level in the syscall handler = {mask 1, level int_pri[1] = 1} = 0x11",
-             all(lv5(v) == 0x11 for v in lvs.values()), ", ".join(f"{k}: {v:#x}" for k, v in lvs.items()))
+    rep.item("14b", "int-level in the syscall handler = {ker 1, mask 1, level int_pri[1] = 1} = 0x91",
+             all(v == 0x91 for v in lvs.values()), ", ".join(f"{k}: {v:#x}" for k, v in lvs.items()))
     stalled, lost, wrong, levels, order = [], [], [], [], {"Q first": 0, "S first": 0}
     final = re.compile(r"E" + HEX * 2 + r"G((?:[0-9A-F]{8} )*)g" + HEX * 2 + "e")
     for r in runs:
@@ -617,7 +633,7 @@ def t_sysirq(rep, pool, a):
             why = f"SQ IRQ R={rq:#x} before after (nested in the syscall handler?)"
         elif (g5, g6, ist, lv5(lv)) != (6, 60, ISTACK, 0):
             why = f"gen5={g5} gen6={g6} istack={ist:#x} level={lv:#x}"
-        if lv5(log[1 if seq[0] == "Q" else 3]) != 0x11:
+        if log[1 if seq[0] == "Q" else 3] != 0x91:
             levels.append(r.where())
         if why:
             wrong.append(f"{r.where()} {why}")
@@ -630,14 +646,14 @@ def t_sysirq(rep, pool, a):
     rep.item("15c", "IRQ around syscall: IRQ before the syscall commits (R <= sc) or after its iret, "
              "syscall R = next word", (not wrong) if len(lost) < len(runs) else None,
              f"{len(wrong)} wrong: " + brief(wrong, 3) if wrong else ", ".join(f"{k}: {v}" for k, v in order.items()))
-    rep.item("15d", "IRQ around syscall: int-level in the IRQ handler = 0x11", not levels, brief(levels))
+    rep.item("15d", "IRQ around syscall: int-level in the IRQ handler = 0x91", not levels, brief(levels))
 
 
 def t_nest(rep, pool, a):
     jobs, info = [], {}
     for z in a.seeds:
         r, loop, hits, _, d = calibrate("nest", z)
-        m = re.match(r"L" + HEX * 4, r.text)
+        m = banner(r, 4)
         open_, close, main_ = hx(m.group(2)), hx(m.group(3)), hx(m.group(4))
         h1 = hits[len(hits) // 2] & ~1
         lo = sim("nest", z, cols=["PC"], pulses=[(h1, IRQ)], tag=f"nest-z{z}-lo")
@@ -704,7 +720,7 @@ def t_iret2(rep, pool, a):
     iret = op_addrs("iret2", 0x77)[0]
     for z in a.seeds:
         r, loop, hits, _, d = calibrate("iret2", z)
-        main_ = hx(re.match(r"L" + HEX * 2, r.text).group(2))
+        main_ = hx(banner(r, 2).group(2))
         h1 = hits[len(hits) // 2] & ~1
         one = sim("iret2", z, cols=["PC"], pulses=[(h1, IRQ)], tag=f"iret2-z{z}-one")
         dl = read_delta(one.delta)
@@ -790,20 +806,20 @@ def t_sysmem(rep, pool, a):
 
 def t_user(rep, pool, a):
     runs = list(pool.map(lambda z: sim("user", z, tag=f"user-z{z}"), a.seeds))
-    ok_a, ok_b, ok_c, det = [], [], [], []
+    ok_a, ok_b, det = [], [], []
     for r in runs:
-        m = re.match(r"L" + HEX * 3, r.text)
+        m = re.match(r"L" + HEX * 2, r.text)
         log = glog(r.text) or []
-        u1, ust = (hx(m.group(1)), hx(m.group(2))) if m else (None, None)
+        u1, u2 = (hx(m.group(1)), hx(m.group(2))) if m else (None, None)
         det.append(f"z{r.seed} {r.text[r.text.find('K'):r.text.find('E')]!r} log " + " ".join(f"{x:x}" for x in log))
-        ok_a.append(len(log) >= 4 and log[0] == u1 and "Su" in r.text)
-        ok_b.append(len(log) >= 4 and log[1] & 0x80 == 0x80 and log[2] & 0x80 == 0)
-        # trap: fault handler logs 0xFA, R = the stexp, istack unchanged (ISTACK-4 during the trap)
-        i = log.index(0xFA) if 0xFA in log else None
-        ok_c.append(i is not None and log[i + 1:i + 3] == [ust, ISTACK - 4] and "v" not in r.text)
+        # user code makes no memory access (the MMU keeps user mode off the terminal): it puts a mark
+        # in gen[7] and calls syscall, sysh prints "S<mark>" and logs {R, int-level, int-tmplv, istack}.
+        # the 2nd syscall ('w') proves the iret went back to user
+        ok_a.append(len(log) == 8 and log[0] == u1 and log[4] == u2 and "KSUSwE" in r.text)
+        ok_b.append(len(log) == 8 and all(log[k] & 0x80 == 0x80 and log[k + 1] & 0x80 == 0 for k in (1, 5)))
     rep.item("20a", "user mode: syscall from user enters (R = next word) and returns to user", all(ok_a), det[0])
     rep.item("20b", "user mode: in the handler int-level ker = 1, int-tmplv ker = 0", all(ok_b), det[0])
-    rep.item("20c", "user mode: stexp traps (assumed id 0), R = the stexp, istack unchanged", all(ok_c), det[0])
+    # a user stexp (the old 20c) is tested by 23c: privilege fault id 4, R = the stexp, istack not written
 
 
 def t_sys0(rep, pool, a):
@@ -819,9 +835,43 @@ def t_sys0(rep, pool, a):
              f"want R={sc + 4:#x}, output {r.text[:60]!r}, stop [{r.tail.strip()}]")
 
 
+def t_fault(rep, pool, a):
+    """int_fault: user faults. page fault id 3 'P', privilege fault id 4 'V'; each handler logs
+    {0xF3|0xF4, R, int-level, int-tmplv, istack} and irets to the next case. one variant per case
+    (int_fault_s<n>: only that case, then the syscall), the wrong-path block alone (_wp) and the full run."""
+    names = ["full", "wp"] + [f"s{k}" for k in range(1, 7)]
+    runs = dict(zip(names, pool.map(lambda v: sim("fault" if v == "full" else f"fault_{v}", a.seeds[0]), names)))
+    m = re.match(r"L" + HEX * 6, runs["full"].text)
+    if not m:
+        rep.item("23a", "fault: program prints its labels", False, f"output {runs['full'].text[:80]!r}")
+        return
+    c = [hx(x) for x in m.groups()]                     # c1 .. c6
+    cases = [("23a", "user ld above plimit: page fault (id 3), R = the ld", "P", 0xF3, c[0]),
+             ("23b", "user st above plimit: page fault (id 3), R = the st", "P", 0xF3, c[1]),
+             ("23c", "user stexp: privilege fault (id 4), R = the stexp, istack not written", "V", 0xF4, c[2]),
+             ("23d", "user jmp above plimit: fetch page fault (id 3), R = the target 0x6000", "P", 0xF3, 0x6000),
+             ("23e", "user iret: privilege fault (id 4), R = the iret, no return", "V", 0xF4, c[4]),
+             ("23f", "user st to the terminal: page fault (id 3), R = the st", "P", 0xF3, c[5])]
+    for n, (key, text, mark, tag, want) in enumerate(cases, 1):
+        r = runs[f"s{n}"]
+        log = glog(r.text) or []
+        ok = (f"K{mark}SE" in r.text and len(log) == 5 and log[0] == tag and log[1] == want and log[2] == 0x91
+              and log[3] & 0x80 == 0 and log[4] == ISTACK - 4)
+        rep.item(key, text, ok, f"want K{mark}SE, log {tag:x} {want:x} 91 <user> {ISTACK - 4:x}; "
+                 f"output {r.text[r.text.find('K'):][:64]!r}, stop [{r.tail.strip()[:50]}]")
+    r = runs["wp"]
+    rep.item("23g", "fault: ld above plimit and stexp on the wrong path behind a jmp do not trap",
+             "KSEGg" in r.text, f"output {r.text[r.text.find('K'):][:64]!r}, stop [{r.tail.strip()[:50]}]")
+    r = runs["full"]
+    rep.item("23h", "fault: all cases in one run (KPPVPVPSE, 6 records)",
+             "KPPVPVPSE" in r.text and len(glog(r.text) or []) == 30,
+             f"output {r.text[r.text.find('K'):][:64]!r}, stop [{r.tail.strip()[:50]}]")
+
+
 TESTS = {"ext": t_ext, "prec": t_prec, "sled": t_sled, "misp": t_misp, "flc": t_flc, "iret": t_iret,
          "iret2": t_iret2, "iretpre": t_iretpre, "sys": t_sys, "sysprev": t_sysprev, "sysirq": t_sysirq, "nest": t_nest,
-         "wpsys": t_wpsys, "sysmem": t_sysmem, "user": t_user, "sys0": t_sys0, "tbl": t_tbl}
+         "wpsys": t_wpsys, "sysmem": t_sysmem, "user": t_user, "sys0": t_sys0, "tbl": t_tbl,
+         "fault": t_fault}
 
 
 def lock_out():
@@ -878,13 +928,14 @@ def main():
         shutil.rmtree(SNAP, ignore_errors=True)
         shutil.copytree(src, SNAP, ignore=lambda d, names: [n for n in names if Path(d, n).is_file() and not n.endswith(".dig")])
     rep = Report()
-    try:
-        with ThreadPoolExecutor(a.j) as pool:
-            for g in groups:
+    with ThreadPoolExecutor(a.j) as pool:
+        for g in groups:
+            try:
                 TESTS[g](rep, pool, a)
-    except RuntimeError as e:
-        rep.show()
-        sys.exit(f"stopped: {e}")
+            except Exception as e:  # unexpected output in a calibration run etc.: fail this group, run the others
+                msg = str(e) if isinstance(e, RuntimeError) else f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+                print(f"{g}: stopped: {msg}", flush=True)
+                rep.item("0", f"group {g} stopped, its other items were not run", False, msg)
     sys.exit(0 if rep.show() else 1)
 
 
