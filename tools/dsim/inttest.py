@@ -819,8 +819,7 @@ def t_user(rep, pool, a):
         ok_b.append(len(log) == 8 and all(log[k] & 0x80 == 0x80 and log[k + 1] & 0x80 == 0 for k in (1, 5)))
     rep.item("20a", "user mode: syscall from user enters (R = next word) and returns to user", all(ok_a), det[0])
     rep.item("20b", "user mode: in the handler int-level ker = 1, int-tmplv ker = 0", all(ok_b), det[0])
-    rep.item("20c", "user mode: stexp traps (assumed id 0), R = the stexp, istack unchanged", None,
-             "not run: the privilege fault does not store its id yet and re-runs the stexp forever")
+    # a user stexp (the old 20c) is tested by 23c: privilege fault id 4, R = the stexp, istack not written
 
 
 def t_sys0(rep, pool, a):

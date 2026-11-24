@@ -97,7 +97,7 @@ python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [-snap] [그룹...
 | 17a, 17b | `int_iret2` | 첫 IRQ의 핸들러 진입부터 `iret` 뒤까지 모든 위상에 둘째 IRQ. 끝까지 도는지(17a), 진입이 정확히 2번이고 두 복귀 PC가 main에 있는지, `istack`/`int-level`/`gen[5]`(17b). 둘째 펄스를 잡는 edge 직전 half(H2−1)에 그 선의 `I-act`나 `I-acp`가 1이면 장치 latch가 펄스를 무시할 수 있어서(S=R=1, seed에 따라 다름) 1번 또는 2번을 허용합니다. zseed 전부 |
 | 18 | `int_wpsys` | 항상 taken인 분기(조건이 load라 늦게 결정, BTB miss는 not taken 예측)의 fall-through에 `syscall`. `INT_req`가 0, 핸들러 진입 없음. 오경로에서 `syscall`을 fetch하지 않았으면 `SKIP` |
 | 19a, 19b, 19c | `int_sysmem` | `st` 바로 뒤, `ld` 바로 뒤 `syscall`. 복귀 PC(19a), 핸들러에서 본 메모리와 `gen[6]`: 앞 `st`/`ld`는 끝나고 뒤 `st`는 안 됨(19b), `syscall` 뒤 `ld`가 핸들러의 store를 보는지(19c) |
-| 20a, 20b, 20c | `int_user` | `pbase` = 0, `plimit` = 0x5000(리셋 값이면 첫 user fetch가 fault)으로 두고 `iret`(`int-tmplv` = 0)으로 user에 들어감. user 코드는 메모리에 접근하지 않음(user mode는 MMU 때문에 터미널 0x4000000에 쓸 수 없음): `gen[7]`에 표식을 넣고 `syscall`하면 kernel 핸들러가 `S<표식>`을 출력하고 로그를 남김. 출력 `L<u1> <u2> KSUSwE G...g`. user `syscall`이 들어가고(R = 다음 word) user로 돌아오는지(20a, 둘째 `syscall`로 확인), 핸들러에서 `int-level` ker = 1, `int-tmplv` ker = 0(20b). user의 `stexp` trap(20c)은 실행하지 않음(SKIP): 권한 fault가 아직 id를 저장하지 않아 trap하지 않고 같은 명령을 계속 다시 실행함(2026-11-22) |
+| 20a, 20b | `int_user` | `pbase` = 0, `plimit` = 0x5000(리셋 값이면 첫 user fetch가 fault)으로 두고 `iret`(`int-tmplv` = 0)으로 user에 들어감. user 코드는 메모리에 접근하지 않음(user mode는 MMU 때문에 터미널 0x4000000에 쓸 수 없음): `gen[7]`에 표식을 넣고 `syscall`하면 kernel 핸들러가 `S<표식>`을 출력하고 로그를 남김. 출력 `L<u1> <u2> KSUSwE G...g`. user `syscall`이 들어가고(R = 다음 word) user로 돌아오는지(20a, 둘째 `syscall`로 확인), 핸들러에서 `int-level` ker = 1, `int-tmplv` ker = 0(20b). user의 `stexp`(예전 20c, id 0 가정)는 23c(privilege fault id 4)로 옮김(2026-11-25) |
 | 21a, 21b | `int_sys0` | `int_pri[1]` = 0인 `syscall`: 핸들러가 돌지 않는지(21a), id 0으로 한 번 진입하고(복귀 PC = `syscall` 다음 word, `int-level` 0x9f) `iret` 뒤 끝까지 도는지(21b, 11-19 결정, `ISA.md` 2.2 "고정 id"). 프로그램이 `int_vec[0]`에 handler를 둡니다. 출력 `APBEG<R> 0000009F g` |
 | 22 | `int_iretpre` | 핸들러 끝(`iret` 바로 앞) 8종(`st`, `nop`, `set`, `nop` 4개, `ld`, `ld ld` 등)을 따로 빌드(`C0`~`C7`). `syscall`과 IRQ로 한 번씩 들어가 둘 다 돌아오는지 |
 | 23a~23h | `int_fault` | page fault(id 3, `P`)와 privilege fault(id 4, `V`). `pbase` = 0, `plimit` = 0x5000, user에서 c1 `ld` 0x6000, c2 `st` 0x6000, c3 `stexp istack`, c4 `jmp` 0x6000(fetch fault), c5 `iret`, c6 터미널 `st`. 핸들러는 `{0xF3/0xF4, R, int-level, int-tmplv, istack}`을 로그에 남기고 다음 케이스로 `iret`. 케이스마다 그 케이스만 도는 변형(`FSTART s<n>`, `FONE`)으로 23a~23f를 판정(기대: R = fault 낸 명령, fetch fault는 0x6000, `int-level` 0x91, `int-tmplv` ker 0, istack 0x1FFC). 23g: 오경로(BTB miss `jmp` 뒤)의 `ld` 0x6000, `stexp`가 trap하지 않는지(변형 `wp`). 23h: 전체 한 번에(`KPPVPVPSE`, 기록 6개). 20c(id 0 가정)는 23c로 대신함. syscall/iret 중 data fault는 아직 회로에서 처리하지 않아 시험하지 않음(2026-11-23) |
@@ -106,7 +106,13 @@ python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [-snap] [그룹...
 - 모든 실행에 `cpu-32`의 tunnel `PCS`(PC), `com1`, `com2`, `INT_req` probe를 붙입니다(`-Dtap`). 17b는 top-level probe `I-act`, `I-acp`도 기록합니다.
 - 위상 sweep은 2 half 간격의 짝수 half(클럭 상승)만 봅니다.
 
-### 결과 (2026-11-23, `cpu-32.dig` 22:17 저장본, kernel 브랜치) 진행 중
+### 결과 (2026-11-25, `cpu-32.dig` 00:36 저장본, `ROB-INT.dig` 00:35, `computer-32-test.dig` 11-24 22:48, kernel 브랜치)
+
+PASS 52, FAIL 0, SKIP 0(20c는 23c로 옮겨 뺌; 이 실행 때는 SKIP 1로 보고됨). `fault` 그룹 23a~23h 모두 PASS(R, int-level, int-tmplv, istack 기대값 일치). `runtests.sh` SAME 12, DIFF 1(knownbug, 예상). 11-24 ~ 11-25에 고친 원인은 `document/errors.md` 42~53번.
+
+- 아직 시험하지 않은 것: 같은 사이클에 겹친 fault의 우선순위, syscall/iret 중 data fault(회로 미처리).
+
+### 결과 (2026-11-23, `cpu-32.dig` 22:17 저장본, kernel 브랜치) 11-25에 해결
 
 page fault(id 3)와 privilege fault(id 4)를 넣은 회로와 새 테스트 `int_fault`(23a~23h). 자세한 원인은 `document/errors.md` 39~45번.
 
