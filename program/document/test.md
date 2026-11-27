@@ -32,6 +32,7 @@ dlnk fill.o -o ../boot/rom.bin
 | `flushstall.asm` | store가 버스를 잡은 동안 오는 call/jmp/분기/ret flush (FT stage의 옛 fetch가 살아남는 버그, calc_nh `2*3-1`) | 입력 없음. `<케이스> PASS` / `FAIL <결과 hex>` |
 | `memory/ldstmix.asm` | 밀린 load 여러 개와 store를 섞었을 때 load 값 (bus controller mid 겹침 버그) | 입력 없음. `m1`..`m6` `PASS` / `FAIL <오류 수 hex>` |
 | `rotate.asm` | `rol`/`roli`/`ror`/`rori` (X = 0x12345678, 회전량 0~36) | 입력 없음. `<케이스> <결과 hex>`, 에뮬레이터와 비교 |
+| `carry.asm` | carry/carry4/overflow flag, `addc`/`subc`/`shiftlc`/`shiftrc`, 64/96 bit 덧셈·뺄셈, 64 bit shift, rotate carry | 입력 없음. `<케이스> <결과 hex...> <flag>`(`ZNPC4V`, 꺼진 bit는 `.`), 에뮬레이터와 비교. 2026-11-27: 99줄이 zseed 1~3에서 에뮬레이터와 같음 |
 | `knownbug.asm` | 예전 `CLAUDE.md`의 알려진 회로 문제: `st .8L/.16L/.8H` 직후 word load(`document/errors.md` 17번), 분기 바로 뒤 `halt` | 입력 없음. 에뮬레이터와 비교. 2026-11-27 폭 수정 뒤 SAME |
 | `memory/ststld.asm` | 같은 word에 store 2개 이상 뒤 load: 가장 젊은 older store 값을 받는지(a..h, 늦은 data, 다른 주소 store 사이) | 입력 없음. `<케이스> PASS` / `FAIL <읽은 값 hex>`, 에뮬레이터와 비교 |
 | `memory/straddle.asm` | store buffer에 있는 store에서 같은 word의 다른 byte offset으로 forward(a..n). 정렬된 접근만(비정렬은 fault 5, `int_align`) | 입력 없음. `<케이스> PASS` / `FAIL <읽은 값 hex>`, 에뮬레이터와 비교. 2026-11-27 모두 PASS(errors.md 57) |

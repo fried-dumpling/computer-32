@@ -47,6 +47,7 @@ T=(
 "selfflush|selfflush|1|||"   # ld passing a late st: self flush, stack restore
 "straddle|straddle|1|||"     # forward from a store at another byte offset of the same word (aligned only)
 "rotate|rotate|1|||"
+"carry|carry|1|||"
 )
 
 # asm main.asm out.bin [lib.asm...] : main object first. *_nh: halt -> jmp.one pc.32B, 0
@@ -79,6 +80,7 @@ if [ $BUILD = 1 ]; then
   asm "$P/test/memory/selfflush.asm" selfflush.bin
   asm "$P/test/memory/straddle.asm" straddle.bin
   asm "$P/test/rotate.asm" rotate.bin
+  asm "$P/test/carry.asm" carry.bin
   asm "$P/calc/calc.asm" calc.bin "$P/floatingpoint/float.asm" "$P/io/io.asm"
   asm "$P/calc/calc.asm" calc_nh.bin "$P/floatingpoint/float.asm" "$P/io/io.asm"
   asm "$P/picalc/pi.asm" pi_nh.bin "$P/io/io.asm"
