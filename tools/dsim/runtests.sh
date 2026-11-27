@@ -43,6 +43,7 @@ T=(
 "ldstmix|ldstmix|1|||"
 "knownbug|knownbug|1|||"     # DIFF expected: the known problems in CLAUDE.md
 "rotate|rotate|1|||"
+"carry|carry|1|||"
 )
 
 # asm main.asm out.bin [lib.asm...] : main object first. *_nh: halt -> jmp.one pc.32B, 0
@@ -72,6 +73,7 @@ if [ $BUILD = 1 ]; then
   asm "$P/test/ldstmix.asm" ldstmix.bin
   asm "$P/test/knownbug.asm" knownbug.bin
   asm "$P/test/rotate.asm" rotate.bin
+  asm "$P/test/carry.asm" carry.bin
   asm "$P/calc/calc.asm" calc.bin "$P/floatingpoint/float.asm" "$P/io/io.asm"
   asm "$P/calc/calc.asm" calc_nh.bin "$P/floatingpoint/float.asm" "$P/io/io.asm"
   asm "$P/picalc/pi.asm" pi_nh.bin "$P/io/io.asm"
