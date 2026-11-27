@@ -46,7 +46,7 @@ Reads the default dlnk output (8 byte header: start address, length); `-raw` for
 Strict by default:
 - ALU instructions other than `cmp`/`test` invalidate the flags; a branch on invalid flags is an error.
 - Only `32B` mode is allowed, except `ld`/`st` widths (`32B`/`16L`/`8L`/`8H`) and `set` `S16H`/`16L`.
-- Partial `ld` keeps the other bits like the circuit; `st .8L`/`.16L` writes only those bytes. A load after a partial store reads the merged word (it does not copy the circuit's load-buffer forwarding bug below).
+- Partial `ld` keeps the other bits like the circuit; `st .8L`/`.16L` writes only those bytes. A load after a partial store reads the merged word. Unaligned access is allowed here, but the circuit raises fault 5 (half at an odd address, word not a multiple of 4).
 - No carry or interrupt instructions (add them when needed). `rol`/`ror` rotate by the amount mod 32, as on the circuit. `jmp $` is treated as halt.
 
 ### Headless circuit simulator (dsim)
@@ -229,4 +229,5 @@ Memory map (`boot/src/boot.asm`): RAM `0x00000000-0x03FFFFFF`, keyboard/terminal
 
 Past circuit bugs found with dsim (symptom, cause, fix, status): `document/errors.md`. Check it first when a similar symptom shows up.
 
-- **A wider load right after `st .8L`/`.16L`/`.8H` to the same address gets the wrong value**: load-buffer forwarding ignores the access width, so the load receives the store's zero-extended value (e.g. `ld .32B` after `st .8L` of 0xAA gets `0x000000AA`). Memory itself is written correctly: the same load after the store has finished reads the right word (`document/errors.md` #17). Workaround: don't read wider than a partial store until it has finished.
+- **Natural alignment**: a half (`16L`) needs an even address, a word (`32B`) a multiple of 4; bytes are allowed anywhere. An unaligned `ld`/`st` raises fault 5 (`document/errors.md` #58). The emulator does not check this.
+- **An ALU op right after `pop flag` doesn't see the popped flags** and its own flag result is lost (`document/errors.md` #59, open). Put a real instruction (not `nop`) between them.

@@ -1,18 +1,19 @@
 ; =====================================================================
-;  knownbug.asm : the known circuit problems in CLAUDE.md (expected fail)
+;  knownbug.asm : circuit problems once listed in CLAUDE.md
 ;
 ;  build (in program/) :  dasm test/knownbug.asm -o knownbug.o
 ;                         dlnk knownbug.o -o ../boot/rom.bin
-;  run    : tools/dsim/runtests.sh knownbug  (DIFF until the bugs are fixed)
+;  run    : tools/dsim/runtests.sh knownbug  (compares with the emulator)
 ;
 ;  output : "<case> PASS" or "<case> FAIL <word read hex>"
 ;    k1 : st .8L  of 0xAA   into 0x11223344, expect 0x112233AA
 ;    k2 : st .16L of 0xBEEF into 0x11223344, expect 0x1122BEEF
 ;    k3 : st .8H  of 0xCC00 into 0x11223344, expect 0x112233CC
 ;         (the emulator writes bits 15..8 to the addressed byte)
-;    (circuit: load-buffer forwarding ignores the width, so the ld right
-;     after the store gets the zero-extended value 000000AA / 0000BEEF /
-;     000000CC. memory is right: with a delay before the ld, all pass)
+;    (circuit until 2026-11-27: store-buffer forwarding ignored the width,
+;     so the ld right after the store got 000000AA / 0000BEEF / 000000CC.
+;     fixed: the store byte mask comes from MB_MD and the check is
+;     load mask within store mask, errors.md 17)
 ;    h  : loop of 3 rounds printing '1' '2' '3', then halt right after the
 ;         loop branch. the branch is predicted not taken the first time,
 ;         and the circuit runs halt before the branch resolves, so it
@@ -45,10 +46,13 @@
 #end
 
 ; STW(name) : X = 0x11223344. then the partial store, then STR(expected)
+; STW(c) : print k<c>, slot = 0x11223344. the value is set before the
+; PUTC so the st is not late: a late full-word st flushes the next ld
+; and hid the forward bug (2026-11-27)
 #macro STW 1
+    LSET(gen[2], 0x11223344)
     PUTC('k')
     PUTC(#1)
-    LSET(gen[2], 0x11223344)
     st.zero gen[2].32B, slot
 #end
 

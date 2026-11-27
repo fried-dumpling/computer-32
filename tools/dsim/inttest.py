@@ -3,7 +3,7 @@
 
   python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [-snap] [-full] [-nolimit] [-stall N]
                                [-oneshot] [group...]
-  group : ext prec sled misp flc iret iret2 sys sysprev sysirq nest wpsys sysmem user sys0 tbl
+  group : ext prec sled misp flc iret iret2 sys sysprev sysirq nest wpsys sysmem user sys0 tbl fault align
           (default all). Output: program/build/dsim/int/
 
 The emulator has no interrupts, so each item is compared with values from ISA.md 2.2, not
@@ -57,12 +57,13 @@ START = "6:R=0;10:S=1;16:S=0"
 TAP = "cpu-32.dig:PCS=PC,com1,com2,INT_req=INT_req"
 
 PROGRAMS = ["ext", "prec", "sled", "misp", "flc", "iret", "iret2", "iretpre", "sys", "sysprev", "sysirq",
-            "nest", "wpsys", "sysmem", "user", "sys0", "tbl", "fault"]
+            "nest", "wpsys", "sysmem", "user", "sys0", "tbl", "fault", "align"]
 # programs that are also built as variants: image int_<name>_<tag> from a wrapper in OUT
 # that #defines the given line and includes the program (dasm has no -D)
 VARIANTS = {"sysprev": {f"p{n}": f"NPAD {n}" for n in range(24)},
             "iretpre": {f"c{k}": f"C{k} 1" for k in range(8)},
-            "fault": {**{f"s{k}": f"FSTART s{k}\n#define FONE 1" for k in range(1, 7)}, "wp": "FSTART r6"}}
+            "fault": {**{f"s{k}": f"FSTART s{k}\n#define FONE 1" for k in range(1, 7)}, "wp": "FSTART r6"},
+            "align": {**{f"s{k}": f"FSTART s{k}\n#define FONE 1" for k in range(1, 5)}, "wp": "FSTART r4"}}
 SYSPREV = ["st", "set", "addi", "nop", "set+nop", "mispredicted loop exit", "jmp.one",
            "predicted not-taken jmp.zero", "ld", "cmpi", "loop exit+nop", "loop exit+set"]
 IRETPRE = ["st", "nop", "set", "4 nops", "ld", "ld ld (int_nest)", "ld ld", "st st .. ld ld"]
@@ -868,10 +869,45 @@ def t_fault(rep, pool, a):
              f"output {r.text[r.text.find('K'):][:64]!r}, stop [{r.tail.strip()[:50]}]")
 
 
+def t_align(rep, pool, a):
+    """int_align: alignment fault id 5 (half at an odd address, word not a multiple of 4), in kernel. the
+    handler prints 'A', logs {0xF5, R, gen[2]} and irets to the next case; gen[2] = SENT before each case
+    (a faulting ld must not write it), memory must keep W0 / W1 after the faulting st. one variant per case
+    (int_align_s<n>), the legal loads and the wrong-path block alone (_wp) and the full run."""
+    names = ["full", "wp"] + [f"s{k}" for k in range(1, 5)]
+    runs = dict(zip(names, pool.map(lambda v: sim("align" if v == "full" else f"align_{v}", a.seeds[0]), names)))
+    m = re.match(r"L" + HEX * 4, runs["full"].text)
+    if not m:
+        rep.item("24a", "align: program prints its labels", False, f"output {runs['full'].text[:80]!r}")
+        return
+    c = [hx(x) for x in m.groups()]
+    mem = "E11223344 55667788 "
+    legal = "00001122 00000011 00003300 "
+    cases = [("24a", "ld.32B at X+2: alignment fault (id 5), R = the ld, dest not written", c[0]),
+             ("24b", "ld.16L at X+1: alignment fault (id 5), R = the ld, dest not written", c[1]),
+             ("24c", "st.32B at X+2: alignment fault (id 5), R = the st, memory unchanged", c[2]),
+             ("24d", "st.16L at X+3 (crosses a word): alignment fault (id 5), R = the st, memory unchanged", c[3])]
+    for n, (key, text, want) in enumerate(cases, 1):
+        r = runs[f"s{n}"]
+        log = glog(r.text) or []
+        ok = "KA" + mem in r.text and log == [0xF5, want, SENT]
+        rep.item(key, text, ok, f"want KA{mem}.. log f5 {want:x} {SENT:x}; "
+                 f"output {r.text[r.text.find('K'):][:96]!r}, stop [{r.tail.strip()[:50]}]")
+    r = runs["wp"]
+    rep.item("24e", "align: legal ld.16L X+2 / ld.8L X+3 / ld.8H X+1 do not fault and read right; "
+             "an unaligned ld and st on the wrong path behind a jmp do not trap",
+             "K" + mem + legal + "Gg" in r.text, f"output {r.text[r.text.find('K'):][:96]!r}, stop [{r.tail.strip()[:50]}]")
+    r = runs["full"]
+    want = [x for w in c for x in (0xF5, w, SENT)]
+    rep.item("24f", "align: all cases in one run (KAAAAE, 4 records)",
+             "KAAAA" + mem + legal in r.text and glog(r.text) == want,
+             f"output {r.text[r.text.find('K'):][:96]!r}, stop [{r.tail.strip()[:50]}]")
+
+
 TESTS = {"ext": t_ext, "prec": t_prec, "sled": t_sled, "misp": t_misp, "flc": t_flc, "iret": t_iret,
          "iret2": t_iret2, "iretpre": t_iretpre, "sys": t_sys, "sysprev": t_sysprev, "sysirq": t_sysirq, "nest": t_nest,
          "wpsys": t_wpsys, "sysmem": t_sysmem, "user": t_user, "sys0": t_sys0, "tbl": t_tbl,
-         "fault": t_fault}
+         "fault": t_fault, "align": t_align}
 
 
 def lock_out():

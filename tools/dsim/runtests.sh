@@ -42,7 +42,10 @@ T=(
 "fill|fill_nh|1|||"
 "flushstall|flushstall|1|||"
 "ldstmix|ldstmix|1|||"
-"knownbug|knownbug|1|||"     # DIFF expected: the known problems in CLAUDE.md
+"knownbug|knownbug|1|||"     # partial st then ld (errors.md 17), halt after a branch
+"ststld|ststld|1|||"         # two or more stores to one word, then ld: youngest older store
+"selfflush|selfflush|1|||"   # ld passing a late st: self flush, stack restore
+"straddle|straddle|1|||"     # forward from a store at another byte offset of the same word (aligned only)
 "rotate|rotate|1|||"
 )
 
@@ -72,6 +75,9 @@ if [ $BUILD = 1 ]; then
   asm "$P/test/flushstall.asm" flushstall.bin
   asm "$P/test/memory/ldstmix.asm" ldstmix.bin
   asm "$P/test/knownbug.asm" knownbug.bin
+  asm "$P/test/memory/ststld.asm" ststld.bin
+  asm "$P/test/memory/selfflush.asm" selfflush.bin
+  asm "$P/test/memory/straddle.asm" straddle.bin
   asm "$P/test/rotate.asm" rotate.bin
   asm "$P/calc/calc.asm" calc.bin "$P/floatingpoint/float.asm" "$P/io/io.asm"
   asm "$P/calc/calc.asm" calc_nh.bin "$P/floatingpoint/float.asm" "$P/io/io.asm"
@@ -102,7 +108,7 @@ for t in "${T[@]}"; do
   run "$n" "$b" "$z" "$k" "$ek" "$x" &
 done
 wait
-# summary (knownbug is an expected DIFF); exit 1 on an ERROR
+# summary; exit 1 on an ERROR
 echo "summary: $(awk '{print $3}' "$RES" | sort | uniq -c | awk '{printf "%s=%s ", $2, $1}')"
 grep ' ERROR ' "$RES" | sed 's/^== /ERROR: /'
 ! grep -q ' ERROR ' "$RES"

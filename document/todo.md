@@ -75,6 +75,28 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 - [ ] 3b97a39에서 들어간 빌드 산출물: `boot/src/boot.out`(88바이트, boot 이미지의 raw 사본으로 보임), `program/calc/calc.bin`, `program/picalc/pi.bin` — 남길지, 지우고 `.gitignore`에 넣을지 결정
 - [ ] (선택) `log/` 히스토리 제거: 작업 폴더에선 111MB지만 압축돼 사본에서 지워 봐도 pack 크기가 거의 그대로였음. 히스토리 재작성 + force push가 필요해 보류
 
+### 5. 커널 개발 전에 필요한 computer 기능 (2026-11-26 점검)
+`kernel` 브랜치 기준. syscall / `iret` / fault(id 3, 4) 진입은 `inttest` 전부 통과(11-25). 순서 제안: ③·④ → ① → 도구(에뮬레이터) → 첫 커널은 base-limit MMU로.
+
+필수:
+- [ ] ① **타이머 인터럽트**: 시간마다 IRQ를 내는 장치가 없음. `computer-32-test`의 외부 IRQ는 테스트 입력 `I-in`(→ `RS-64`)뿐이라 선점형 스케줄링 불가
+  - MMIO 타이머(카운터 + 비교값 + en)를 IPU IRQ 선 하나에 연결, id 정하기
+- [ ] ② **MMU 방식 결정**: `MMU-D`/`MMU-I`는 `MMU-BL`(`p-base`/`p-limit`)뿐. 지금의 "page fault"(id 3)는 limit fault. 페이징 / TLB / 공유 페이지 없음
+  - 첫 커널은 base-limit(재배치 + 경계 검사)으로 할지, 페이징을 만들지
+  - (?) kernel mode에서 MMU가 자동으로 꺼지는지, `pctl`로 직접 꺼야 하는지 확인 (커널 진입 코드가 달라짐)
+- [ ] ③ **mask = 1일 때의 동기 예외 규칙** (`ISA.md` 2.2 "미정"): 핸들러 안의 fault / syscall을 어떻게 할지 (id 0 강제 진입 안). 커널 버그 하나로 바로 생기는 상황
+- [ ] ④ **illegal-instruction trap**: 80–FF가 `nop`으로 실행되어 잘못된 곳으로 점프해도 trap이 나지 않음. `brk`를 trap으로 만들지도 같이 결정
+
+있으면 좋음:
+- [ ] `getabs`(7D) / `cache`(7E) / `atom`(7F): `cpu-32`에 관련 net이 없음(미구현으로 보임). 단일 코어 커널은 `int-level` mask로 임계 구역을 만들 수 있어 처음엔 없어도 됨. 사용자 lock은 `atom` 또는 syscall 필요
+- [ ] 키보드 IRQ: 지금은 polling만. 있으면 입력 대기 중 다른 프로세스 실행 가능
+- [ ] 저장 장치: 없음. 사용자 프로그램은 커널과 함께 `rom.bin`에 넣어야 함 (첫 커널엔 충분)
+- [ ] 남은 회로 문제: `errors.md` 59번(`pop flag` 바로 뒤 ALU), 35번 남은 부분(syscall 수락 때 IRQ line 0 clear), 안 쓰는 핀 `INT_ker` / Ground인 `INT_vstr`·`INT_pstr`·`INT_ret` 정리
+
+도구:
+- [ ] **에뮬레이터 커널 기능** (`tools` 브랜치): `isa32emu.py`는 `halt`만 받고 `syscall`, `iret`, `ldexp`/`stexp`, `interst`/`interld`, `pctl`, MMU, IRQ가 없음. 지금은 커널 코드를 느린 dsim으로만 확인 가능. IRQ 타이밍과 MMU 규칙을 먼저 정해야 함
+- [ ] 어셈블러: ABI 별칭(`kt0`/`kt1`/`at` 등, "다음 목표 3"), `-align`(부속별 1). `zero.32B, label`로 닿는 주소가 0x8000 미만이라 커널이 커지면 걸림
+
 ---
 
 ## 부속별 정리
