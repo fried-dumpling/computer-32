@@ -44,10 +44,10 @@ python tools/emu/isa32emu.py <program.bin> ["keyboard input"] [-raw]
 Reads the default dlnk output (8 byte header: start address, length); `-raw` for headerless images. Test scripts (`program/*/..._test.py`) import it as a module (`CPU`, `load_image`, `find_word`).
 
 Strict by default:
-- ALU instructions other than `cmp`/`test` invalidate the flags; a branch on invalid flags is an error.
+- Flag validity is tracked per bit: after `add`/`sub`/`cmp` (and their `i`/`c` forms) all six bits are valid, after shifts/rotates `zero`/`neg`/`pos`/`carry`, after logic ops and `test` only `zero`/`neg`/`pos`. A branch on an undefined bit, or `addc`/`subc`/`shiftlc`/`shiftrc` with an undefined carry, is an error.
 - Only `32B` mode is allowed, except `ld`/`st` widths (`32B`/`16L`/`8L`/`8H`) and `set` `S16H`/`16L`.
 - Partial `ld` keeps the other bits like the circuit; `st .8L`/`.16L` writes only those bytes. A load after a partial store reads the merged word. Unaligned access is allowed here, but the circuit raises fault 5 (half at an odd address, word not a multiple of 4).
-- No carry or interrupt instructions (add them when needed). `rol`/`ror` rotate by the amount mod 32, as on the circuit. `jmp $` is treated as halt.
+- Carry ops (`addc`/`subc`/`shiftlc`/`shiftrc`) follow the circuit (`document/ISA.md` sections 4/5): after `sub`/`cmp` carry is the borrow, `subc` = a - b - carry, shifts set carry to the OR of the bits shifted out, `shiftlc`/`shiftrc` fill all vacated bits with carry. No interrupt instructions (add them when needed). `rol`/`ror` rotate by the amount mod 32, as on the circuit. `jmp $` is treated as halt.
 
 ### Headless circuit simulator (dsim)
 
@@ -206,7 +206,7 @@ Instruction semantics, flags and ABI: `document/ISA.md`. Assembler syntax: `docu
 - **32-bit constants:** `set R.S16H, hi` then `set R.16L, lo` (the order proven on the circuit).
 - **Instruction semantics the code relies on** (check these first if the circuit disagrees):
   - a branch uses only the flags of the immediately preceding `cmp`/`cmpi`/`test`/`testi`; `neg` = bit 31 of the result, `pos` = neither zero nor neg; compared values never overflow
-  - no carry/overflow flags, no `addc`/`subc`/`shiftlc`/`shiftrc`, no rotates
+  - the libraries don't use the carry/overflow flags, `addc`/`subc`/`shiftlc`/`shiftrc` or rotates (the circuit and the emulator have them, rules in `document/ISA.md`; test: `program/test/carry.asm`)
   - `shiftr`/`shiftri` are logical; register shift amounts are always 0..31
   - immediates are zero-extended (0..65535); `set R.32B, imm` is `R = imm`
   - `push`: `stack -= 4; mem[stack] = v`; `call` pushes the return address
@@ -230,4 +230,4 @@ Memory map (`boot/src/boot.asm`): RAM `0x00000000-0x03FFFFFF`, keyboard/terminal
 Past circuit bugs found with dsim (symptom, cause, fix, status): `document/errors.md`. Check it first when a similar symptom shows up.
 
 - **Natural alignment**: a half (`16L`) needs an even address, a word (`32B`) a multiple of 4; bytes are allowed anywhere. An unaligned `ld`/`st` raises fault 5 (`document/errors.md` #58). The emulator does not check this.
-- **An ALU op right after `pop flag` doesn't see the popped flags** and its own flag result is lost (`document/errors.md` #59, open). Put a real instruction (not `nop`) between them.
+- **A hex-print loop can deadlock** (`shiftr` by a register + `bnd`/`cmpi`/`addi`/`st` and a `cmpi`/`jmp.zero`/`subi`/`jmp.one` loop): stalls at PC=0x214 on the second digit (`document/errors.md` #60, open). `program/test/carry.asm` uses an unrolled printer for this reason.

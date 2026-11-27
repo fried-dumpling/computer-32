@@ -46,6 +46,7 @@ T=(
 "ststld|ststld|1|||"         # two or more stores to one word, then ld: youngest older store
 "selfflush|selfflush|1|||"   # ld passing a late st: self flush, stack restore
 "straddle|straddle|1|||"     # forward from a store at another byte offset of the same word (aligned only)
+"stackmov|stackmov|1|||"     # mov/set/ld/addi to stack next to push/pop/call (errors.md 59 kind)
 "rotate|rotate|1|||"
 "carry|carry|1|||"
 )
@@ -79,6 +80,7 @@ if [ $BUILD = 1 ]; then
   asm "$P/test/memory/ststld.asm" ststld.bin
   asm "$P/test/memory/selfflush.asm" selfflush.bin
   asm "$P/test/memory/straddle.asm" straddle.bin
+  asm "$P/test/memory/stackmov.asm" stackmov.bin
   asm "$P/test/rotate.asm" rotate.bin
   asm "$P/test/carry.asm" carry.bin
   asm "$P/calc/calc.asm" calc.bin "$P/floatingpoint/float.asm" "$P/io/io.asm"

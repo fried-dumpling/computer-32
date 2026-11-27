@@ -53,7 +53,8 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-07) 중 dsim으로 찾은 회�
 | 56 | 11-27 | store-buffer 다음 word 비교 | 정렬 load가 다음 word store에서 forward (ldstmix m4) | ✅ |
 | 57 | 11-27 | store-buffer forward byte offset | `st.32B X` 뒤 `ld.8L X+1`이 byte 0을 받음, 고친 뒤 offset 1과 3이 뒤바뀜 (straddle) | ✅ |
 | 58 | 11-27 | alignment fault (id 5) | byte 접근이 fault, word/half 비정렬은 통과; fault id가 MMU 단 명령 | ✅ |
-| 59 | 11-27 | `pop flag` 뒤 ALU | 바로 뒤 ALU가 pop한 flag를 못 보고, 그 ALU의 flag 결과도 사라짐 | ❌ |
+| 59 | 11-27 | `pop flag` 뒤 ALU | 바로 뒤 ALU가 pop한 flag를 못 보고, 그 ALU의 flag 결과도 사라짐 | ✅ (11-28) |
+| 60 | 11-27 | hex 출력 루프 deadlock | `shiftr` reg + `cmpi`/`subi`/`jmp` 루프가 PC=0x214에서 멈춤 (carry-loopshow) | ❌ |
 | — | 10-17 | 기존 알려진 문제 | `halt`가 분기보다 먼저 실행 | ✅ 재현 안 됨 (11-07 `haltbr`), CLAUDE.md에서 삭제 |
 
 2026-11-07 기준 runtests 13개 중 `knownbug`(k1~k3, 17번)만 DIFF이고 나머지는 모두 에뮬레이터와 같습니다. `selfflush`(a~l), `haltbr`(H1~H10)도 모두 같습니다.
@@ -321,12 +322,30 @@ tools 세션이 추가한 테스트(`int_sysprev`, `int_sysirq`, `int_nest`, `in
 - **56. 다음 word 비교 (ldstmix m4):** 두 word에 걸친 load를 위해 `M*_CMP1`(comp_addr + 1)을 더했는데, 정렬 load에도 받아들여짐(4만큼 shift한 load mask가 0이라 어떤 store mask에도 포함). → `ld_high` 조건 추가 ✅. 자연 정렬로 정한 뒤로는 걸친 접근이 fault라 이 경로는 쓰이지 않음.
 - **57. forward data byte offset (straddle a, c, e, f):** 같은 word의 다른 offset에서 읽는 load(`st.32B X` 뒤 `ld.8L X+1`)가 store 데이터를 shift 없이 받아 byte 0(`CC`)을 읽음. shift를 넣은 첫 판은 방향이 반대라 offset 1 ↔ 3이 뒤바뀜(`ld.8L X+1` → 99, `ld.8L X+3` → BB, `ld.8H X+1` → 9900, `st.16L X+2` 뒤 `ld.8L X+3` → 00). offset 2는 방향과 상관없이 맞아서 통과. → 사용자 수정 ✅ (straddle a~n 모두 PASS)
 - **58. alignment fault (id 5, int_align 24a~24f):** `cpu-32` (3300~3640, 3920~4120). misal = MB_any_e ∧ MD[1] ∧ (MD[0] ? a0 : a0|a1)로 MD 인코딩(0 = 32B, 1 = 16L, 2 = 8L, 3 = 8H)과 맞지 않아 8L/8H가 fault, 32B/16L은 통과 → 문자열을 `ld.8L`로 읽는 selftest/calc/picalc가 멈춤. → `And@3520,4080` In_2 반전(¬MD[1]) ✅. fault id driver(`Driver@3640,4060`)가 두 단 뒤의 `MMU_INST`를 씀 → `MB_INST` ✅. fault 난 store는 메모리를 바꾸지 않음(24c, 24d).
-- **59. `pop flag` 바로 뒤 ALU가 flag를 못 봄 ❌ (다른 세션이 dsim으로 찾음, zseed 1, 2 같음):**
+- **59. `pop flag` 바로 뒤 ALU가 flag를 못 봄 ✅ (11-28; 다른 세션이 dsim으로 찾음, 테스트 `program/test/flagpop.asm`):**
   - `set gen[3], 8 ; push gen[3] ; pop flag ; addc gen[1], gen[2]`(0 + 0) → 0 (정답 1, carry를 못 봄). 뒤의 `push flag`는 0x48(pop한 값, `addc`의 flag가 사라짐). 사이에 `nop` 하나 있어도 같음.
   - `pop flag`(0) `; cmp 0,1 ; push flag` → 0x40 (정답 0x4A, `cmp`의 N, C가 사라짐).
   - 사이에 실제 명령(`set` 등)이 하나 있으면 맞음. `nop`은 dispatch 전에 빠지는 것으로 보임.
   - 별도 관찰: flag = 8(carry만)을 pop한 뒤 `jmp.pos`가 taken(bit 2 = 0인데). pos를 z/n에서 만드는 것으로 보임.
   - 영향: ISR 끝의 `pop flag` 바로 뒤가 ALU 명령인 경우.
+  - 원인 1 (투기 경로, flagpop d, e): `addc`가 pop한 carry를 기다리지 않고 commit된 FL을 읽음. `inst-wfile`의 flag 생산자 추적이 `pop flag`(reg 1F 레지스터 쓰기)를 flag 생산자로 보지 않았음. → 사용자 수정(`inst-wfile.dig`) ✅
+  - 원인 2 (commit, flagpop a, b, f~i): regFile의 FL 쓰기 선택 `sel = FL_sel ∧ ¬(E1 ∧ A1 == flag) ∧ ¬(E2 ∧ A2 == flag)`(`And@1020,2200`, `NAnd@880,2180/2260`). 어느 포트든 flag에 레지스터 쓰기가 있으면 ROB-FL의 ALU flag를 버림. slot 1 = `pop flag`, slot 2 = `cmp`가 같은 사이클에 commit되면(half 10310, `com1 = com2 = 1`, `E1 = 1`, `CT_FL-_W2 = 1`) 더 젊은 cmp의 flag가 사라짐. case g의 `jmp.neg`는 그 뒤에 풀려 망가진 FL을 읽음(18066 commit, 18070 not taken). `f`(cmp가 늦음), `i`(pop의 load가 늦음)도 DELAY 뒤에서 한 쌍으로 commit됨. `set`이 사이에 있으면(c) cmp가 다음 사이클에 따로 commit되어 맞음. → regFile 입력 `FL_W2`(cpu-32 `And@3500,-100`, slot 2의 ALU flag 쓰기)를 더해 slot 1 레지스터 쓰기는 `¬FL_W2`일 때만 이기게 함 ✅
+  - stack도 같은 구조(SCA, SCS의 `NAnd@740,1860/1940`, reg 1E)라 `SCS_W2`(cpu-32 `And@2000,-120`)로 같은 처리. 고치기 전 회로(3f1c4f9)에서도 `program/test/memory/stackmov.asm` 12 case는 에뮬레이터와 같았고, stack 레지스터 쓰기 26 half 중 push/pop commit과 겹친 것은 반대 순서(slot 1 push, slot 2 `mov stack`, half 35554) 한 번뿐이라 문제 순서는 나오지 않았음.
+  - 같이 볼 것: ALU flag 경로 `fl_i`는 ROB-FL bit 0–7, bit 8 = FL[14], bit 9–31 = Ground이고 `FL_e-_EX` = 1이라, ALU commit마다 범용 flag bit(08–1F)가 지워지는 것으로 보임(확인 안 함).
+  - 11-28 확인: flagpop a~i zseed 1~3 PASS, runtests SAME 18, inttest PASS 58.
+
+## 60. hex 출력 루프 deadlock (11-27) ❌
+다른 세션이 carry 테스트를 만들다 찾음. 11-28 kernel(1fc95c0, `inst-wfile.dig` 작업 중)에서 다시 확인: zseed 1, 2 모두 `PC=214 stop: stall 2000`(92678 half). 에뮬레이터는 끝까지 실행(`[14507 steps]`).
+- 재현: `carry-loopshow.asm`(carry.asm에서 출력만 루프로 바꾼 판). 아래 루프를 `call`로 부름(gen[17] = 값, gen[24] = IO_BASE).
+  ```
+  show_loop: mov gen[20], gen[17] ; shiftr gen[20], gen[19] ; bnd gen[20], gen[18](0xF)
+             cmpi gen[20], 10 ; jmp.neg show_num ; addi gen[20], 'A'-10-'0'
+  show_num:  addi gen[20], '0' ; st.gen[24] gen[20], TERM_OUT
+             cmpi gen[19], 0 ; jmp.zero show_end ; subi gen[19], 4 ; jmp.one show_loop
+  ```
+- 출력: `a0 Z..C4. 00000000`, `a1 ..P... 00000003`까지 맞고 `a2 .N..4V 8`(0x7FFFFFFF + 1 = 0x80000000의 첫 자리)에서 멈춤. 앞의 두 case는 루프 8번을 다 돎.
+- 원인 미확인. 앞 case와 다른 점: 값의 bit 31 = 1, 바로 앞 ALU flag가 N, carry4, V.
+- 지금은 `program/test/carry.asm`이 루프 대신 풀어 쓴 출력을 씀. 재현 파일은 `program/test/carry-loopshow.asm`.
 
 ## 기존 알려진 문제: `halt`가 분기보다 먼저 실행 (10-17) ✅ 재현 안 됨 (11-07)
 - **예전 증상:** not-taken으로 예측된 분기 바로 뒤 `halt`가 분기보다 먼저 실행돼 CPU가 멈춤. 그래서 프로그램을 `jmp.one pc.32B, 0`으로 끝냈음.

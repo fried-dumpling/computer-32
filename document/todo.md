@@ -91,7 +91,7 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 - [ ] `getabs`(7D) / `cache`(7E) / `atom`(7F): `cpu-32`에 관련 net이 없음(미구현으로 보임). 단일 코어 커널은 `int-level` mask로 임계 구역을 만들 수 있어 처음엔 없어도 됨. 사용자 lock은 `atom` 또는 syscall 필요
 - [ ] 키보드 IRQ: 지금은 polling만. 있으면 입력 대기 중 다른 프로세스 실행 가능
 - [ ] 저장 장치: 없음. 사용자 프로그램은 커널과 함께 `rom.bin`에 넣어야 함 (첫 커널엔 충분)
-- [ ] 남은 회로 문제: `errors.md` 59번(`pop flag` 바로 뒤 ALU), 35번 남은 부분(syscall 수락 때 IRQ line 0 clear), 안 쓰는 핀 `INT_ker` / Ground인 `INT_vstr`·`INT_pstr`·`INT_ret` 정리
+- [ ] 남은 회로 문제: `errors.md` 60번(hex 출력 루프 deadlock), 35번 남은 부분(syscall 수락 때 IRQ line 0 clear), 안 쓰는 핀 `INT_ker` / Ground인 `INT_vstr`·`INT_pstr`·`INT_ret` 정리
 
 도구:
 - [ ] **에뮬레이터 커널 기능** (`tools` 브랜치): `isa32emu.py`는 `halt`만 받고 `syscall`, `iret`, `ldexp`/`stexp`, `interst`/`interld`, `pctl`, MMU, IRQ가 없음. 지금은 커널 코드를 느린 dsim으로만 확인 가능. IRQ 타이밍과 MMU 규칙을 먼저 정해야 함

@@ -33,6 +33,9 @@ dlnk fill.o -o ../boot/rom.bin
 | `memory/ldstmix.asm` | 밀린 load 여러 개와 store를 섞었을 때 load 값 (bus controller mid 겹침 버그) | 입력 없음. `m1`..`m6` `PASS` / `FAIL <오류 수 hex>` |
 | `rotate.asm` | `rol`/`roli`/`ror`/`rori` (X = 0x12345678, 회전량 0~36) | 입력 없음. `<케이스> <결과 hex>`, 에뮬레이터와 비교 |
 | `carry.asm` | carry/carry4/overflow flag, `addc`/`subc`/`shiftlc`/`shiftrc`, 64/96 bit 덧셈·뺄셈, 64 bit shift, rotate carry | 입력 없음. `<케이스> <결과 hex...> <flag>`(`ZNPC4V`, 꺼진 bit는 `.`), 에뮬레이터와 비교. 2026-11-27: 99줄이 zseed 1~3에서 에뮬레이터와 같음 |
+| `flagpop.asm` | `pop flag` 바로 뒤 flag를 쓰거나 읽는 ALU(`cmp`, `cmpi`, `addc`, `jmp.neg`), 사이에 `nop`/`set`, 늦은 cmp/pop (`errors.md` 59번) | 입력 없음. 에뮬레이터에 flag 레지스터가 없어 스스로 판정: `<케이스> <flag 또는 결과 hex> PASS/FAIL`. dsim으로 직접 실행(runtests 아님). 2026-11-28 모두 PASS |
+| `memory/stackmov.asm` | `stack`에 일반 레지스터 쓰기(`set`/`mov`/`ld`/`subi`) 옆의 `push`/`pop`/`call` (a..l, 59번과 같은 종류) | 입력 없음. `<케이스> <stack> <T-4> <T-8> <레지스터>` hex, 에뮬레이터와 비교. 2026-11-28 SAME |
+| `carry-loopshow.asm` | `carry.asm`의 hex 출력을 루프로 바꾼 판, `errors.md` 60번 재현 | 회로가 a2 둘째 자리(PC=0x214)에서 멈춤, 에뮬레이터는 끝까지 실행. runtests에는 넣지 않음 (2026-11-28 재현)|
 | `knownbug.asm` | 예전 `CLAUDE.md`의 알려진 회로 문제: `st .8L/.16L/.8H` 직후 word load(`document/errors.md` 17번), 분기 바로 뒤 `halt` | 입력 없음. 에뮬레이터와 비교. 2026-11-27 폭 수정 뒤 SAME |
 | `memory/ststld.asm` | 같은 word에 store 2개 이상 뒤 load: 가장 젊은 older store 값을 받는지(a..h, 늦은 data, 다른 주소 store 사이) | 입력 없음. `<케이스> PASS` / `FAIL <읽은 값 hex>`, 에뮬레이터와 비교 |
 | `memory/straddle.asm` | store buffer에 있는 store에서 같은 word의 다른 byte offset으로 forward(a..n). 정렬된 접근만(비정렬은 fault 5, `int_align`) | 입력 없음. `<케이스> PASS` / `FAIL <읽은 값 hex>`, 에뮬레이터와 비교. 2026-11-27 모두 PASS(errors.md 57) |
@@ -42,12 +45,12 @@ dlnk fill.o -o ../boot/rom.bin
 
 `M4.o`, `M7.o`, `fill.o`, `memtest2.o`, `selftest.o`는 예전 빌드 결과입니다(커밋 안 됨). 하위 폴더의 파일은 `dasm test/memory/memtest.asm -o memtest.o`처럼 빌드합니다.
 
-## 회귀 테스트 (`flushstall`, `ldstmix`, `knownbug`, `ststld`, `selfflush`, `straddle`)
+## 회귀 테스트 (`flushstall`, `ldstmix`, `knownbug`, `ststld`, `selfflush`, `straddle`, `stackmov`)
 
 `tools/dsim/runtests.sh`에 들어 있습니다. 에뮬레이터 출력과 비교하므로, DIFF가 나면 다른 줄의 케이스 이름이 문제의 케이스입니다. 셋 다 한 번 돌리는 데 6만 half 이하입니다.
 
 ```
-bash tools/dsim/runtests.sh flushstall ldstmix knownbug ststld selfflush straddle     ; 루트에서. 결과: program/build/dsim/<이름>.sim / .emu
+bash tools/dsim/runtests.sh flushstall ldstmix knownbug ststld selfflush straddle stackmov     ; 루트에서. 결과: program/build/dsim/<이름>.sim / .emu
 ```
 
 - `flushstall`: 케이스 이름은 `<종류><store 수 K><nop 수 N>`입니다. K개의 store와 N개의 nop 뒤에 flush하는 명령(`c` call, `r` store 뒤 ret하는 callee, `d` call 두 번 연속, `p` push 두 번 뒤 call, `j` jmp.one, `b` cmp 뒤 taken jmp.zero)을 두고, 그 뒤 word를 모두 `addi gen[7], 1`(ret 뒤는 `+0x100`)로 채웁니다. 결과는 `gen[7] << 16 | gen[6] << 8 | (스택 차이)`이고, call 종류는 `00040100`(`d`는 `00040200`), jmp/분기 종류는 `00000100`이 정상입니다. 옛 fetch가 실행되면 `gen[7]`이 늘어납니다.
