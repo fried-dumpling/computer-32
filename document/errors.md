@@ -334,7 +334,7 @@ tools 세션이 추가한 테스트(`int_sysprev`, `int_sysirq`, `int_nest`, `in
   - 같이 볼 것: ALU flag 경로 `fl_i`는 ROB-FL bit 0–7, bit 8 = FL[14], bit 9–31 = Ground이고 `FL_e-_EX` = 1이라, ALU commit마다 범용 flag bit(08–1F)가 지워지는 것으로 보임(확인 안 함).
   - 11-28 확인: flagpop a~i zseed 1~3 PASS, runtests SAME 18, inttest PASS 58.
 
-## 60. hex 출력 루프 deadlock (11-27) ❌
+## 60. hex 출력 루프 deadlock (11-27) ✅ (11-28)
 다른 세션이 carry 테스트를 만들다 찾음. 11-28 kernel(1fc95c0, `inst-wfile.dig` 작업 중)에서 다시 확인: zseed 1, 2 모두 `PC=214 stop: stall 2000`(92678 half). 에뮬레이터는 끝까지 실행(`[14507 steps]`).
 - 재현: `carry-loopshow.asm`(carry.asm에서 출력만 루프로 바꾼 판). 아래 루프를 `call`로 부름(gen[17] = 값, gen[24] = IO_BASE).
   ```
@@ -344,8 +344,15 @@ tools 세션이 추가한 테스트(`int_sysprev`, `int_sysirq`, `int_nest`, `in
              cmpi gen[19], 0 ; jmp.zero show_end ; subi gen[19], 4 ; jmp.one show_loop
   ```
 - 출력: `a0 Z..C4. 00000000`, `a1 ..P... 00000003`까지 맞고 `a2 .N..4V 8`(0x7FFFFFFF + 1 = 0x80000000의 첫 자리)에서 멈춤. 앞의 두 case는 루프 8번을 다 돎.
-- 원인 미확인. 앞 case와 다른 점: 값의 bit 31 = 1, 바로 앞 ALU flag가 N, carry4, V.
-- 지금은 `program/test/carry.asm`이 루프 대신 풀어 쓴 출력을 씀. 재현 파일은 `program/test/carry-loopshow.asm`.
+- **원인:** JPU 오분기 flush와 같은 사이클에 JPU로 들어간 오경로 `ret`이 죽지 않고, 다음 사이클에 풀려 자기 flush를 냄(41, 45, 50번과 같은 종류). zseed 1, a2의 둘째 자리:
+  - 90644: `jmp.zero show_end`(0x39f8, ID 3)가 taken 예측(BTB가 앞 루프에서 배움)인데 not taken. `Fl_JPU` = 1, `clr_id` = 3, `clr_ep` = 1. 같은 half에 `CT_JPU-_LD` = 1로 뒤의 오경로 `ret`(0x3a04, ID 4)이 JPU에 load됨.
+  - 90646: JPU가 그 `ret`을 풀어(`JPU_EN` = 1, `JPU_PC` = 3a04) miss로 다시 flush(`clr_id` = 4, `clr_ep` = 1). epoch가 같아(`epoch_DP`는 90676에야 바뀜) 걸러지지 않음.
+  - 90648: PC가 반환 주소 0x1d8로 감. 루프 나머지가 버려진 채 a2 코드를 돌다 0x214에서 멈춤.
+  - ret 경로(`D_FF@5220,2780` → `Driver@5420,2800..2920`가 `CT_JPU-_LD`, `RET_INST`/`RET_EPOCH`를 JPU로 모는 곳)에 `clr_id`/`clr_ep` 비교가 없었음. 다른 단계(`inst-sfcomp`)와 달리 JPU 입력 쪽(`D_FF@4420,980` `JPU_EN`, `Register@4420,1160`)도 clr로 죽지 않음.
+  - a2에서만 난 이유: `ret`이 `jmp.zero`가 풀리는 바로 그 사이클에 JPU로 갈 준비가 된 타이밍. 값의 bit 31이나 flag와는 상관없음.
+- **수정 (cpu-32):** `inst-sfcomp@5080,2620`(A = `RET_INST`/`RET_EPOCH`, B = `clr_id`/`clr_ep`/`clr_self`)의 `A_new`와 `clr`로 `NAnd@5220,2680`, 그 결과와 ret 유효(`D_FF@5220,2780`)를 `And@5300,2740`로 묶어 ret driver의 sel로 씀. flush보다 젊은 ret은 그 사이클에 JPU로 load되지 않음.
+- **확인:** carry-loopshow zseed 1, 2 에뮬레이터와 같음(100줄, `ok`). runtests 18개 SAME, inttest PASS 58.
+- `program/test/carry.asm`은 루프 대신 풀어 쓴 출력을 그대로 씀. 재현 파일은 `program/test/carry-loopshow.asm`.
 
 ## 기존 알려진 문제: `halt`가 분기보다 먼저 실행 (10-17) ✅ 재현 안 됨 (11-07)
 - **예전 증상:** not-taken으로 예측된 분기 바로 뒤 `halt`가 분기보다 먼저 실행돼 CPU가 멈춤. 그래서 프로그램을 `jmp.one pc.32B, 0`으로 끝냈음.

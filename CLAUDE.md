@@ -230,4 +230,3 @@ Memory map (`boot/src/boot.asm`): RAM `0x00000000-0x03FFFFFF`, keyboard/terminal
 Past circuit bugs found with dsim (symptom, cause, fix, status): `document/errors.md`. Check it first when a similar symptom shows up.
 
 - **Natural alignment**: a half (`16L`) needs an even address, a word (`32B`) a multiple of 4; bytes are allowed anywhere. An unaligned `ld`/`st` raises fault 5 (`document/errors.md` #58). The emulator does not check this.
-- **A hex-print loop can deadlock** (`shiftr` by a register + `bnd`/`cmpi`/`addi`/`st` and a `cmpi`/`jmp.zero`/`subi`/`jmp.one` loop): stalls at PC=0x214 on the second digit (`document/errors.md` #60, open). `program/test/carry.asm` uses an unrolled printer for this reason.

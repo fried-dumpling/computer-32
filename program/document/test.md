@@ -35,7 +35,7 @@ dlnk fill.o -o ../boot/rom.bin
 | `carry.asm` | carry/carry4/overflow flag, `addc`/`subc`/`shiftlc`/`shiftrc`, 64/96 bit 덧셈·뺄셈, 64 bit shift, rotate carry | 입력 없음. `<케이스> <결과 hex...> <flag>`(`ZNPC4V`, 꺼진 bit는 `.`), 에뮬레이터와 비교. 2026-11-27: 99줄이 zseed 1~3에서 에뮬레이터와 같음 |
 | `flagpop.asm` | `pop flag` 바로 뒤 flag를 쓰거나 읽는 ALU(`cmp`, `cmpi`, `addc`, `jmp.neg`), 사이에 `nop`/`set`, 늦은 cmp/pop (`errors.md` 59번) | 입력 없음. 에뮬레이터에 flag 레지스터가 없어 스스로 판정: `<케이스> <flag 또는 결과 hex> PASS/FAIL`. dsim으로 직접 실행(runtests 아님). 2026-11-28 모두 PASS |
 | `memory/stackmov.asm` | `stack`에 일반 레지스터 쓰기(`set`/`mov`/`ld`/`subi`) 옆의 `push`/`pop`/`call` (a..l, 59번과 같은 종류) | 입력 없음. `<케이스> <stack> <T-4> <T-8> <레지스터>` hex, 에뮬레이터와 비교. 2026-11-28 SAME |
-| `carry-loopshow.asm` | `carry.asm`의 hex 출력을 루프로 바꾼 판, `errors.md` 60번 재현 | 회로가 a2 둘째 자리(PC=0x214)에서 멈춤, 에뮬레이터는 끝까지 실행. runtests에는 넣지 않음 (2026-11-28 재현)|
+| `carry-loopshow.asm` | `carry.asm`의 hex 출력을 루프로 바꾼 판, `errors.md` 60번 재현 | 예전 회로는 a2 둘째 자리(PC=0x214)에서 멈춤. 11-28 수정 뒤 zseed 1, 2 에뮬레이터와 같음. runtests에는 넣지 않음|
 | `knownbug.asm` | 예전 `CLAUDE.md`의 알려진 회로 문제: `st .8L/.16L/.8H` 직후 word load(`document/errors.md` 17번), 분기 바로 뒤 `halt` | 입력 없음. 에뮬레이터와 비교. 2026-11-27 폭 수정 뒤 SAME |
 | `memory/ststld.asm` | 같은 word에 store 2개 이상 뒤 load: 가장 젊은 older store 값을 받는지(a..h, 늦은 data, 다른 주소 store 사이) | 입력 없음. `<케이스> PASS` / `FAIL <읽은 값 hex>`, 에뮬레이터와 비교 |
 | `memory/straddle.asm` | store buffer에 있는 store에서 같은 word의 다른 byte offset으로 forward(a..n). 정렬된 접근만(비정렬은 fault 5, `int_align`) | 입력 없음. `<케이스> PASS` / `FAIL <읽은 값 hex>`, 에뮬레이터와 비교. 2026-11-27 모두 PASS(errors.md 57) |
