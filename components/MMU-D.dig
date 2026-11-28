@@ -939,6 +939,26 @@
       </elementAttributes>
       <pos x="1440" y="1000"/>
     </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>mmu_c</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1040" y="1200"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Tunnel</elementName>
+      <elementAttributes>
+        <entry>
+          <string>NetName</string>
+          <string>mmu_c</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1060" y="1200"/>
+    </visualElement>
   </visualElements>
   <wires>
     <wire>
@@ -1122,6 +1142,14 @@
       <p2 x="1460" y="1260"/>
     </wire>
     <wire>
+      <p1 x="1040" y="1200"/>
+      <p2 x="1060" y="1200"/>
+    </wire>
+    <wire>
+      <p1 x="1440" y="1200"/>
+      <p2 x="1540" y="1200"/>
+    </wire>
+    <wire>
       <p1 x="1320" y="560"/>
       <p2 x="1340" y="560"/>
     </wire>
@@ -1136,10 +1164,6 @@
     <wire>
       <p1 x="1420" y="880"/>
       <p2 x="1460" y="880"/>
-    </wire>
-    <wire>
-      <p1 x="1440" y="1200"/>
-      <p2 x="1540" y="1200"/>
     </wire>
     <wire>
       <p1 x="1280" y="1140"/>

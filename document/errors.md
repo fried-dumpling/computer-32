@@ -26,7 +26,7 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-07) 중 dsim으로 찾은 회�
 | 14 | 11-04 | 버스 mid | store 응답이 load 데이터로 들어감 | ✅ (store 응답 끔) |
 | 15 | 11-04 | 프론트엔드 flush | calc `ret`이 0x40a00000으로 점프, picalc 끝자리 틀림 | ✅ (11-05 최종 수정, flushstall 통과) |
 | 16 | 11-02 | res-station.dig (non-debug) | `inst-wfile` 핀 연결이 밀림 | ❌ |
-| 17 | 11-05 | load-buffer forward 폭 | `st .8L` 직후 `ld .32B`가 `000000AA` (정답 `112233AA`) | ❌ |
+| 17 | 11-05 | load-buffer forward 폭 | `st .8L` 직후 `ld .32B`가 `000000AA` (정답 `112233AA`) | ✅ (11-27, 55번) |
 | 18 | 11-07 | `st.stack` base | issue가 밀린 `st.stack`이 더 젊은 pop/ret/push가 바꾼 stack을 주소로 씀 | ✅ (11-07, `st.stack`이 PCA 사용) |
 | 19 | 11-16 | TRAP `iret` load id | `iret`의 load가 돌아오지 않음 (`Ii` 뒤 stall) | ✅ |
 | 20 | 11-16 | `iret` commit ECLR | `iret`이 0x178이 아니라 자기 PC+4(0x1c)로 감 | ✅ |
@@ -48,6 +48,13 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-07) 중 dsim으로 찾은 회�
 | 36 | 11-19 | FT RS_FF S=R=1 | `syscall` wait와 IRQ `run_int`가 같은 클럭이면 fetch가 멈추지 않아 반환 PC 틀림 (15c) | ✅ |
 | 37 | 11-19 | IRQ 수락 latch 취소 | 수락 뒤 `stexp`로 level을 올려도 진입 (16b, R = 0x1dc..) | ✅ |
 | 38 | 11-19 | IPU ICLR 창의 펄스 | acp 직후 3클럭 안의 펄스가 사라짐 (17b) | ✅ 장치 규칙 (acp까지 high) |
+| 54 | 11-27 | ROB-SC self flush 복구 | self flush 뒤 stack(SCS)이 다른 entry 값으로 복구돼 처음부터 다시 시작 (ststld) | ✅ |
+| 55 | 11-27 | store-buffer forward 폭 | 부분 store 뒤 더 넓은 load가 store 값만 받음 (17번) | ✅ |
+| 56 | 11-27 | store-buffer 다음 word 비교 | 정렬 load가 다음 word store에서 forward (ldstmix m4) | ✅ |
+| 57 | 11-27 | store-buffer forward byte offset | `st.32B X` 뒤 `ld.8L X+1`이 byte 0을 받음, 고친 뒤 offset 1과 3이 뒤바뀜 (straddle) | ✅ |
+| 58 | 11-27 | alignment fault (id 5) | byte 접근이 fault, word/half 비정렬은 통과; fault id가 MMU 단 명령 | ✅ |
+| 59 | 11-27 | `pop flag` 뒤 ALU | 바로 뒤 ALU가 pop한 flag를 못 보고, 그 ALU의 flag 결과도 사라짐 | ✅ (11-28) |
+| 60 | 11-27 | hex 출력 루프 deadlock | `shiftr` reg + `cmpi`/`subi`/`jmp` 루프가 PC=0x214에서 멈춤 (carry-loopshow) | ❌ |
 | — | 10-17 | 기존 알려진 문제 | `halt`가 분기보다 먼저 실행 | ✅ 재현 안 됨 (11-07 `haltbr`), CLAUDE.md에서 삭제 |
 
 2026-11-07 기준 runtests 13개 중 `knownbug`(k1~k3, 17번)만 DIFF이고 나머지는 모두 에뮬레이터와 같습니다. `selfflush`(a~l), `haltbr`(H1~H10)도 모두 같습니다.
@@ -198,7 +205,7 @@ INT-MMU / buff-outstanding 작업(2026-10-29 ~ 11-07) 중 dsim으로 찾은 회�
 - `inst-wfile`에 `clr_self` 입력이 생기면서 핀 위치가 밀렸는데 `res-station.dig`(cpu-32.dig가 씀)는 갱신 안 됨: `clr_id` 연결 없음, `clr_ep`←`clr_id`, `clr_self`←`clr_ep`.
 - `res-station-debug.dig`처럼 손으로 맞춰야 합니다(`sync-nondebug.sh`는 2026-11-19에 삭제). (self flush 구조가 바뀌어 `clr_self`가 없어졌다면 다시 확인)
 
-## 17. load-buffer forward가 접근 폭을 보지 않음 (11-05) ❌
+## 17. load-buffer forward가 접근 폭을 보지 않음 (11-05) ✅ (11-27, 55번)
 - **증상:** `knownbug`에서 `0x11223344`를 쓰고 부분 store 직후 같은 주소를 `ld .32B`로 읽으면 틀립니다.
 
   | 케이스 | store | 읽은 값 | 정답 |
@@ -306,6 +313,46 @@ tools 세션이 추가한 테스트(`int_sysprev`, `int_sysirq`, `int_nest`, `in
 - **51. fetch fault의 R이 0x6008, 그다음 issue/commit (23d):** fetch fault 명령이 issue되지 않고 decode PC(`PCS_DC`)만 진행해 fault 표시가 두 word 뒤 PC로 ROB-PC에 들어감. `fault_ILD`를 decode에 저장해 issue를 막자 fault 명령 자신도 issue되지 않아 기록이 생기지 않음 → fault 명령을 강제 issue, 그러나 ROB-gen이 done이 되지 않아 Fl_ECLR이 나지 않음 → dispatch에서 fault 명령을 강제 validate. ✅
 - **52. id-manager 출력 핀이 한 칸 밀림 (11-24 23:41):** id-manager에 `fault1` 출력을 더하고 위치를 옮기면서 `cmks_16` 핀에 `icmks_16`와 `clrs_16` tunnel이 함께 붙고 `clrs_16` 핀은 빈 선(@-340,1740). ROB-gen/ROB-INT/ROB-SC/ROB-FL의 `clr_16`에 commit mask가 들어가 boot에서 `block`이 copy loop를 기다리지 않고 `jmp gen[4]`(0)로 감. 모든 테스트가 실패. → 배선 수정 ✅
 - **53. commit slot 2에 온 fault (23e, 51번 뒤):** 강제 validate로 user `iret`(id 5)이 앞 `set`(id 4)과 같은 사이클에 commit에 옴. ROB-INT `W_O`(`CT_INT-_W`)는 slot 1만 봐서 0(`W2_O` = 1), id-manager는 ECLR을 내고 복구 PC는 slot 1의 `pca_i`(0x83C)라 `set`과 `iret`을 무한 반복. → 사용자 수정(`ROB-INT.dig` 11-25 00:35) ✅
+
+## 54~59. store/load buffer, ROB-SC, alignment fault, `pop flag` (11-27)
+재현: `bash tools/dsim/runtests.sh ststld knownbug ldstmix straddle`, `python tools/dsim/inttest.py align`. 11-27 끝에 runtests SAME 16, inttest PASS 58 (59번 제외). 접근 규칙은 자연 정렬로 정함: half는 짝수, word는 4의 배수 주소, byte는 어디나. 아니면 fault 5.
+
+- **54. ROB-SC self flush 복구 범위 (ststld):** 복구할 entry를 고르는 mask C(≥ com1)와 R(≤ roll', self flush면 roll - 1)에서 wrap = roll' < com1을 `Comparator@3240,-140`("= 0", C ∧ roll' one-hot)로 구함. 처음 ≥ 비교로 바꿨을 때 roll == com1(자기 자신이 아닌 경우)이 깨짐(재시작 120회). mask 방식에서는 `Not@3300,-160`이 wrap을 뒤집어 다른 entry를 고름(12736 half, clr_id = a, com1 = 8에서 entry c, 재시작 69회). 빈 범위(roll_sf ∧ com1 == roll)는 SCA를 그대로 씀. → Not 제거 ✅
+- **55. forward 폭 (17번, knownbug k1~k3):** store-buffer의 `M*_CMP`가 같은 word만 보고 store byte mask를 보지 않았음. store byte mask를 MB_MD에서 만들고(`MB_SET`: MD 0 = 32B 1111, 1 = 16L 0011, 2/3 = 8L/8H 0001을 `MB_addr[1:0]`만큼 shift, `Multiplexer@2480,4480`), 고른 slot의 mask ⊇ load mask일 때만 forward(`Comparator@660,-160`). 아니면 over-clr(`And@800,-140`) → `STB_clr` → MB_INST replay. ✅
+- **56. 다음 word 비교 (ldstmix m4):** 두 word에 걸친 load를 위해 `M*_CMP1`(comp_addr + 1)을 더했는데, 정렬 load에도 받아들여짐(4만큼 shift한 load mask가 0이라 어떤 store mask에도 포함). → `ld_high` 조건 추가 ✅. 자연 정렬로 정한 뒤로는 걸친 접근이 fault라 이 경로는 쓰이지 않음.
+- **57. forward data byte offset (straddle a, c, e, f):** 같은 word의 다른 offset에서 읽는 load(`st.32B X` 뒤 `ld.8L X+1`)가 store 데이터를 shift 없이 받아 byte 0(`CC`)을 읽음. shift를 넣은 첫 판은 방향이 반대라 offset 1 ↔ 3이 뒤바뀜(`ld.8L X+1` → 99, `ld.8L X+3` → BB, `ld.8H X+1` → 9900, `st.16L X+2` 뒤 `ld.8L X+3` → 00). offset 2는 방향과 상관없이 맞아서 통과. → 사용자 수정 ✅ (straddle a~n 모두 PASS)
+- **58. alignment fault (id 5, int_align 24a~24f):** `cpu-32` (3300~3640, 3920~4120). misal = MB_any_e ∧ MD[1] ∧ (MD[0] ? a0 : a0|a1)로 MD 인코딩(0 = 32B, 1 = 16L, 2 = 8L, 3 = 8H)과 맞지 않아 8L/8H가 fault, 32B/16L은 통과 → 문자열을 `ld.8L`로 읽는 selftest/calc/picalc가 멈춤. → `And@3520,4080` In_2 반전(¬MD[1]) ✅. fault id driver(`Driver@3640,4060`)가 두 단 뒤의 `MMU_INST`를 씀 → `MB_INST` ✅. fault 난 store는 메모리를 바꾸지 않음(24c, 24d).
+- **59. `pop flag` 바로 뒤 ALU가 flag를 못 봄 ✅ (11-28; 다른 세션이 dsim으로 찾음, 테스트 `program/test/flagpop.asm`):**
+  - `set gen[3], 8 ; push gen[3] ; pop flag ; addc gen[1], gen[2]`(0 + 0) → 0 (정답 1, carry를 못 봄). 뒤의 `push flag`는 0x48(pop한 값, `addc`의 flag가 사라짐). 사이에 `nop` 하나 있어도 같음.
+  - `pop flag`(0) `; cmp 0,1 ; push flag` → 0x40 (정답 0x4A, `cmp`의 N, C가 사라짐).
+  - 사이에 실제 명령(`set` 등)이 하나 있으면 맞음. `nop`은 dispatch 전에 빠지는 것으로 보임.
+  - 별도 관찰: flag = 8(carry만)을 pop한 뒤 `jmp.pos`가 taken(bit 2 = 0인데). pos를 z/n에서 만드는 것으로 보임.
+  - 영향: ISR 끝의 `pop flag` 바로 뒤가 ALU 명령인 경우.
+  - 원인 1 (투기 경로, flagpop d, e): `addc`가 pop한 carry를 기다리지 않고 commit된 FL을 읽음. `inst-wfile`의 flag 생산자 추적이 `pop flag`(reg 1F 레지스터 쓰기)를 flag 생산자로 보지 않았음. → 사용자 수정(`inst-wfile.dig`) ✅
+  - 원인 2 (commit, flagpop a, b, f~i): regFile의 FL 쓰기 선택 `sel = FL_sel ∧ ¬(E1 ∧ A1 == flag) ∧ ¬(E2 ∧ A2 == flag)`(`And@1020,2200`, `NAnd@880,2180/2260`). 어느 포트든 flag에 레지스터 쓰기가 있으면 ROB-FL의 ALU flag를 버림. slot 1 = `pop flag`, slot 2 = `cmp`가 같은 사이클에 commit되면(half 10310, `com1 = com2 = 1`, `E1 = 1`, `CT_FL-_W2 = 1`) 더 젊은 cmp의 flag가 사라짐. case g의 `jmp.neg`는 그 뒤에 풀려 망가진 FL을 읽음(18066 commit, 18070 not taken). `f`(cmp가 늦음), `i`(pop의 load가 늦음)도 DELAY 뒤에서 한 쌍으로 commit됨. `set`이 사이에 있으면(c) cmp가 다음 사이클에 따로 commit되어 맞음. → regFile 입력 `FL_W2`(cpu-32 `And@3500,-100`, slot 2의 ALU flag 쓰기)를 더해 slot 1 레지스터 쓰기는 `¬FL_W2`일 때만 이기게 함 ✅
+  - stack도 같은 구조(SCA, SCS의 `NAnd@740,1860/1940`, reg 1E)라 `SCS_W2`(cpu-32 `And@2000,-120`)로 같은 처리. 고치기 전 회로(3f1c4f9)에서도 `program/test/memory/stackmov.asm` 12 case는 에뮬레이터와 같았고, stack 레지스터 쓰기 26 half 중 push/pop commit과 겹친 것은 반대 순서(slot 1 push, slot 2 `mov stack`, half 35554) 한 번뿐이라 문제 순서는 나오지 않았음.
+  - 같이 볼 것: ALU flag 경로 `fl_i`는 ROB-FL bit 0–7, bit 8 = FL[14], bit 9–31 = Ground이고 `FL_e-_EX` = 1이라, ALU commit마다 범용 flag bit(08–1F)가 지워지는 것으로 보임(확인 안 함).
+  - 11-28 확인: flagpop a~i zseed 1~3 PASS, runtests SAME 18, inttest PASS 58.
+
+## 60. hex 출력 루프 deadlock (11-27) ✅ (11-28)
+다른 세션이 carry 테스트를 만들다 찾음. 11-28 kernel(1fc95c0, `inst-wfile.dig` 작업 중)에서 다시 확인: zseed 1, 2 모두 `PC=214 stop: stall 2000`(92678 half). 에뮬레이터는 끝까지 실행(`[14507 steps]`).
+- 재현: `carry-loopshow.asm`(carry.asm에서 출력만 루프로 바꾼 판). 아래 루프를 `call`로 부름(gen[17] = 값, gen[24] = IO_BASE).
+  ```
+  show_loop: mov gen[20], gen[17] ; shiftr gen[20], gen[19] ; bnd gen[20], gen[18](0xF)
+             cmpi gen[20], 10 ; jmp.neg show_num ; addi gen[20], 'A'-10-'0'
+  show_num:  addi gen[20], '0' ; st.gen[24] gen[20], TERM_OUT
+             cmpi gen[19], 0 ; jmp.zero show_end ; subi gen[19], 4 ; jmp.one show_loop
+  ```
+- 출력: `a0 Z..C4. 00000000`, `a1 ..P... 00000003`까지 맞고 `a2 .N..4V 8`(0x7FFFFFFF + 1 = 0x80000000의 첫 자리)에서 멈춤. 앞의 두 case는 루프 8번을 다 돎.
+- **원인:** JPU 오분기 flush와 같은 사이클에 JPU로 들어간 오경로 `ret`이 죽지 않고, 다음 사이클에 풀려 자기 flush를 냄(41, 45, 50번과 같은 종류). zseed 1, a2의 둘째 자리:
+  - 90644: `jmp.zero show_end`(0x39f8, ID 3)가 taken 예측(BTB가 앞 루프에서 배움)인데 not taken. `Fl_JPU` = 1, `clr_id` = 3, `clr_ep` = 1. 같은 half에 `CT_JPU-_LD` = 1로 뒤의 오경로 `ret`(0x3a04, ID 4)이 JPU에 load됨.
+  - 90646: JPU가 그 `ret`을 풀어(`JPU_EN` = 1, `JPU_PC` = 3a04) miss로 다시 flush(`clr_id` = 4, `clr_ep` = 1). epoch가 같아(`epoch_DP`는 90676에야 바뀜) 걸러지지 않음.
+  - 90648: PC가 반환 주소 0x1d8로 감. 루프 나머지가 버려진 채 a2 코드를 돌다 0x214에서 멈춤.
+  - ret 경로(`D_FF@5220,2780` → `Driver@5420,2800..2920`가 `CT_JPU-_LD`, `RET_INST`/`RET_EPOCH`를 JPU로 모는 곳)에 `clr_id`/`clr_ep` 비교가 없었음. 다른 단계(`inst-sfcomp`)와 달리 JPU 입력 쪽(`D_FF@4420,980` `JPU_EN`, `Register@4420,1160`)도 clr로 죽지 않음.
+  - a2에서만 난 이유: `ret`이 `jmp.zero`가 풀리는 바로 그 사이클에 JPU로 갈 준비가 된 타이밍. 값의 bit 31이나 flag와는 상관없음.
+- **수정 (cpu-32):** `inst-sfcomp@5080,2620`(A = `RET_INST`/`RET_EPOCH`, B = `clr_id`/`clr_ep`/`clr_self`)의 `A_new`와 `clr`로 `NAnd@5220,2680`, 그 결과와 ret 유효(`D_FF@5220,2780`)를 `And@5300,2740`로 묶어 ret driver의 sel로 씀. flush보다 젊은 ret은 그 사이클에 JPU로 load되지 않음.
+- **확인:** carry-loopshow zseed 1, 2 에뮬레이터와 같음(100줄, `ok`). runtests 18개 SAME, inttest PASS 58.
+- `program/test/carry.asm`은 루프 대신 풀어 쓴 출력을 그대로 씀. 재현 파일은 `program/test/carry-loopshow.asm`.
 
 ## 기존 알려진 문제: `halt`가 분기보다 먼저 실행 (10-17) ✅ 재현 안 됨 (11-07)
 - **예전 증상:** not-taken으로 예측된 분기 바로 뒤 `halt`가 분기보다 먼저 실행돼 CPU가 멈춤. 그래서 프로그램을 `jmp.one pc.32B, 0`으로 끝냈음.

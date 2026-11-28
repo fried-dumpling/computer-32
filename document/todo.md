@@ -50,16 +50,16 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 
 ### 2. Boot-sequence | 외부 ROM
 동작은 완료(아래 완료 탭). 남은 일:
-- [~] reset 시퀀스: reset PC = boot ROM은 동작. 파이프라인·ROB·RAS·BTB 초기화는 따로 확인 안 함
-  - [~] 부트 코드 `boot/src/boot.asm` → `boot/boot.bin`
-    - [ ] stack / istack 설정, `interst`(vec/pri) 설정 (`panicvec`은 시트에서 없어짐, 2026-11-16)
+- [ ] reset 시퀀스: reset PC = boot ROM은 동작. 파이프라인·ROB·RAS·BTB 초기화는 따로 확인 안 함
+  - [x] 부트 코드 `boot/src/boot.asm` → `boot/boot.bin`
+   - [ ] stack / istack 설정, `interst`(vec/pri) 설정 (`panicvec`은 시트에서 없어짐, 2026-11-16)
 
 ### 3. ISA ↔ 툴 맞추기 (`ISA.md` 6절)
 - [ ] floatingpoint 테스트(`fp_test.py`)는 에뮬레이터 전용 — 회로에서 돌릴 방법 검토 (calc로 간접 확인만 됨)
 
 #### ISA 시트 동기화 (2026-11-18, 11-16 저장본 기준)
 `ISA.md`의 1절(권한), 2절(ABI 이름, EXT), 4절(flag), 2.2절(`int-tmplv`), 6절은 고쳤습니다. 남은 일:
-- [ ] 시트 G67 오타 수정: `md-id = md<<3 | id` → md는 bit 7(`md<<7 | id`). 어셈블러와 회로는 이미 bit 7
+- [x] 시트 G67 오타 수정: `md-id = md<<3 | id` → md는 bit 7(`md<<7 | id`). 어셈블러와 회로는 이미 bit 7
 - [ ] 어셈블러 ABI 별칭 추가 여부: `lret`/`hret`(gen[0]/[1]), `at`(gen[21]), `kt0`/`kt1`(gen[22]/[23]), `addr`(gen[24])
   - lexer 키워드라 cache version을 올려야 함. 예약어가 되므로 `program/`의 라벨·`#define` 이름과 겹치는지 먼저 확인
 - [ ] 어셈블러 `jp`/`jpi`/`break`(시트 이름) 별칭 추가 여부. 지금은 `jmp`/`ijmp`/`brk`만. 라벨 충돌 위험으로 보류 중
@@ -71,9 +71,30 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 ### 4. Git / 저장소 정리
 병합과 문서 정리는 완료(아래 완료 탭). 남은 일:
 - [~] `assembler-linker` 원격: README "moved to computer-32 repository's tools/ directory"는 push됨(main 57fedf2, dev 090b3c9). GitHub에서 archive만 남음 (Settings → Archive, 또는 `gh repo archive fried-dumpling/assembler-linker`. 이 PC에는 `gh`가 없음)
-- [ ] 상위 `computer 32 (new)/bin`(옛 dasm, 10-17 빌드): 사용자 PATH가 여기를 가리킴. PATH를 `computer-32/bin`으로 바꾼 뒤 삭제
 - [ ] 3b97a39에서 들어간 빌드 산출물: `boot/src/boot.out`(88바이트, boot 이미지의 raw 사본으로 보임), `program/calc/calc.bin`, `program/picalc/pi.bin` — 남길지, 지우고 `.gitignore`에 넣을지 결정
 - [ ] (선택) `log/` 히스토리 제거: 작업 폴더에선 111MB지만 압축돼 사본에서 지워 봐도 pack 크기가 거의 그대로였음. 히스토리 재작성 + force push가 필요해 보류
+
+### 5. 커널 개발 전에 필요한 computer 기능 (2026-11-26 점검)
+`kernel` 브랜치 기준. syscall / `iret` / fault(id 3, 4) 진입은 `inttest` 전부 통과(11-25). 순서 제안: ③·④ → ① → 도구(에뮬레이터) → 첫 커널은 base-limit MMU로.
+
+필수:
+- [ ] ① **타이머 인터럽트**: 시간마다 IRQ를 내는 장치가 없음. `computer-32-test`의 외부 IRQ는 테스트 입력 `I-in`(→ `RS-64`)뿐이라 선점형 스케줄링 불가
+  - MMIO 타이머(카운터 + 비교값 + en)를 IPU IRQ 선 하나에 연결, id 정하기
+- [ ] ② **MMU 방식 결정**: `MMU-D`/`MMU-I`는 `MMU-BL`(`p-base`/`p-limit`)뿐. 지금의 "page fault"(id 3)는 limit fault. 페이징 / TLB / 공유 페이지 없음
+  - 첫 커널은 base-limit(재배치 + 경계 검사)으로 할지, 페이징을 만들지
+  - (?) kernel mode에서 MMU가 자동으로 꺼지는지, `pctl`로 직접 꺼야 하는지 확인 (커널 진입 코드가 달라짐)
+- [ ] ③ **mask = 1일 때의 동기 예외 규칙** (`ISA.md` 2.2 "미정"): 핸들러 안의 fault / syscall을 어떻게 할지 (id 0 강제 진입 안). 커널 버그 하나로 바로 생기는 상황
+- [ ] ④ **illegal-instruction trap**: 80–FF가 `nop`으로 실행되어 잘못된 곳으로 점프해도 trap이 나지 않음. `brk`를 trap으로 만들지도 같이 결정
+
+있으면 좋음:
+- [ ] `getabs`(7D) / `cache`(7E) / `atom`(7F): `cpu-32`에 관련 net이 없음(미구현으로 보임). 단일 코어 커널은 `int-level` mask로 임계 구역을 만들 수 있어 처음엔 없어도 됨. 사용자 lock은 `atom` 또는 syscall 필요
+- [ ] 키보드 IRQ: 지금은 polling만. 있으면 입력 대기 중 다른 프로세스 실행 가능
+- [ ] 저장 장치: 없음. 사용자 프로그램은 커널과 함께 `rom.bin`에 넣어야 함 (첫 커널엔 충분)
+- [ ] 남은 회로 문제: `errors.md` 35번 남은 부분(syscall 수락 때 IRQ line 0 clear), 안 쓰는 핀 `INT_ker` / Ground인 `INT_vstr`·`INT_pstr`·`INT_ret` 정리
+
+도구:
+- [ ] **에뮬레이터 커널 기능** (`tools` 브랜치): `isa32emu.py`는 `halt`만 받고 `syscall`, `iret`, `ldexp`/`stexp`, `interst`/`interld`, `pctl`, MMU, IRQ가 없음. 지금은 커널 코드를 느린 dsim으로만 확인 가능. IRQ 타이밍과 MMU 규칙을 먼저 정해야 함
+- [ ] 어셈블러: ABI 별칭(`kt0`/`kt1`/`at` 등, "다음 목표 3"), `-align`(부속별 1). `zero.32B, label`로 닿는 주소가 0x8000 미만이라 커널이 커지면 걸림
 
 ---
 
@@ -102,14 +123,14 @@ FU 결과를 대기 중인 명령에 바로 넘겨서 ready가 되기까지 걸�
 
 ##### 해야 할 일
 - [x] `iret` — `inttest` 7a~7c PASS (11-16, `errors.md` 19~22)
-- [~] `syscall` — 진입·복귀는 8a, 8b PASS (11-18, id 1, `errors.md` 23~24). "IPU가 가져갈 때까지 다른 인터럽트 마스크"는 테스트 없음
+- [x] ~`syscall` — 진입·복귀는 8a, 8b PASS (11-18, id 1, `errors.md` 23~24). "IPU가 가져갈 때까지 다른 인터럽트 마스크"는 테스트 없음
 - [x] 외부 IPU 연결 — `computer-32-test.dig`(CPU + `IPU-test.dig`)에서 IRQ, `syscall`, `interst`/`interld` 동작
-- [ ] 권한 검사 배선 (kernel 브랜치에서 다른 exception과 함께, 20b/20c): `ISS_kernel` → `DP_ker`(dispatch로 전달), `privilege-fault`를 TRAP으로 (지금은 LED만, `ISA.md` 2.2 "권한 검사")
+- [x] 권한 검사 배선 (kernel 브랜치에서 다른 exception과 함께, 20b/20c): `ISS_kernel` → `DP_ker`(dispatch로 전달), `privilege-fault`를 TRAP으로 (지금은 LED만, `ISA.md` 2.2 "권한 검사")
 - [~] id 0(panic/비상용) 진입 규칙과 회로 — level 0 칸 요청은 IPU가 id 0(level 31, `int-level` 0x9f, 복귀 PC = 다음 word)으로 바꿔 진입 (11-19, 21b PASS, `ISA.md` 2.2 "고정 id"). mask = 1일 때 동기 예외의 id 0 진입은 남음 (kernel 브랜치)
-- [ ] 인터럽트 테스트에서 나온 버그 고치기 (`errors.md` 25~31): fetch hold(반환 PC +4), 공용 stack 가산기 mux, 진입 때 `int-level`/`int-tmplv`, `syscall` 직전 IRQ 유실, 연속 `syscall`의 `iret`, `ld ; ld ; iret` stall
+- [x] 인터럽트 테스트에서 나온 버그 고치기 (`errors.md` 25~31): fetch hold(반환 PC +4), 공용 stack 가산기 mux, 진입 때 `int-level`/`int-tmplv`, `syscall` 직전 IRQ 유실, 연속 `syscall`의 `iret`, `ld ; ld ; iret` stall
 - [x] level 0 칸으로 `syscall`했을 때의 동작 정하기 — id 0으로 진입, R = `syscall` 다음 word (11-19, `int_sys0`에 id 0 handler 추가, 21b PASS)
 - [x] 인터럽트 테스트 추가 (tools 세션에 요청, 11-18) — `inttest.py` 10d~10f, 14a~22 (`int_sysprev`, `int_sysirq`, `int_nest`, `int_iret2`, `int_iretpre`, `int_wpsys`, `int_sysmem`, `int_flc`, `int_user`, `int_sys0`). 결과와 XFAIL 원인은 `program/document/test.md`. 11번은 Fl_INT가 쓰이지 않아 SKIP: `syscall` 대기 중 IRQ, 중첩(`int-tmplv` 저장/복원), `iret` 주변 IRQ, 오분기 경로의 `syscall`, ld/st 직후 `syscall`, 11번(Fl_INT/Fl_JPU 같은 half)이 실제로 나는 프로그램, user mode `syscall`과 권한 trap, `int_pri[1]` = 0인 `syscall`
-- [~] CLR(flush) priority 정리 — 예전 안은 JPU / MEM-FL > ERR(TRAP) > INT, 새 안(`todo.txt` "## flush")은 **ECLR > INT > JPU/MEM**
+- [x] CLR(flush) priority 정리 — 예전 안은 JPU / MEM-FL > ERR(TRAP) > INT, 새 안(`todo.txt` "## flush")은 **ECLR > INT > JPU/MEM**
   - 영역: dispatch(issue, disp) / process(JPU·MEM: disp~commit) / commit(INT: com2, ECLR: com1~com2)
   - id 나이: issue > disp > processing > com2 > com1 (위가 새 것)
   - 작업 중 (미커밋): `flush-mux`에 `E_acp`, `id-manager-debug`에 `eclr` 출력, 새 `components/inst-sfcomp.dig`(A/B id·ep 비교 → `A_new`, `B_eq`)
@@ -151,8 +172,8 @@ CPU 쪽:
 - 복귀 level/mode: (2026-10-25) IPU 내부 스택(16칸) → (2026-11-16 시트) `int-tmplv` 한 칸. 진입 때 `int-tmplv = int-level`, `iret`에서 되돌림. 하드웨어가 메모리에 push하는 것은 PC 1 word(istack)뿐
 - flag는 하드웨어가 저장하지 않음. `mov`/`ldexp`/`stexp`/`push`/`pop`이 flag를 바꾸지 않으므로 ISR이 `push flag` 하면 충분
 - ABI: `at` = `gen[21]`(1개), `kt0`/`kt1` = `gen[22]`/`gen[23]`
-- [ ] IPU: level/mask 레지스터, `ldexp`/`stexp int-level` 경로. (`{level, mode}` 16칸 스택과 `iret` pop req/ack은 `int-tmplv` 방식으로 바뀌어 필요 없는지 확인)
-- [ ] CPU: mode 사본(디코드 권한 검사), `iret` 직렬화, 진입 시 istack push
+- [x] IPU: level/mask 레지스터, `ldexp`/`stexp int-level` 경로. (`{level, mode}` 16칸 스택과 `iret` pop req/ack은 `int-tmplv` 방식으로 바뀌어 필요 없는지 확인)
+- [x] CPU: mode 사본(디코드 권한 검사), `iret` 직렬화, 진입 시 istack push
 - [ ] (2026-10-26) `interst`(79)/`interld`(78) (2026-11-14에 78/79에서 맞바꿈), byte 3 = md(b7: vec=0, pri=1)|id(b5:0), 값 = `R[base] + imm` (`ISA.md` 5절). 어셈블러는 완료(`interst R, m, vec | id`, `interld R, pri | id`, pseudo-mnemonic 없음, `bin/dasm.exe` 교체됨). 회로: IPU의 vec/pri 쓰기·읽기 경로, `interld` 직렬화
 - [ ] 미정: ~~`syscall`의 level/벡터~~ (11-18: id 1, level은 `int_pri[1]`, id 0은 비상용), `cache`/`atom` user 여부(보류), mask = 1일 때 동기 예외 규칙(`panic-vec`은 없어짐). `int-prev` EXT는 `int-tmplv`로 대신할 수 있어 보임
 
@@ -183,7 +204,7 @@ CPU 쪽:
 - [ ] **버퍼 크기 증가** — ACU 통합 시 st-buffer busy가 lda를 막거나 그 반대가 생김 → load/store buffer를 6~8로
 
 #### RAW table
-- [ ] invalid flush (내용 비어 있음)
+- [x] invalid flush (내용 비어 있음)
 
 #### 회로 에러 (`document/errors.md`, 2026-11-07)
 - [ ] 11번 후속(선택): self flush된 옛 load id가 commit됨(값은 regFile에 안 써서 안 보임). 옛 id commit과 다시 fetch된 load 사이 인터럽트, IO 주소 load(두 번 읽힘)는 확인 안 함
@@ -196,16 +217,17 @@ CPU 쪽:
 #### mmu 연결
 
 ### 3. IPU
-- [ ] 인터럽트 사전 요청
-- [ ] 인터럽트 순서 결정 — 현재 요청은 조정하지 않음?
+- [x] 인터럽트 사전 요청
+- [x] 인터럽트 순서 결정 — 현재 요청은 조정하지 않음?
 
 ### 4. MMU
 - [~] 처음 구현 — `MMU-BL.dig`(addr/base/limit/md → addr_o, error), `MMU-D.dig`(MMU 2개, 임시), store-buffer/MMU outstanding (e9e045d)
-   - [~] base-limit 구현 (확장 레지스터 `p-base` / `p-limit`) — `p-base`/`p-limit` → MMU 연결과 `error` 처리(예외) 확인 필요
+   - [x] base-limit 구현 (확장 레지스터 `p-base` / `p-limit`) — `p-base`/`p-limit` → MMU 연결과 `error` 처리(예외) 확인 필요
+   - [ ] getabs구현
 - [ ] 페이지 구현: 페이지 계산은 ld/st buffer 뒤에서 수행 → 버퍼 안에서 물리/가상 주소 분리
 
 ### 5. CACHE
-- [ ] MMU 장착, 0~8은 index, 9~40은 MMU 검사 (256byte page)
+- [x] MMU 장착, 0~8은 index, 9~40은 MMU 검사 (256byte page)
 - [ ] D-CACHE
 - [ ] I-CACHE
 - [ ] L2-CACHE

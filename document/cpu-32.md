@@ -215,5 +215,5 @@ cpu-32.dig
 2. **임시 Ground 출력**: `INT_vstr`/`INT_pstr`/`INT_ret`, `MMU_*`, `CSH_*`.
 3. **안 쓰는 입력**: `INT_ker`, `INT_rqac`.
 4. **명령어 latch**: `I_D-_R` enable에 `I_valid`를 넣을지 정합니다(§7).
-5. **어디서도 쓰지 않는 `.dig`**: cpu-32, cpu-test, computer-32, computer-32-test, MMU-D 어디에서도 쓰지 않는 파일은 `components/legacy/`로 옮겼습니다(2026-10-31). `store-buffer8-debug`는 작업 중이라 남겼습니다(2026-11-08에 `debugs/`로 옮김). `RAS.dig`(return address stack)도 cpu-32에 인스턴스가 없어서 legacy에 있습니다.
+5. **어디서도 쓰지 않는 `.dig`**: cpu-32, cpu-test, computer-32, computer-32-test, MMU-D 어디에서도 쓰지 않는 파일은 `components/legacy/`로 옮겼습니다(2026-10-31). `store-buffer8-debug`는 작업 중이라 남겼습니다(2026-11-08에 `debugs/`로 옮김). `RAS.dig`(return address stack)도 cpu-32에 인스턴스가 없어서 legacy에 있습니다. `store-controller-mod.dig`와 그것이 쓰는 `index-compressor-mod.dig`(2026-11-22에 만든 store-arbiter 수정판, 어디서도 쓰지 않음)도 2026-11-28에 legacy로 옮겼습니다.
 6. **영역 이름**: 철자를 맞출 곳이 있습니다(`primeary`, `aribiter`, `kernal`).

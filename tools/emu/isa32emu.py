@@ -23,17 +23,38 @@ byte. a partial st writes only its bytes (measured on the circuit,
 IO (addr >= IO_BASE) is word wide, any width : KEY_IN, KEY_V read,
 KEY_R / TERM_OUT store.
 
-strict=True (default) makes flags valid only right after cmp/cmpi/test/testi;
-any other ALU op poisons them, so a branch that depends on flags left by
-add/shift/... raises instead of silently guessing the hardware behavior.
+Flags (zero, neg, pos, carry, carry4, overflow = bits 0..5), measured on
+the circuit with dsim (2026-11-27, program/test/carry.asm). Every ALU op
+writes all six bits, but only some of them mean something:
+  add/addi/addc/sub/subi/subc/cmp/cmpi : all six
+      addc = a + b + carry, subc = a - b - carry
+      carry    : add = carry out of bit 31; sub = borrow (1 when the
+                 unsigned a < b + borrow_in)
+      carry4   : raw adder carry out of bit 3 of a + b + cin, where a sub
+                 adds ~b + (1 - borrow_in). Not inverted for sub: 1 - 1
+                 gives carry4 = 1, 0 - 1 gives 0
+      overflow : signed overflow
+  shiftl/shiftli/shiftlc/shiftr/shiftri/shiftrc, rol/roli/ror/rori :
+      zero/neg/pos, and carry = OR of all bits shifted out (rotates: of
+      the bits that wrap around), 0 for an amount of 0.
+      shiftlc / shiftrc fill ALL vacated bits with carry (by 1 this is
+      the usual multiword shift; by 4 with carry = 1: 0x10 -> 0x10F)
+  bxr/bor/bnd (+i), test/testi : zero/neg/pos only
+The other bits come from the adder (A + B) as a side effect and count as
+undefined.
+
+strict=True (default) tracks each flag: a bit the last ALU op left
+undefined is None, and a branch on it (or addc/subc/shiftlc/shiftrc
+reading an undefined carry) raises. strict=False keeps the previous value
+of such bits instead. mov/set/ld/st/push/pop/jumps leave the flags alone.
 Only register mode 32B is accepted, except ld / st (32B / 16L / 8L / 8H)
 and `set`. `set` writes only the bits of its mode and keeps the others, as
 measured on the circuit: S16H = [31:16], 16L / S16L = [15:0],
 8L / S8L = [7:0], 8H / S8H = [15:8].
 
 rol / ror rotate by the amount mod 32 (checked on the circuit,
-program/test/rotate.asm). Unsupported opcodes (carry ops, interrupts, ...)
-raise EmuError.
+program/test/rotate.asm). Unsupported opcodes (interrupts, ...) raise
+EmuError, and so does pop of the flag register.
 
 Images: CPU() takes the raw program bytes (dlnk -raw), loaded at 0, pc = 0.
 load_image() also reads the default dlnk output with its 8 byte header
@@ -46,6 +67,7 @@ IO_BASE = 0x4000000
 KEY_IN, KEY_V, KEY_R, TERM_OUT = 0, 4, 8, 12
 MEM_SIZE = 0x100000         # emulated RAM (1 MB), accesses beyond it raise
 
+FLAG_NAMES = ("zero", "neg", "pos", "carry", "carry4", "overflow")
 R_SBP, R_ZERO, R_ONE, R_FULL, R_PC, R_STACK, R_FLAG = 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F
 M32 = 0xFFFFFFFF
 
@@ -84,7 +106,7 @@ class CPU:
         self.mem[:len(image)] = image
         self.r = [0] * 32
         self.pc = start
-        self.flags = None          # (zero, neg, pos) or None
+        self.flags = [None] * 6    # zero, neg, pos, carry, carry4, overflow; None = undefined
         self.strict = strict
         self.steps = 0
         self.halted = False
@@ -174,24 +196,62 @@ class CPU:
         return v
 
     # ---- flags --------------------------------------------------------
-    def set_flags(self, res):
+    def set_flags(self, res, c=None, c4=None, o=None):
+        """zero/neg/pos from res; carry/carry4/overflow None = undefined"""
         res &= M32
         z = res == 0
         n = bool(res >> 31)
-        self.flags = (z, n, not z and not n)
-
-    def poison(self):
-        if self.strict:
-            self.flags = None
+        new = [z, n, not z and not n, c, c4, o]
+        for i in range(3, 6):
+            if new[i] is not None:
+                new[i] = bool(new[i])
+            elif not self.strict:
+                new[i] = self.flags[i]
+        self.flags = new
 
     def cond(self, f):
         if f == 6:
             return True
-        if f not in (0, 1, 2):
+        if f > 5:
             raise EmuError(f"flag {f} not supported at pc={self.pc:#x}")
-        if self.flags is None:
-            raise EmuError(f"branch on undefined flags at pc={self.pc:#x}")
+        if self.flags[f] is None:
+            raise EmuError(f"branch on undefined flag {FLAG_NAMES[f]} at pc={self.pc:#x}")
         return self.flags[f]
+
+    def carry_in(self):
+        c = self.flags[3]
+        if c is None:
+            if self.strict:
+                raise EmuError(f"carry in undefined at pc={self.pc:#x}")
+            c = False
+        return int(c)
+
+    def addsub(self, x, y, sub, cin):
+        """x + y + cin, or x - y - cin (cin = borrow); sets all six flags"""
+        if sub:
+            y, cin = ~y & M32, 1 - cin
+        full = x + y + cin
+        res = full & M32
+        c4 = ((x & 0xF) + (y & 0xF) + cin) >> 4
+        o = ((x ^ res) & (y ^ res)) >> 31
+        self.set_flags(res, (full >> 32) ^ sub, c4, o)
+        return res
+
+    def shift(self, x, amt, left, fill):
+        """x shifted by amt (0..31), vacated bits from fill's low amt bits;
+        carry = OR of the bits that leave"""
+        if amt == 0:
+            self.set_flags(x, 0)
+            return x
+        low = (1 << amt) - 1
+        if left:
+            out = x >> (32 - amt)
+            res = (x << amt) & M32 | (fill & low)
+        else:
+            out = x & low
+            res = x >> amt | (fill & low) << (32 - amt)
+        self.set_flags(res, out != 0)
+        return res
 
     # ---- execution ----------------------------------------------------
     def step(self):
@@ -200,39 +260,35 @@ class CPU:
         imm = (b << 8) | c
         npc = self.pc + 4
 
-        alu_rr = {0x00: lambda x, y: x + y, 0x03: lambda x, y: x - y,
-                  0x06: lambda x, y: x ^ y, 0x08: lambda x, y: x | y,
-                  0x0A: lambda x, y: x & y}
-        alu_ri = {0x02: 0x00, 0x05: 0x03, 0x07: 0x06, 0x09: 0x08, 0x0B: 0x0A}
+        logic = {0x06: lambda x, y: x ^ y, 0x08: lambda x, y: x | y,
+                 0x0A: lambda x, y: x & y}
 
-        if op in alu_rr:
-            self.wr(a, alu_rr[op](self.rd(a), self.rd(b)))
-            self.poison()
-        elif op in alu_ri:
-            self.wr(a, alu_rr[alu_ri[op]](self.rd(a), imm))
-            self.poison()
-        elif 0x0C <= op <= 0x0F:               # rol, roli, ror, rori
+        if op <= 0x05 or op in (0x16, 0x17):   # add, addc, addi, sub, subc, subi, cmp, cmpi
+            y = imm if op in (0x02, 0x05, 0x17) else self.rd(b)
+            cin = self.carry_in() if op in (0x01, 0x04) else 0
+            res = self.addsub(self.rd(a), y, int(op in (0x03, 0x04, 0x05, 0x16, 0x17)), cin)
+            if op <= 0x05:
+                self.wr(a, res)
+        elif 0x06 <= op <= 0x0B:               # bxr, bxri, bor, bori, bnd, bndi
+            res = logic[op & ~1](self.rd(a), imm if op & 1 else self.rd(b))
+            self.wr(a, res)
+            self.set_flags(res)
+        elif 0x0C <= op <= 0x0F:               # rol, roli, ror, rori : amount mod 32
             amt = (self.rd(b) if op in (0x0C, 0x0E) else imm) & 31
             x = self.rd(a)
-            if op >= 0x0E:
-                amt = (32 - amt) & 31
-            self.wr(a, (x << amt | x >> (32 - amt)) & M32)
-            self.poison()
-        elif op in (0x10, 0x12, 0x13, 0x15):
-            amt = self.rd(b) if op in (0x10, 0x13) else imm
+            if op < 0x0E:                      # rol: the top amt bits come in at the bottom
+                fill = x >> (32 - amt) if amt else 0
+            else:                              # ror: the low amt bits come in at the top
+                fill = x
+            self.wr(a, self.shift(x, amt, op < 0x0E, fill))
+        elif 0x10 <= op <= 0x15:               # shiftl, shiftlc, shiftli, shiftr, shiftrc, shiftri
+            amt = imm if op in (0x12, 0x15) else self.rd(b)
             if amt >= 32:
                 raise EmuError(f"shift by {amt} at pc={self.pc:#x}")
-            x = self.rd(a)
-            self.wr(a, x << amt if op in (0x10, 0x12) else x >> amt)
-            self.poison()
-        elif op == 0x16:
-            self.set_flags(self.rd(a) - self.rd(b))
-        elif op == 0x17:
-            self.set_flags(self.rd(a) - imm)
-        elif op == 0x18:
-            self.set_flags(self.rd(a) & self.rd(b))
-        elif op == 0x19:
-            self.set_flags(self.rd(a) & imm)
+            fill = M32 if op in (0x11, 0x14) and self.carry_in() else 0
+            self.wr(a, self.shift(self.rd(a), amt, op <= 0x12, fill))
+        elif op in (0x18, 0x19):               # test, testi
+            self.set_flags(self.rd(a) & (imm if op == 0x19 else self.rd(b)))
         elif op == 0x1A:                       # set
             rid, mode = a >> 3, a & 7
             if mode == 0:

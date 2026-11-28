@@ -118,7 +118,7 @@
 - t 레지스터: leaf 함수, 또는 `call`을 넘지 않는 값에 씁니다. `t0`/`t1` 배치는 io와 fp 라이브러리가 이미 쓰는 방식입니다(`IO_LDBASE(gen[13])`, `IO_LDB(gen[14], ...)`).
 - s 레지스터: `call`을 넘어 살아 있어야 하는 값에 씁니다. `call` 뒤에도 쓸 인자는 함수 첫머리에서 s 레지스터로 옮깁니다. 그 외의 인자는 `gen[1]`–`gen[4]`를 그대로 작업 레지스터로 써도 됩니다.
 - 결과는 처음부터 `gen[0]`에 누적하면 마지막 `mov`가 필요 없습니다.
-- `cmp`/`test`가 아닌 ALU 명령은 flag를 깨뜨립니다. 그래서 `subi`로 카운터를 줄여도 0인지 판단하려면 `cmpi`가 필요합니다. 루프 끝이 상수면 `cmpi cnt, N`, 상수가 아니면 끝값 레지스터와 `cmp`를 씁니다.
+- 분기는 바로 앞 `cmp`/`test`의 flag만 쓰는 것으로 짭니다. 그래서 `subi`로 카운터를 줄여도 0인지 판단하려면 `cmpi`를 넣습니다. 루프 끝이 상수면 `cmpi cnt, N`, 상수가 아니면 끝값 레지스터와 `cmp`를 씁니다. 회로에서는 모든 ALU 명령이 flag를 쓰고 `zero`/`neg`/`pos`도 결과대로 맞습니다(4절, 2026-11-27 확인). 기존 코드는 이 규칙을 지키므로 바꾸지 않았습니다.
 
 ### 확장 레지스터 (EXT, `ldexp`/`stexp` 전용)
 
@@ -283,6 +283,23 @@ int-level = int-tmplv        ; level, mask, mode(ker) 복원
 
 분기 명령의 조건 필드는 3비트라서 bit 00–07만 조건으로 쓸 수 있습니다.
 
+### ALU 명령이 쓰는 flag (2026-11-27, dsim, `program/test/carry.asm`)
+
+ALU 명령(`add`–`testi`, op 00–19)은 모두 bit 00–05를 씁니다. 명령마다 의미가 있는 bit는 아래와 같고, 나머지 bit에는 adder(A + B)의 carry 등이 부산물로 들어갑니다. 에뮬레이터는 부산물 bit를 정의되지 않은 값으로 보고, 거기에 분기하면 에러를 냅니다. `mov`, `set`, `ld`/`st`, `push`/`pop`, 분기, `call`/`ret`은 flag를 바꾸지 않습니다.
+
+| 명령 | 의미 있는 bit | 내용 |
+|---|---|---|
+| `add`, `addi`, `addc` | 00–05 | `carry` = bit 31의 carry out. `overflow` = 부호 있는 overflow. `carry4` = bit 3의 carry out(a + b + carry in) |
+| `sub`, `subi`, `subc`, `cmp`, `cmpi` | 00–05 | `carry` = **borrow**(부호 없는 a < b(+ borrow in)이면 1). `overflow` = 부호 있는 overflow. `carry4`는 a + ~b + (1 − borrow in)의 bit 3 carry out을 **그대로** 씁니다(반전 안 함: `1 - 1` → 1, `0 - 1` → 0) |
+| `shiftl`, `shiftli`, `shiftlc`, `shiftr`, `shiftri`, `shiftrc` | 00–03 | `carry` = 밀려 나간 bit 전체의 OR. shift 양이 0이면 0 |
+| `rol`, `roli`, `ror`, `rori` | 00–03 | `carry` = 반대쪽으로 넘어간 bit 전체의 OR. 회전량(mod 32)이 0이면 0 |
+| `bxr`, `bor`, `bnd`(+`i`), `test`, `testi` | 00–02 | |
+
+- carry in을 쓰는 명령: `addc` = a + b + carry, `subc` = a − b − carry(carry = borrow), `shiftlc`/`shiftrc` = 비는 bit를 **모두** carry로 채움. 1 bit shift면 보통의 다중 word shift가 되고, 4 bit면 `0x10 shiftlc 4`(carry 1) → `0x10F`입니다.
+- 다중 word: 64 bit 덧셈은 `add lo` → `addc hi`, 뺄셈은 `sub lo` → `subc hi`, 1 bit shift는 `shiftl lo` → `shiftlc hi`, `shiftr hi` → `shiftrc lo`입니다. 사이에 `mov`/`set`/`ld`/`st`/`push`/`pop`이 있어도 carry가 남습니다.
+- carry를 직접 정하려면 `set R, 0` 뒤에 `cmpi R, v`(v = 0이나 1)를 씁니다. 0 − 1은 borrow라서 carry = 1입니다.
+- `pop flag` 바로 뒤의 ALU 명령(사이에 `nop`만 있어도)은 pop한 carry를 보지 못하고, 그 명령이 쓴 flag도 pop한 값에 덮입니다(2026-11-27 dsim). 실제 명령이 하나 이상 끼면 맞습니다.
+
 ## 5. 명령어
 
 ### ALU (user)
@@ -293,7 +310,7 @@ int-level = int-tmplv        ; level, mask, mode(ker) 복원
 | 01 | `addc` | dest | src | u.u | dest += src + flag[carry] |
 | 02 | `addi` | dest | imm (0~65535) | | dest += imm |
 | 03 | `sub` | dest | src | u.u | dest -= src |
-| 04 | `subc` | dest | src | u.u | dest -= src - flag[carry] |
+| 04 | `subc` | dest | src | u.u | dest -= src + flag[carry] (carry = borrow; 시트의 `src - flag[carry]`는 틀림) |
 | 05 | `subi` | dest | imm | | dest -= imm |
 | 06 | `bxr` | dest | src | u.u | dest ^= src |
 | 07 | `bxri` | dest | imm | | dest ^= imm |
@@ -306,10 +323,10 @@ int-level = int-tmplv        ; level, mask, mode(ker) 복원
 | 0E | `ror` | dest | src | u.u | dest = dest *rollright* src |
 | 0F | `rori` | dest | imm | | dest = dest *rollright* imm |
 | 10 | `shiftl` | dest | src | u.u | dest <<= src |
-| 11 | `shiftlc` | dest | src | u.u | dest <<= src, flag[carry] |
+| 11 | `shiftlc` | dest | src | u.u | dest <<= src, 비는 bit는 flag[carry] |
 | 12 | `shiftli` | dest | imm | | dest <<= imm |
 | 13 | `shiftr` | dest | src | u.u | dest >>= src |
-| 14 | `shiftrc` | dest | src | u.u | dest = flag[carry], dest >> src |
+| 14 | `shiftrc` | dest | src | u.u | dest >>= src, 비는 bit는 flag[carry] |
 | 15 | `shiftri` | dest | imm | | dest >>= imm |
 | 16 | `cmp` | src1 | src2 | u.u | src1 - src2로 플래그 설정 |
 | 17 | `cmpi` | src | imm | | src - imm으로 플래그 설정 |

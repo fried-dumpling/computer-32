@@ -32,24 +32,33 @@ dlnk fill.o -o ../boot/rom.bin
 | `flushstall.asm` | store가 버스를 잡은 동안 오는 call/jmp/분기/ret flush (FT stage의 옛 fetch가 살아남는 버그, calc_nh `2*3-1`) | 입력 없음. `<케이스> PASS` / `FAIL <결과 hex>` |
 | `memory/ldstmix.asm` | 밀린 load 여러 개와 store를 섞었을 때 load 값 (bus controller mid 겹침 버그) | 입력 없음. `m1`..`m6` `PASS` / `FAIL <오류 수 hex>` |
 | `rotate.asm` | `rol`/`roli`/`ror`/`rori` (X = 0x12345678, 회전량 0~36) | 입력 없음. `<케이스> <결과 hex>`, 에뮬레이터와 비교 |
-| `knownbug.asm` | 루트 `CLAUDE.md`의 알려진 회로 문제: `st .8L/.16L/.8H`, 분기 바로 뒤 `halt` | 입력 없음. 고쳐질 때까지 DIFF가 정상 |
+| `carry.asm` | carry/carry4/overflow flag, `addc`/`subc`/`shiftlc`/`shiftrc`, 64/96 bit 덧셈·뺄셈, 64 bit shift, rotate carry | 입력 없음. `<케이스> <결과 hex...> <flag>`(`ZNPC4V`, 꺼진 bit는 `.`), 에뮬레이터와 비교. 2026-11-27: 99줄이 zseed 1~3에서 에뮬레이터와 같음 |
+| `flagpop.asm` | `pop flag` 바로 뒤 flag를 쓰거나 읽는 ALU(`cmp`, `cmpi`, `addc`, `jmp.neg`), 사이에 `nop`/`set`, 늦은 cmp/pop (`errors.md` 59번) | 입력 없음. 에뮬레이터에 flag 레지스터가 없어 스스로 판정: `<케이스> <flag 또는 결과 hex> PASS/FAIL`. dsim으로 직접 실행(runtests 아님). 2026-11-28 모두 PASS |
+| `memory/stackmov.asm` | `stack`에 일반 레지스터 쓰기(`set`/`mov`/`ld`/`subi`) 옆의 `push`/`pop`/`call` (a..l, 59번과 같은 종류) | 입력 없음. `<케이스> <stack> <T-4> <T-8> <레지스터>` hex, 에뮬레이터와 비교. 2026-11-28 SAME |
+| `carry-loopshow.asm` | `carry.asm`의 hex 출력을 루프로 바꾼 판, `errors.md` 60번 재현 | 예전 회로는 a2 둘째 자리(PC=0x214)에서 멈춤. 11-28 수정 뒤 zseed 1, 2 에뮬레이터와 같음. runtests에는 넣지 않음|
+| `knownbug.asm` | 예전 `CLAUDE.md`의 알려진 회로 문제: `st .8L/.16L/.8H` 직후 word load(`document/errors.md` 17번), 분기 바로 뒤 `halt` | 입력 없음. 에뮬레이터와 비교. 2026-11-27 폭 수정 뒤 SAME |
+| `memory/ststld.asm` | 같은 word에 store 2개 이상 뒤 load: 가장 젊은 older store 값을 받는지(a..h, 늦은 data, 다른 주소 store 사이) | 입력 없음. `<케이스> PASS` / `FAIL <읽은 값 hex>`, 에뮬레이터와 비교 |
+| `memory/straddle.asm` | store buffer에 있는 store에서 같은 word의 다른 byte offset으로 forward(a..n). 정렬된 접근만(비정렬은 fault 5, `int_align`) | 입력 없음. `<케이스> PASS` / `FAIL <읽은 값 hex>`, 에뮬레이터와 비교. 2026-11-27 모두 PASS(errors.md 57) |
 | `memory/selfflush.asm` | 늦은 store를 앞지른 load의 self flush(`document/errors.md` 11번): 일반 load, dest = base, 의존 load, `pop`, `ret`, `st.stack` 뒤 stack 변경 | 입력 없음. `<글자> <오류 수 hex>`, 에뮬레이터와 비교. 2026-11-07: 처음엔 `g`, `j`, `l` FAIL(`stack` base store가 더 젊은 pop/ret/push가 바꾼 stack을 씀). `st.stack`이 PCA를 쓰도록 고친 뒤 모두 PASS(zseed 1~3) |
 | `haltbr.asm` | 늦게 풀리는 not-taken 예측 분기 바로 뒤 `halt` (H1..H10) | 이미지마다 `#define H<n> 1`을 앞에 붙여 빌드. `AB`(H6은 `A123`)가 정상. 2026-11-07: 10개 × zseed 1~3 모두 정상 |
 | `interrupt/int_*.asm` (`interrupt/int.hsm`) | 인터럽트 진입, 복귀, `syscall`, `interst`/`interld`, 확장 레지스터 | 입력 없음. `tools/dsim/inttest.py`로 실행. 아래 "인터럽트 회귀 테스트" |
 
 `M4.o`, `M7.o`, `fill.o`, `memtest2.o`, `selftest.o`는 예전 빌드 결과입니다(커밋 안 됨). 하위 폴더의 파일은 `dasm test/memory/memtest.asm -o memtest.o`처럼 빌드합니다.
 
-## 회귀 테스트 (`flushstall`, `ldstmix`, `knownbug`)
+## 회귀 테스트 (`flushstall`, `ldstmix`, `knownbug`, `ststld`, `selfflush`, `straddle`, `stackmov`)
 
 `tools/dsim/runtests.sh`에 들어 있습니다. 에뮬레이터 출력과 비교하므로, DIFF가 나면 다른 줄의 케이스 이름이 문제의 케이스입니다. 셋 다 한 번 돌리는 데 6만 half 이하입니다.
 
 ```
-bash tools/dsim/runtests.sh flushstall ldstmix knownbug     ; 루트에서. 결과: program/build/dsim/<이름>.sim / .emu
+bash tools/dsim/runtests.sh flushstall ldstmix knownbug ststld selfflush straddle stackmov     ; 루트에서. 결과: program/build/dsim/<이름>.sim / .emu
 ```
 
 - `flushstall`: 케이스 이름은 `<종류><store 수 K><nop 수 N>`입니다. K개의 store와 N개의 nop 뒤에 flush하는 명령(`c` call, `r` store 뒤 ret하는 callee, `d` call 두 번 연속, `p` push 두 번 뒤 call, `j` jmp.one, `b` cmp 뒤 taken jmp.zero)을 두고, 그 뒤 word를 모두 `addi gen[7], 1`(ret 뒤는 `+0x100`)로 채웁니다. 결과는 `gen[7] << 16 | gen[6] << 8 | (스택 차이)`이고, call 종류는 `00040100`(`d`는 `00040200`), jmp/분기 종류는 `00000100`이 정상입니다. 옛 fetch가 실행되면 `gen[7]`이 늘어납니다.
 - `ldstmix`: `A[i] = 0x5A000011 + i*0x01030507`을 쓰고, 16라운드 동안 load 8개 연속(m1), ld/st 교대(m2), st 뒤 같은 주소 ld(m3), load한 값을 store하고 다시 load(m4), 그 결과 확인(m5), store를 끼운 pointer chase(m6)를 하며 load 값을 모두 확인합니다.
-- `knownbug`: `0x11223344`에 `st .8L`/`.16L`/`.8H`를 하고 word를 읽습니다(k1..k3). 마지막은 3바퀴 루프의 분기 바로 뒤 `halt`이고 `h 123`이 나와야 합니다. 이 테스트만 `halt`로 끝납니다.
+- `ststld`: a..h 모두 `DELAY`(느린 load와 addi 사슬)로 commit을 늦춰 store가 store buffer에 남은 상태에서 load합니다. e/f는 store data가 늦게 옵니다(load-buffer의 늦은 store flush, ROB-SC self flush stack 복구도 같이 탐).
+- `selfflush`: 위 표 참고.
+- `straddle`: X = 0x11223344, X+4 = 0x55667788로 시작합니다. a..h는 store보다 좁은 load가 다른 offset에서 읽는 경우(`st.32B X` 뒤 `ld.8L X+1/+2/+3`, `ld.16L X+2`, `ld.8H X+1`, `st.16L X+2` 뒤 `ld.8L X+3/+2`, `st.8H X+2` 뒤 `ld.8L X+2`), i..k는 store보다 넓은 load(store data와 메모리를 합침), l은 같은 offset, m은 다음 word store와 정렬 load(ldstmix m4 패턴), n은 d에서 DELAY 없음. 정렬 규칙(half는 짝수, word는 4의 배수 주소, byte는 어디나)에 맞는 접근만 씁니다. word 경계에 걸친 예전 케이스(u1..ua)는 fault 5가 나므로 뺐습니다(2026-11-27).
+- `knownbug`: `0x11223344`에 `st .8L`/`.16L`/`.8H`를 하고 word를 읽습니다(k1..k3). 마지막은 3바퀴 루프의 분기 바로 뒤 `halt`이고 `h 123`이 나와야 합니다. `halt`로 끝납니다. STW는 값을 PUTC 전에 준비합니다(store가 늦으면 다음 load가 self flush되어 forward 버그가 가려짐, 2026-11-27).
 
 ### 결과 (2026-11-05, dsim, `cpu-test.dig` 작업 트리)
 
@@ -100,6 +109,7 @@ python tools/dsim/inttest.py [-j N] [-seeds 1,2,3] [-nobuild] [-snap] [그룹...
 | 20a, 20b | `int_user` | `pbase` = 0, `plimit` = 0x5000(리셋 값이면 첫 user fetch가 fault)으로 두고 `iret`(`int-tmplv` = 0)으로 user에 들어감. user 코드는 메모리에 접근하지 않음(user mode는 MMU 때문에 터미널 0x4000000에 쓸 수 없음): `gen[7]`에 표식을 넣고 `syscall`하면 kernel 핸들러가 `S<표식>`을 출력하고 로그를 남김. 출력 `L<u1> <u2> KSUSwE G...g`. user `syscall`이 들어가고(R = 다음 word) user로 돌아오는지(20a, 둘째 `syscall`로 확인), 핸들러에서 `int-level` ker = 1, `int-tmplv` ker = 0(20b). user의 `stexp`(예전 20c, id 0 가정)는 23c(privilege fault id 4)로 옮김(2026-11-25) |
 | 21a, 21b | `int_sys0` | `int_pri[1]` = 0인 `syscall`: 핸들러가 돌지 않는지(21a), id 0으로 한 번 진입하고(복귀 PC = `syscall` 다음 word, `int-level` 0x9f) `iret` 뒤 끝까지 도는지(21b, 11-19 결정, `ISA.md` 2.2 "고정 id"). 프로그램이 `int_vec[0]`에 handler를 둡니다. 출력 `APBEG<R> 0000009F g` |
 | 22 | `int_iretpre` | 핸들러 끝(`iret` 바로 앞) 8종(`st`, `nop`, `set`, `nop` 4개, `ld`, `ld ld` 등)을 따로 빌드(`C0`~`C7`). `syscall`과 IRQ로 한 번씩 들어가 둘 다 돌아오는지 |
+| 24a~24f | `int_align` | alignment fault(id 5). kernel에서 X = 0x3800에 0x11223344, 0x55667788을 두고 c1 `ld.32B X+2`, c2 `ld.16L X+1`, c3 `st.32B X+2`, c4 `st.16L X+3`(word 경계에 걸침). 케이스 전에 `gen[2]` = SENT. 핸들러는 `A`를 출력하고 `{0xF5, R, gen[2]}`를 로그에 남긴 뒤 다음 케이스로 `iret`. 24a~24d: 케이스마다 그 케이스만 도는 변형(`FSTART s<n>`, `FONE`)으로 R = fault 낸 명령, `gen[2]`가 그대로(ld가 쓰지 않음), 메모리가 그대로(st가 쓰지 않음)인지 판정. 24e(변형 `wp`): 정렬된 `ld.16L X+2`, `ld.8L X+3`, `ld.8H X+1`이 fault 없이 맞게 읽고, 오경로(`jmp` 뒤)의 비정렬 `ld`/`st`가 trap하지 않는지. 24f: 전체 한 번에(`KAAAA`, 기록 4개). 2026-11-27 모두 PASS |
 | 23a~23h | `int_fault` | page fault(id 3, `P`)와 privilege fault(id 4, `V`). `pbase` = 0, `plimit` = 0x5000, user에서 c1 `ld` 0x6000, c2 `st` 0x6000, c3 `stexp istack`, c4 `jmp` 0x6000(fetch fault), c5 `iret`, c6 터미널 `st`. 핸들러는 `{0xF3/0xF4, R, int-level, int-tmplv, istack}`을 로그에 남기고 다음 케이스로 `iret`. 케이스마다 그 케이스만 도는 변형(`FSTART s<n>`, `FONE`)으로 23a~23f를 판정(기대: R = fault 낸 명령, fetch fault는 0x6000, `int-level` 0x91, `int-tmplv` ker 0, istack 0x1FFC). 23g: 오경로(BTB miss `jmp` 뒤)의 `ld` 0x6000, `stexp`가 trap하지 않는지(변형 `wp`). 23h: 전체 한 번에(`KPPVPVPSE`, 기록 6개). 20c(id 0 가정)는 23c로 대신함. syscall/iret 중 data fault는 아직 회로에서 처리하지 않아 시험하지 않음(2026-11-23) |
 | (공통) | `int.hsm` | CPU는 kernel, mask 1(`int-level` 0x90)로 시작하므로 `INIT`이 `int-level` = 0x80(ker 1, mask 0, level 0)을 씁니다(2026-11-22). `int_pri`에는 ker 비트를 함께 써야(`PKER` + level, 예: 0x81) 핸들러가 kernel로 돌고 핸들러 안 `int-level`이 0x91이 됩니다. `int_sys0`의 level 0과 `int_tbl`의 왕복 값은 그대로입니다. 핸들러는 `LOGK`/`LOGRET`/`LOGEXT`로 값을 메모리 로그(`LOG` 0x2800)에 붙입니다. ALU를 쓰지 않아 끼어든 코드의 flag가 그대로입니다. main이 끝에 `DUMPLOG`로 `G<값> ... g`를 출력합니다 |
 
